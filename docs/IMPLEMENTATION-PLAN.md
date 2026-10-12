@@ -57,24 +57,24 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 - [ ] OpenAPI document from Zod schemas at /api/docs (dev) — deferred to Step 12 hardening
 
 ### Step 2 — Masters
-- [ ] Vendors (auto location), buyers, items, processes, locations, users, roles — API + tests + screens + pickers
+- [x] Vendors (auto location), buyers, items, processes, locations, users, roles — API + tests + screens + pickers
 
 ### Step 3 — Orders and programs
-- [ ] Orders + colour × size matrix, components, confirm/close
-- [ ] Costing sheet (panel cost per piece, …)
-- [ ] Fabric program processes with allowed loss % & material cost/kg; approve
-- [ ] Trims BOM
+- [x] Orders + colour × size matrix, components, confirm/close
+- [x] Costing sheet (panel cost per piece, …)
+- [x] Fabric program processes with allowed loss % & material cost/kg; approve
+- [x] Trims BOM (per order, Q-030)
 
 ### Step 4 — Yarn store
-- [ ] Yarn receipt draft/post/cancel → SUPPLIER → YARN_STORE
-- [ ] Stock balances / movements / at-vendors API + screens
+- [x] Yarn receipt draft/post/cancel → SUPPLIER → YARN_STORE — verified in browser end-to-end
+- [x] Stock balances / movements / at-vendors API + screens
 
 ### Step 5 — Fabric job work
-- [ ] Outward D.C. (store → vendor, vendor → vendor), expected return date
-- [ ] Inward D.C. with rolls + dc_links, consumption at vendor, pending kg
-- [ ] Loss functions + live badge + close (residual → PROCESS_LOSS, frozen)
-- [ ] Rule 55 D.C. print, inward/GRN print, material-at-vendors
-- [ ] **Gate — Fabric flow live**
+- [x] Outward D.C. (store → vendor, vendor → vendor), expected return date
+- [x] Inward D.C. with rolls + dc_links, consumption at vendor, pending kg
+- [x] Loss functions + live badge + close (residual → PROCESS_LOSS, frozen) — API verified by tests; live badge UI pending browser pass
+- [~] Rule 55 D.C. print, inward/GRN print, material-at-vendors — built; print preview check in Chrome pending
+- [~] **Gate — Fabric flow live** — software ready; gate requires Wewin entering current D.C.s (UAT)
 
 ## Phase 2 — Production
 - [ ] Step 6 Cutting: lays, roll consumption, bundles, QR tickets
@@ -96,6 +96,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
+
+### 2026-10-12 — Steps 2–5 (Phase 1) implemented
+- Migrations: `masters`, `orders_programs`, `yarn_store`, `jobwork` applied (dev + test DBs).
+- 145 automated tests green (25 shared, 120 API): masters, orders/programs, yarn receipts (incl. concurrent double post, mid-post rollback), job work (knit → dye → held at dyer → direct transfer → compact; QTY_EXCEEDS_PENDING under concurrency; close freezes loss; excess-loss notification with WhatsApp SKIPPED_NOT_CONFIGURED).
+- Browser: masters CRUD, order document, costing, yarn receipt create → post → stock balance (via pg-boss refresh) verified. Job-work screens built but not yet clicked through (browser pane hidden).
+- Fixes found by browser testing: picker Enter selection with async results, Button asChild Slot crash, "Invalid uuid" messages.
 
 ### 2026-10-12 — Step 0 + Step 1 verified
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` (59 tests: 11 shared, 48 API), `pnpm build` all green.
