@@ -8,3 +8,4 @@ export * from './settings';
 export * from './auth';
 export * from './masters';
 export * from './orders';
+export * from './documents';

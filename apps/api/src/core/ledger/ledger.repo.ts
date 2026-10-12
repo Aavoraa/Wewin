@@ -1,5 +1,5 @@
 import { Prisma } from '@wewin/db';
-import { type Tx } from '../db';
+import { type Tx, type prisma } from '../db';
 import { type NormalisedMovement } from './ledger.validate';
 
 export interface BalanceKey {
@@ -102,7 +102,7 @@ export const ledgerRepo = {
       ORDER BY m.source_line_key`;
   },
 
-  movementsOfSource(tx: Tx, sourceType: string, sourceId: string) {
-    return tx.stockMovement.findMany({ where: { sourceType, sourceId }, orderBy: [{ isReversal: 'asc' }, { sourceLineKey: 'asc' }] });
+  movementsOfSource(db: Tx | typeof prisma, sourceType: string, sourceId: string) {
+    return db.stockMovement.findMany({ where: { sourceType, sourceId }, orderBy: [{ isReversal: 'asc' }, { sourceLineKey: 'asc' }] });
   },
 };

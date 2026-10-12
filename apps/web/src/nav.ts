@@ -1,4 +1,5 @@
 import {
+  PackageOpen,
   ClipboardSignature,
   Route,
   Building2,
@@ -48,6 +49,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Stores',
     items: [
+      { label: 'Yarn receipts', to: '/yarn-receipts', icon: PackageOpen, perm: 'yarn.view' },
       { label: 'Stock balances', to: '/stock/balances', icon: Boxes, perm: 'stock.view' },
       { label: 'Stock movements', to: '/stock/movements', icon: History, perm: 'stock.view' },
     ],

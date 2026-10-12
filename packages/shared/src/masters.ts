@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { zItemType, zUnit } from './constants';
 import { zDecimal } from './decimal';
-import { zListQuery } from './api';
+import { zListQuery, zRef } from './api';
 import { zPasswordPolicy } from './auth';
 import { PERMISSION_KEYS, type PermissionKey } from './permissions';
 
@@ -73,7 +73,7 @@ const vendorShape = z.object({
   bankName: optText(100),
   bankAccount: optText(40),
   bankIfsc: optText(20),
-  processIds: z.array(z.string().uuid()).default([]),
+  processIds: z.array(zRef()).default([]),
 });
 
 type VendorShape = z.output<typeof vendorShape>;
@@ -91,7 +91,7 @@ export const zVendorUpdate = vendorShape.extend({ version: z.number().int().min(
 export type VendorInput = z.input<typeof zVendorInput>;
 export type VendorOutput = z.output<typeof zVendorInput>;
 export const zVendorListQuery = zMasterListQuery.extend({
-  processId: z.string().uuid().optional(),
+  processId: zRef().optional(),
   processCode: z.string().optional(),
 });
 
@@ -147,13 +147,13 @@ export const zUserCreate = z.object({
   email: zEmail,
   phone: optText(30),
   password: zPasswordPolicy,
-  roleIds: z.array(z.string().uuid()).min(1, 'Assign at least one role'),
+  roleIds: z.array(zRef()).min(1, 'Assign at least one role'),
 });
 export const zUserUpdate = z.object({
   fullName: z.string().trim().min(2).max(100),
   email: zEmail,
   phone: optText(30),
-  roleIds: z.array(z.string().uuid()).min(1, 'Assign at least one role'),
+  roleIds: z.array(zRef()).min(1, 'Assign at least one role'),
   version: z.number().int().min(1),
 });
 export const zResetPassword = z.object({ password: zPasswordPolicy });

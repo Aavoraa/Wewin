@@ -51,6 +51,7 @@ export function EntityPicker({
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [label, setLabel] = useState<string | null>(valueLabel ?? null);
+  const [selected, setSelected] = useState('');
 
   useEffect(() => setLabel(valueLabel ?? null), [valueLabel]);
   useEffect(() => {
@@ -73,6 +74,12 @@ export function EntityPicker({
     staleTime: 30_000,
   });
   const options = (q.data?.data ?? []).map(map);
+  const optionKey = options.map((o) => o.id).join(',');
+  // cmdk does not re-highlight items that arrive asynchronously: keep the first result selected so Enter works.
+  useEffect(() => {
+    const ids = optionKey ? optionKey.split(',') : [];
+    setSelected((cur) => (ids.includes(cur) ? cur : (ids[0] ?? '')));
+  }, [optionKey]);
 
   function choose(o: PickerOption | null) {
     setLabel(o?.label ?? null);
@@ -82,7 +89,14 @@ export function EntityPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        if (disabled) return;
+        if (o) setSearch('');
+        setOpen(o);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -108,7 +122,7 @@ export function EntityPicker({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(420px,90vw)]">
-        <Command shouldFilter={false} className="flex flex-col">
+        <Command shouldFilter={false} value={selected} onValueChange={setSelected} className="flex flex-col">
           <div className="flex items-center border-b px-2">
             <Command.Input
               autoFocus

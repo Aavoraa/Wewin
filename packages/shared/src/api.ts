@@ -29,6 +29,8 @@ export interface ApiErrorBody {
 }
 
 export const zId = z.string().uuid();
+/** Reference to another record in a form: empty → "Required". */
+export const zRef = () => z.string({ required_error: 'Required' }).min(1, 'Required').uuid('Required');
 export const zIdParam = z.object({ id: zId });
 export const zVersion = z.object({ version: z.number().int().min(1) });
 export const zReason = z.object({ reason: z.string().trim().min(3, 'Give a reason (min 3 characters)').max(500) });

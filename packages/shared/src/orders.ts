@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { D, type DecimalLike, zDecimal, zKg, zPct, zRate } from './decimal';
 import { zDate } from './dates';
-import { zListQuery } from './api';
+import { zListQuery, zRef } from './api';
 import { zCode, zOptional } from './masters';
 
 export const ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'CLOSED', 'CANCELLED'] as const;
@@ -19,20 +19,20 @@ export const zOrderLine = z.object({
 export const zOrderComponent = z.object({
   code: zCode,
   name: z.string().trim().min(1).max(60),
-  panelItemId: z.string().uuid(),
+  panelItemId: zRef(),
   pcsPerGarment: z.coerce.number().int().min(1).max(20),
 });
 
 const orderShape = z.object({
   orderNo: zCode,
-  buyerId: z.string().uuid(),
+  buyerId: zRef(),
   buyerPoNo: z.string().trim().min(1).max(60),
   poDate: zDate(),
   shipDate: zOptional(zDate()),
   styleNo: z.string().trim().min(1).max(60),
   styleName: zOptional(z.string().trim().max(120)),
   description: zOptional(z.string().trim().max(500)),
-  garmentItemId: z.string().uuid(),
+  garmentItemId: zRef(),
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   colours: z.array(zLabel).min(1, 'Add at least one colour').max(40),
   sizes: z.array(zLabel).min(1, 'Add at least one size').max(20),
@@ -66,7 +66,7 @@ export const zOrderUpdate = orderShape.extend({ version: z.number().int().min(1)
 export type OrderInput = z.input<typeof zOrderInput>;
 export const zOrderListQuery = zListQuery.extend({
   status: z.enum(ORDER_STATUSES).optional(),
-  buyerId: z.string().uuid().optional(),
+  buyerId: zRef().optional(),
   from: zDate().optional(),
   to: zDate().optional(),
   active: z.enum(['true', 'false', 'all']).optional(),
@@ -89,16 +89,16 @@ export const zCostingInput = z.object({
 
 export const zProgramProcess = z.object({
   sequence: z.coerce.number().int().min(1).max(20),
-  processId: z.string().uuid(),
-  inputItemId: z.string().uuid(),
-  outputItemId: z.string().uuid(),
+  processId: zRef(),
+  inputItemId: zRef(),
+  outputItemId: zRef(),
   allowedLossPct: zPct(),
   materialCostPerKg: zOptional(zRate()),
-  plannedVendorId: zOptional(z.string().uuid()),
+  plannedVendorId: zOptional(zRef()),
 });
 const programShape = z.object({
-  orderId: z.string().uuid(),
-  fabricItemId: z.string().uuid(),
+  orderId: zRef(),
+  fabricItemId: zRef(),
   colour: zOptional(z.string().trim().max(30)),
   requiredKg: zKg({ positive: true }),
   gsm: zOptional(z.coerce.number().int().min(1).max(2000)),
@@ -113,12 +113,12 @@ function programRules(v: { processes: { sequence: number }[] }, ctx: z.Refinemen
 export const zProgramInput = programShape.superRefine(programRules);
 export const zProgramUpdate = programShape.omit({ orderId: true }).extend({ version: z.number().int().min(1) }).superRefine(programRules);
 export const zProgramListQuery = zListQuery.extend({
-  orderId: z.string().uuid().optional(),
+  orderId: zRef().optional(),
   status: z.enum(PROGRAM_STATUSES).optional(),
 });
 
 export const zTrimsBomLine = z.object({
-  trimItemId: z.string().uuid(),
+  trimItemId: zRef(),
   colour: zOptional(z.string().trim().max(30)),
   size: zOptional(z.string().trim().max(30)),
   qtyPerGarment: zDecimal({ scale: 4, positive: true }),

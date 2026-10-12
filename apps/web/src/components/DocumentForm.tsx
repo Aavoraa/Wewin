@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { errorMessage } from '@/lib/api';
 import { focusNextField, useDocumentHotkeys } from '@/lib/hotkeys';
 import { formatDateTimeIst } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -220,10 +221,10 @@ export function DocumentForm(p: DocumentFormProps) {
 
 export function Field({ label, error, children, className }: { label: string; error?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={className}>
-      <div className="mb-1 text-xs font-medium text-muted-foreground">{label}</div>
+    <label className={cn('block', className)}>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
       {children}
-      {error ? <div className="mt-0.5 text-[11px] text-destructive">{error}</div> : null}
-    </div>
+      {error ? <span className="mt-0.5 block text-[11px] text-destructive">{error}</span> : null}
+    </label>
   );
 }
