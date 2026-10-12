@@ -1,0 +1,17 @@
+### Health
+GET http://localhost:4000/api/health
+
+### Login (dev seed owner; password = SEED_OWNER_PASSWORD in .env)
+# @name login
+POST http://localhost:4000/api/v1/auth/login
+Content-Type: application/json
+
+{ "username": "owner", "password": "{{$dotenv SEED_OWNER_PASSWORD}}" }
+
+### Me
+GET http://localhost:4000/api/v1/auth/me
+Authorization: Bearer {{login.response.body.data.accessToken}}
+
+### Stock balances
+GET http://localhost:4000/api/v1/stock/balances?pageSize=10
+Authorization: Bearer {{login.response.body.data.accessToken}}

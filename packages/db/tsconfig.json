@@ -1,0 +1,1 @@
+{ "extends": "@wewin/config/tsconfig.base.json", "compilerOptions": { "types": ["node"] }, "include": ["src", "prisma/*.ts", "prisma.config.ts"] }

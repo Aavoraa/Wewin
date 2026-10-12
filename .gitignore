@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.env
+.env.*.local
+*.log
+storage/
+apps/api/storage/
+playwright-report/
+test-results/
+.DS_Store

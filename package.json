@@ -1,0 +1,31 @@
+{
+  "name": "wewin-erp",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:coverage": "pnpm --filter @wewin/api test:coverage",
+    "e2e": "pnpm --filter @wewin/web e2e",
+    "format": "prettier --write .",
+    "db:migrate": "pnpm --filter @wewin/db exec prisma migrate dev",
+    "db:deploy": "pnpm --filter @wewin/db exec prisma migrate deploy",
+    "db:generate": "pnpm --filter @wewin/db exec prisma generate",
+    "db:seed": "pnpm --filter @wewin/db seed",
+    "db:studio": "pnpm --filter @wewin/db exec prisma studio",
+    "db:reset": "pnpm --filter @wewin/db exec prisma migrate reset --force"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6",
+    "typescript": "~5.9.2",
+    "prettier": "^3.6.2",
+    "eslint": "^9.36.0",
+    "@types/node": "^22.18.0"
+  }
+}

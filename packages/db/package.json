@@ -1,0 +1,31 @@
+{
+  "name": "@wewin/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "seed": "tsx prisma/seed.ts",
+    "lint": "eslint src prisma",
+    "typecheck": "tsc -p . --noEmit",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.0",
+    "@wewin/shared": "workspace:*",
+    "argon2": "^0.44.0",
+    "decimal.js": "^10.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@wewin/config": "workspace:*",
+    "dotenv": "^17.2.2",
+    "eslint": "^9.36.0",
+    "prisma": "^6.16.0",
+    "tsx": "^4.20.5",
+    "typescript": "~5.9.2"
+  }
+}

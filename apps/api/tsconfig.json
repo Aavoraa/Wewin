@@ -1,0 +1,5 @@
+{
+  "extends": "@wewin/config/tsconfig.base.json",
+  "compilerOptions": { "types": ["node"], "lib": ["ES2023"] },
+  "include": ["src", "test", "vitest.config.ts", "tsup.config.ts"]
+}

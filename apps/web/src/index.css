@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+/* Design tokens (shadcn/ui convention). Minimal, enterprise palette: navy primary, neutral surfaces. */
+@theme {
+  --color-background: #f6f7f9;
+  --color-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-border: #e2e8f0;
+  --color-input: #cbd5e1;
+  --color-ring: #2563eb;
+  --color-primary: #1e3a5f;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #eef2f7;
+  --color-secondary-foreground: #1e293b;
+  --color-accent: #e8eef7;
+  --color-accent-foreground: #0f172a;
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-sidebar: #13243b;
+  --color-sidebar-foreground: #cbd5e1;
+  --color-sidebar-active: #22395a;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-size: 14px;
+  }
+  * {
+    @apply border-border;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+}
+
+/* Numbers line up in registers and grids */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ───────── Print ───────── */
+@media print {
+  @page {
+    margin: 10mm;
+  }
+  body {
+    background: #fff;
+    font-size: 11px;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    border: none !important;
+  }
+  .print-break {
+    break-after: page;
+  }
+}
+.print-a4 {
+  width: 210mm;
+  min-height: 297mm;
+}
+.print-a5 {
+  width: 148mm;
+  min-height: 210mm;
+}
+.print-label {
+  width: 100mm;
+  min-height: 60mm;
+}

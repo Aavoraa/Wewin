@@ -1,0 +1,1 @@
+{ "extends": "@wewin/config/tsconfig.base.json", "include": ["src"] }
