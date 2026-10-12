@@ -1,0 +1,228 @@
+import { Prisma } from '@wewin/db';
+import { type Tx, prisma } from '../../core/db';
+import { type Paging } from '../../core/list';
+
+type Db = Tx | typeof prisma;
+
+const outwardInclude = {
+  vendor: { select: { id: true, code: true, name: true, gstin: true, addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, pincode: true } },
+  process: { select: { id: true, code: true, name: true, defaultReturnDays: true } },
+  order: { select: { id: true, orderNo: true, styleNo: true, status: true } },
+  fromLocation: { select: { id: true, code: true, name: true, kind: true, vendorId: true } },
+  programProcess: {
+    select: { id: true, sequence: true, allowedLossPct: true, materialCostPerKg: true, inputItemId: true, outputItemId: true, program: { select: { id: true, programNo: true } } },
+  },
+  lines: {
+    orderBy: { lineNo: 'asc' },
+    include: { item: { select: { id: true, code: true, name: true, hsnCode: true, type: true } }, roll: { select: { id: true, rollNo: true } } },
+  },
+} satisfies Prisma.OutwardDcInclude;
+export type OutwardDetail = Prisma.OutwardDcGetPayload<{ include: typeof outwardInclude }>;
+
+const inwardInclude = {
+  vendor: { select: { id: true, code: true, name: true, gstin: true } },
+  toLocation: { select: { id: true, code: true, name: true, kind: true } },
+  lines: { orderBy: { lineNo: 'asc' }, include: { item: { select: { id: true, code: true, name: true, hsnCode: true } }, roll: { select: { id: true, rollNo: true } } } },
+  links: {
+    include: {
+      outward: {
+        select: {
+          id: true,
+          docNo: true,
+          docDate: true,
+          status: true,
+          orderId: true,
+          vendorId: true,
+          processId: true,
+          allowedLossPct: true,
+          process: { select: { code: true, name: true } },
+          programProcess: { select: { outputItemId: true, allowedLossPct: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.InwardDcInclude;
+export type InwardDetail = Prisma.InwardDcGetPayload<{ include: typeof inwardInclude }>;
+
+export interface OutwardLineData {
+  itemId: string;
+  lot: string;
+  colour: string;
+  rollId: string | null;
+  qtyKg: string;
+  rolls: number | null;
+  valuePerKg: string | null;
+}
+export interface InwardLineData {
+  itemId: string;
+  rollNo: string | null;
+  kg: string;
+  lot: string;
+  colour: string;
+  gsm: number | null;
+  dia: string | null;
+  remarks: string | null;
+}
+
+const dec = (v: string | null) => (v === null ? null : new Prisma.Decimal(v));
+const outRows = (lines: OutwardLineData[]) =>
+  lines.map((l, i) => ({ lineNo: i + 1, itemId: l.itemId, lot: l.lot, colour: l.colour, rollId: l.rollId, qtyKg: new Prisma.Decimal(l.qtyKg), rolls: l.rolls, valuePerKg: dec(l.valuePerKg) }));
+const inRows = (lines: InwardLineData[]) =>
+  lines.map((l, i) => ({
+    lineNo: i + 1,
+    itemId: l.itemId,
+    rollNo: l.rollNo ?? `#${i + 1}`,
+    kg: new Prisma.Decimal(l.kg),
+    lot: l.lot,
+    colour: l.colour,
+    gsm: l.gsm,
+    dia: l.dia,
+    remarks: l.remarks,
+  }));
+
+export const jobworkRepo = {
+  // ───────── Outward ─────────
+  listOutward(where: Prisma.OutwardDcWhereInput, order: Prisma.OutwardDcOrderByWithRelationInput, p: Paging) {
+    return prisma.$transaction([
+      prisma.outwardDc.findMany({ where, orderBy: order, skip: p.skip, take: p.take, include: outwardInclude }),
+      prisma.outwardDc.count({ where }),
+    ]);
+  },
+  getOutward(id: string, db: Db = prisma) {
+    return db.outwardDc.findUnique({ where: { id }, include: outwardInclude });
+  },
+  async lockOutward(tx: Tx, ids: string[]) {
+    if (!ids.length) return;
+    // Sorted lock order avoids deadlocks between concurrent inward postings.
+    await tx.$queryRaw`SELECT 1 FROM outward_dcs WHERE id = ANY(${[...ids].sort()}::uuid[]) ORDER BY id FOR UPDATE`;
+  },
+  createOutward(tx: Tx, data: Omit<Prisma.OutwardDcUncheckedCreateInput, 'lines'>, lines: OutwardLineData[]) {
+    return tx.outwardDc.create({ data: { ...data, lines: { create: outRows(lines) } } });
+  },
+  async updateOutward(tx: Tx, id: string, version: number, data: Prisma.OutwardDcUncheckedUpdateManyInput, lines: OutwardLineData[]) {
+    const r = await tx.outwardDc.updateMany({ where: { id, version, status: 'DRAFT' }, data: { ...data, version: { increment: 1 } } });
+    if (r.count === 0) return false;
+    await tx.outwardDcLine.deleteMany({ where: { dcId: id } });
+    await tx.outwardDcLine.createMany({ data: outRows(lines).map((l) => ({ ...l, dcId: id })) });
+    return true;
+  },
+  deleteOutward(tx: Tx, id: string) {
+    return tx.outwardDc.delete({ where: { id } });
+  },
+  updateOutwardState(tx: Tx, id: string, data: Prisma.OutwardDcUncheckedUpdateInput) {
+    return tx.outwardDc.update({ where: { id }, data: { ...data, version: { increment: 1 } } });
+  },
+
+  /** Kg received against outwards (posted inwards only). */
+  async receivedByOutward(ids: string[], db: Db = prisma): Promise<Map<string, string>> {
+    if (!ids.length) return new Map();
+    const rows = await db.dcLink.groupBy({
+      by: ['outwardDcId'],
+      where: { outwardDcId: { in: ids }, inward: { status: 'POSTED' } },
+      _sum: { receivedKg: true },
+    });
+    return new Map(rows.map((r) => [r.outwardDcId, (r._sum.receivedKg ?? new Prisma.Decimal(0)).toFixed(3)]));
+  },
+  /** Kg consumed per outward line (posted inwards only). */
+  async consumedByLine(outwardIds: string[], db: Db = prisma): Promise<Map<string, string>> {
+    if (!outwardIds.length) return new Map();
+    const rows = await db.dcConsumption.groupBy({
+      by: ['outwardLineId'],
+      where: { outwardLine: { dcId: { in: outwardIds } }, link: { inward: { status: 'POSTED' } } },
+      _sum: { kg: true },
+    });
+    return new Map(rows.map((r) => [r.outwardLineId, (r._sum.kg ?? new Prisma.Decimal(0)).toFixed(3)]));
+  },
+  postedInwardLinkCount(outwardId: string, db: Db = prisma) {
+    return db.dcLink.count({ where: { outwardDcId: outwardId, inward: { status: 'POSTED' } } });
+  },
+  outwardCountForProgram(programId: string, db: Db = prisma) {
+    return db.outwardDc.count({ where: { programProcess: { programId }, status: { not: 'CANCELLED' } } });
+  },
+  linkedInwards(outwardId: string, db: Db = prisma) {
+    return db.dcLink.findMany({
+      where: { outwardDcId: outwardId },
+      include: { inward: { select: { id: true, docNo: true, docDate: true, status: true, billId: true } } },
+      orderBy: { inward: { docDate: 'asc' } },
+    });
+  },
+
+  // ───────── Inward ─────────
+  listInward(where: Prisma.InwardDcWhereInput, order: Prisma.InwardDcOrderByWithRelationInput, p: Paging) {
+    return prisma.$transaction([
+      prisma.inwardDc.findMany({ where, orderBy: order, skip: p.skip, take: p.take, include: inwardInclude }),
+      prisma.inwardDc.count({ where }),
+    ]);
+  },
+  getInward(id: string, db: Db = prisma) {
+    return db.inwardDc.findUnique({ where: { id }, include: inwardInclude });
+  },
+  async lockInward(tx: Tx, id: string) {
+    await tx.$queryRaw`SELECT 1 FROM inward_dcs WHERE id = ${id}::uuid FOR UPDATE`;
+  },
+  createInward(
+    tx: Tx,
+    data: Omit<Prisma.InwardDcUncheckedCreateInput, 'lines' | 'links'>,
+    lines: InwardLineData[],
+    links: { outwardDcId: string; receivedKg: string }[],
+  ) {
+    return tx.inwardDc.create({
+      data: {
+        ...data,
+        lines: { create: inRows(lines) },
+        links: { create: links.map((l) => ({ outwardDcId: l.outwardDcId, receivedKg: new Prisma.Decimal(l.receivedKg) })) },
+      },
+    });
+  },
+  async updateInward(
+    tx: Tx,
+    id: string,
+    version: number,
+    data: Prisma.InwardDcUncheckedUpdateManyInput,
+    lines: InwardLineData[],
+    links: { outwardDcId: string; receivedKg: string }[],
+  ) {
+    const r = await tx.inwardDc.updateMany({ where: { id, version, status: 'DRAFT' }, data: { ...data, version: { increment: 1 } } });
+    if (r.count === 0) return false;
+    await tx.inwardDcLine.deleteMany({ where: { dcId: id } });
+    await tx.dcLink.deleteMany({ where: { inwardDcId: id } });
+    await tx.inwardDcLine.createMany({ data: inRows(lines).map((l) => ({ ...l, dcId: id })) });
+    await tx.dcLink.createMany({ data: links.map((l) => ({ inwardDcId: id, outwardDcId: l.outwardDcId, receivedKg: new Prisma.Decimal(l.receivedKg) })) });
+    return true;
+  },
+  deleteInward(tx: Tx, id: string) {
+    return tx.inwardDc.delete({ where: { id } });
+  },
+  updateInwardState(tx: Tx, id: string, data: Prisma.InwardDcUncheckedUpdateInput) {
+    return tx.inwardDc.update({ where: { id }, data: { ...data, version: { increment: 1 } } });
+  },
+  renameRoll(tx: Tx, lineId: string, rollNo: string) {
+    return tx.inwardDcLine.update({ where: { id: lineId }, data: { rollNo } });
+  },
+  createRoll(tx: Tx, data: Prisma.FabricRollUncheckedCreateInput) {
+    return tx.fabricRoll.create({ data });
+  },
+  rollNoTaken(tx: Tx, rollNos: string[]) {
+    return tx.fabricRoll.findMany({ where: { rollNo: { in: rollNos } }, select: { rollNo: true } });
+  },
+  createConsumptions(tx: Tx, rows: { linkId: string; outwardLineId: string; kg: string }[]) {
+    return tx.dcConsumption.createMany({ data: rows.map((r) => ({ ...r, kg: new Prisma.Decimal(r.kg) })) });
+  },
+  outwardLines(tx: Tx, outwardIds: string[]) {
+    return tx.outwardDcLine.findMany({ where: { dcId: { in: outwardIds } }, orderBy: [{ dcId: 'asc' }, { lineNo: 'asc' }] });
+  },
+  rollsByIds(ids: string[], db: Db = prisma) {
+    return db.fabricRoll.findMany({ where: { id: { in: ids } } });
+  },
+  findRoll(rollNo: string) {
+    return prisma.fabricRoll.findUnique({ where: { rollNo }, include: { item: { select: { code: true, name: true } } } });
+  },
+
+  // ───────── Lookups ─────────
+  itemsByIds(ids: string[], db: Db = prisma) {
+    return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, type: true, isActive: true, code: true, unit: true } });
+  },
+  vendorHasProcess(vendorId: string, processId: string, db: Db = prisma) {
+    return db.vendorProcess.count({ where: { vendorId, processId } });
+  },
+};

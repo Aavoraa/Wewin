@@ -251,17 +251,19 @@ model AuditLog {
 // ───────────────────────────── Stock core ─────────────────────────────
 
 model Location {
-  id        String          @id @default(uuid()) @db.Uuid
-  code      String          @unique
-  name      String
-  kind      LocationKind
-  vendorId  String?         @unique @map("vendor_id") @db.Uuid
-  isActive  Boolean         @default(true) @map("is_active")
-  version   Int             @default(1)
-  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
-  movesOut  StockMovement[] @relation("from")
-  movesIn   StockMovement[] @relation("to")
+  id          String          @id @default(uuid()) @db.Uuid
+  code        String          @unique
+  name        String
+  kind        LocationKind
+  vendorId    String?         @unique @map("vendor_id") @db.Uuid
+  isActive    Boolean         @default(true) @map("is_active")
+  version     Int             @default(1)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  movesOut    StockMovement[] @relation("from")
+  movesIn     StockMovement[] @relation("to")
+  outwardFrom OutwardDc[]     @relation("outwardFrom")
+  inwardTo    InwardDc[]      @relation("inwardTo")
 
   @@map("locations")
 }
@@ -287,6 +289,9 @@ model Item {
   ppOutputs        FabricProgramProcess[] @relation("ppOutput")
   trimsBomLines    TrimsBomLine[]         @relation("trimItem")
   yarnReceiptLines YarnReceiptLine[]      @relation("yarnReceiptItem")
+  outwardLines     OutwardDcLine[]        @relation("outwardLineItem")
+  inwardLines      InwardDcLine[]         @relation("inwardLineItem")
+  rolls            FabricRoll[]           @relation("rollItem")
 
   @@index([type])
   @@map("items")
@@ -445,6 +450,7 @@ model Process {
   updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   vendors           VendorProcess[]
   programProcesses  FabricProgramProcess[]
+  outwardDcs        OutwardDc[]            @relation("outwardProcess")
 
   @@map("processes")
 }
@@ -483,6 +489,8 @@ model Vendor {
   updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   processes              VendorProcess[]
   yarnReceipts           YarnReceipt[]
+  outwardDcs             OutwardDc[]     @relation("outwardVendor")
+  inwardDcs              InwardDc[]      @relation("inwardVendor")
 
   @@index([name])
   @@map("vendors")
@@ -567,6 +575,7 @@ model Order {
   programs      FabricProgram[]
   trimsBom      TrimsBomLine[]
   yarnReceipts  YarnReceipt[]
+  outwardDcs    OutwardDc[]      @relation("outwardOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -671,6 +680,7 @@ model FabricProgramProcess {
   process           Process       @relation(fields: [processId], references: [id], onDelete: Restrict)
   inputItem         Item          @relation("ppInput", fields: [inputItemId], references: [id], onDelete: Restrict)
   outputItem        Item          @relation("ppOutput", fields: [outputItemId], references: [id], onDelete: Restrict)
+  outwardDcs        OutwardDc[]
 
   @@unique([programId, sequence])
   @@map("fabric_program_processes")
@@ -738,6 +748,178 @@ model YarnReceiptLine {
 
   @@index([itemId])
   @@map("yarn_receipt_lines")
+}
+
+// ───────────────────────────── Fabric job work (Step 5) ─────────────────────────────
+
+/// Outward delivery challan (Rule 55): material sent to a job worker under an approved program process.
+model OutwardDc {
+  id                 String               @id @default(uuid()) @db.Uuid
+  docNo              String?              @unique @map("doc_no")
+  docDate            DateTime             @map("doc_date") @db.Date
+  vendorId           String               @map("vendor_id") @db.Uuid
+  programProcessId   String               @map("program_process_id") @db.Uuid
+  processId          String               @map("process_id") @db.Uuid
+  orderId            String               @map("order_id") @db.Uuid
+  /// YARN_STORE / FABRIC_STORE, or another vendor's location for a direct vendor → vendor transfer.
+  fromLocationId     String               @map("from_location_id") @db.Uuid
+  expectedReturnDate DateTime?            @map("expected_return_date") @db.Date
+  purpose            String               @default("For job work")
+  vehicleNo          String?              @map("vehicle_no")
+  remarks            String?
+  status             DocStatus            @default(DRAFT)
+  version            Int                  @default(1)
+  /// Snapshot at posting so later program edits can never change this D.C.'s loss limit.
+  allowedLossPct     Decimal?             @map("allowed_loss_pct") @db.Decimal(7, 4)
+  postedAt           DateTime?            @map("posted_at") @db.Timestamptz(3)
+  postedById         String?              @map("posted_by_id") @db.Uuid
+  cancelledAt        DateTime?            @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById      String?              @map("cancelled_by_id") @db.Uuid
+  cancelReason       String?              @map("cancel_reason")
+  closedAt           DateTime?            @map("closed_at") @db.Timestamptz(3)
+  closedById         String?              @map("closed_by_id") @db.Uuid
+  closeReason        String?              @map("close_reason")
+  /// Frozen on close (A§7.1).
+  finalSentKg        Decimal?             @map("final_sent_kg") @db.Decimal(12, 3)
+  finalReceivedKg    Decimal?             @map("final_received_kg") @db.Decimal(12, 3)
+  finalLossKg        Decimal?             @map("final_loss_kg") @db.Decimal(12, 3)
+  finalLossPct       Decimal?             @map("final_loss_pct") @db.Decimal(9, 4)
+  finalExcessKg      Decimal?             @map("final_excess_kg") @db.Decimal(12, 3)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById        String?              @map("created_by_id") @db.Uuid
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor             Vendor               @relation("outwardVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  programProcess     FabricProgramProcess @relation(fields: [programProcessId], references: [id], onDelete: Restrict)
+  process            Process              @relation("outwardProcess", fields: [processId], references: [id], onDelete: Restrict)
+  order              Order                @relation("outwardOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  fromLocation       Location             @relation("outwardFrom", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  lines              OutwardDcLine[]
+  links              DcLink[]
+
+  @@index([status, docDate])
+  @@index([vendorId, status])
+  @@index([orderId])
+  @@map("outward_dcs")
+}
+
+model OutwardDcLine {
+  id           String          @id @default(uuid()) @db.Uuid
+  dcId         String          @map("dc_id") @db.Uuid
+  lineNo       Int             @map("line_no")
+  itemId       String          @map("item_id") @db.Uuid
+  lot          String          @default("")
+  colour       String          @default("")
+  rollId       String?         @map("roll_id") @db.Uuid
+  qtyKg        Decimal         @map("qty_kg") @db.Decimal(12, 3)
+  rolls        Int?
+  /// Rule 55 value (Q-015).
+  valuePerKg   Decimal?        @map("value_per_kg") @db.Decimal(12, 4)
+  dc           OutwardDc       @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  item         Item            @relation("outwardLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  roll         FabricRoll?     @relation("outwardRoll", fields: [rollId], references: [id], onDelete: Restrict)
+  consumptions DcConsumption[]
+
+  @@map("outward_dc_lines")
+}
+
+/// Inward delivery challan: processed material returned by a job worker, roll by roll.
+model InwardDc {
+  id            String         @id @default(uuid()) @db.Uuid
+  docNo         String?        @unique @map("doc_no")
+  docDate       DateTime       @map("doc_date") @db.Date
+  vendorId      String         @map("vendor_id") @db.Uuid
+  vendorDcNo    String?        @map("vendor_dc_no")
+  vendorDcDate  DateTime?      @map("vendor_dc_date") @db.Date
+  /// FABRIC_STORE, or the vendor's own location when output stays there for a direct transfer (Q-034).
+  toLocationId  String         @map("to_location_id") @db.Uuid
+  vehicleNo     String?        @map("vehicle_no")
+  remarks       String?
+  status        DocStatus      @default(DRAFT)
+  version       Int            @default(1)
+  postedAt      DateTime?      @map("posted_at") @db.Timestamptz(3)
+  postedById    String?        @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?      @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?        @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?        @map("cancel_reason")
+  /// Set by accounts when a vendor bill covering this D.C. is posted (never billed twice).
+  billId        String?        @map("bill_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?        @map("created_by_id") @db.Uuid
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor        Vendor         @relation("inwardVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  toLocation    Location       @relation("inwardTo", fields: [toLocationId], references: [id], onDelete: Restrict)
+  lines         InwardDcLine[]
+  links         DcLink[]
+
+  @@index([status, docDate])
+  @@index([vendorId, status])
+  @@map("inward_dcs")
+}
+
+model InwardDcLine {
+  id      String      @id @default(uuid()) @db.Uuid
+  dcId    String      @map("dc_id") @db.Uuid
+  lineNo  Int         @map("line_no")
+  itemId  String      @map("item_id") @db.Uuid
+  rollNo  String      @map("roll_no")
+  kg      Decimal     @db.Decimal(12, 3)
+  lot     String      @default("")
+  colour  String      @default("")
+  gsm     Int?
+  dia     String?
+  remarks String?
+  dc      InwardDc    @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  item    Item        @relation("inwardLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  roll    FabricRoll?
+
+  @@map("inward_dc_lines")
+}
+
+/// dc_links: how much of an inward D.C.'s received kg counts against each outward D.C. (A§7.1, Q-004).
+model DcLink {
+  id           String          @id @default(uuid()) @db.Uuid
+  inwardDcId   String          @map("inward_dc_id") @db.Uuid
+  outwardDcId  String          @map("outward_dc_id") @db.Uuid
+  receivedKg   Decimal         @map("received_kg") @db.Decimal(12, 3)
+  inward       InwardDc        @relation(fields: [inwardDcId], references: [id], onDelete: Cascade)
+  outward      OutwardDc       @relation(fields: [outwardDcId], references: [id], onDelete: Restrict)
+  consumptions DcConsumption[]
+
+  @@unique([inwardDcId, outwardDcId])
+  @@map("dc_links")
+}
+
+/// Input consumed at the vendor per outward line when an inward D.C. is posted.
+model DcConsumption {
+  id            String        @id @default(uuid()) @db.Uuid
+  linkId        String        @map("link_id") @db.Uuid
+  outwardLineId String        @map("outward_line_id") @db.Uuid
+  kg            Decimal       @db.Decimal(12, 3)
+  link          DcLink        @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  outwardLine   OutwardDcLine @relation(fields: [outwardLineId], references: [id], onDelete: Restrict)
+
+  @@map("dc_consumptions")
+}
+
+/// Fabric roll created by a posted inward D.C. Its location is derived from the ledger (roll_id).
+model FabricRoll {
+  id           String          @id @default(uuid()) @db.Uuid
+  rollNo       String          @unique @map("roll_no")
+  itemId       String          @map("item_id") @db.Uuid
+  lot          String          @default("")
+  colour       String          @default("")
+  gsm          Int?
+  dia          String?
+  kg           Decimal         @db.Decimal(12, 3)
+  orderId      String?         @map("order_id") @db.Uuid
+  inwardLineId String          @unique @map("inward_line_id") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  item         Item            @relation("rollItem", fields: [itemId], references: [id], onDelete: Restrict)
+  inwardLine   InwardDcLine    @relation(fields: [inwardLineId], references: [id], onDelete: Restrict)
+  outwardLines OutwardDcLine[] @relation("outwardRoll")
+
+  @@index([itemId, lot])
+  @@map("fabric_rolls")
 }
 
 /// Idempotency ledger for business events processed by services and jobs.

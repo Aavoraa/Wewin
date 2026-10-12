@@ -1,4 +1,7 @@
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Warehouse,
   PackageOpen,
   ClipboardSignature,
   Route,
@@ -44,6 +47,14 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Orders', to: '/orders', icon: ClipboardSignature, perm: 'orders.view' },
       { label: 'Fabric programs', to: '/programs', icon: Route, perm: 'programs.view' },
+    ],
+  },
+  {
+    label: 'Job work',
+    items: [
+      { label: 'Outward D.C.s', to: '/outward-dcs', icon: ArrowUpFromLine, perm: 'jobwork.view' },
+      { label: 'Inward D.C.s', to: '/inward-dcs', icon: ArrowDownToLine, perm: 'jobwork.view' },
+      { label: 'Material at vendors', to: '/stock/at-vendors', icon: Warehouse, perm: 'stock.view' },
     ],
   },
   {

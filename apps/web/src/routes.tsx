@@ -22,6 +22,8 @@ import { OrderPage } from '@/features/orders/OrderPage';
 import { ProgramPage, ProgramsListPage } from '@/features/programs/ProgramsPages';
 import { YarnReceiptPage, YarnReceiptsPage } from '@/features/yarn/YarnPages';
 import '@/print/register';
+import { OutwardDcPage, OutwardDcsPage } from '@/features/jobwork/OutwardPages';
+import { AtVendorsPage, InwardDcPage, InwardDcsPage } from '@/features/jobwork/InwardPages';
 
 /** Module pages: path → required permission → element. Modules append here as they are completed. */
 const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
@@ -31,6 +33,11 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'programs/:id', perm: 'programs.view', element: <ProgramPage /> },
   { path: 'yarn-receipts', perm: 'yarn.view', element: <YarnReceiptsPage /> },
   { path: 'yarn-receipts/:id', perm: 'yarn.view', element: <YarnReceiptPage /> },
+  { path: 'outward-dcs', perm: 'jobwork.view', element: <OutwardDcsPage /> },
+  { path: 'outward-dcs/:id', perm: 'jobwork.view', element: <OutwardDcPage /> },
+  { path: 'inward-dcs', perm: 'jobwork.view', element: <InwardDcsPage /> },
+  { path: 'inward-dcs/:id', perm: 'jobwork.view', element: <InwardDcPage /> },
+  { path: 'stock/at-vendors', perm: 'stock.view', element: <AtVendorsPage /> },
   { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },
   { path: 'masters/buyers', perm: 'masters.view', element: <BuyersPage /> },
   { path: 'masters/items', perm: 'masters.view', element: <ItemsPage /> },

@@ -12,6 +12,7 @@ import { authRouter } from './core/auth/auth.routes';
 import { authenticate } from './core/auth/auth.middleware';
 import { errorHandler, notFoundHandler } from './core/errors/error-middleware';
 import { settingsRouter } from './core/settings/settings.routes';
+import { notifyRouter } from './core/notify/notify.routes';
 import { moduleRouters } from './modules';
 
 export function createApp() {
@@ -56,6 +57,7 @@ export function createApp() {
   // Everything below requires a valid access token; each route adds requirePermission().
   v1.use(authenticate);
   v1.use(settingsRouter);
+  v1.use(notifyRouter);
   for (const r of moduleRouters) v1.use(r);
   app.use('/api/v1', v1);
 
