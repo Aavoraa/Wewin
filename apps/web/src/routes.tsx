@@ -24,6 +24,20 @@ import { YarnReceiptPage, YarnReceiptsPage } from '@/features/yarn/YarnPages';
 import '@/print/register';
 import { OutwardDcPage, OutwardDcsPage } from '@/features/jobwork/OutwardPages';
 import { AtVendorsPage, InwardDcPage, InwardDcsPage } from '@/features/jobwork/InwardPages';
+import { BundlesPage, CutLayPage, CutLaysPage } from '@/features/production/CuttingPages';
+import { PanelInListPage, PanelInPage, PanelOutListPage, PanelOutPage, RecutListPage, RecutPage } from '@/features/production/PanelPages';
+import {
+  CartonPage,
+  CartonsPage,
+  PackingListPage,
+  PackingListsPage,
+  SewingEntriesPage,
+  SewingEntryPage,
+  SewingIssuePage,
+  SewingIssuesPage,
+  TrimsDocPage,
+  TrimsDocsPage,
+} from '@/features/production/FloorPages';
 
 /** Module pages: path → required permission → element. Modules append here as they are completed. */
 const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
@@ -38,6 +52,25 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'inward-dcs', perm: 'jobwork.view', element: <InwardDcsPage /> },
   { path: 'inward-dcs/:id', perm: 'jobwork.view', element: <InwardDcPage /> },
   { path: 'stock/at-vendors', perm: 'stock.view', element: <AtVendorsPage /> },
+  { path: 'cut-lays', perm: 'cutting.view', element: <CutLaysPage /> },
+  { path: 'cut-lays/:id', perm: 'cutting.view', element: <CutLayPage /> },
+  { path: 'bundles', perm: 'cutting.view', element: <BundlesPage /> },
+  { path: 'panel-out', perm: 'panels.view', element: <PanelOutListPage /> },
+  { path: 'panel-out/:id', perm: 'panels.view', element: <PanelOutPage /> },
+  { path: 'panel-in', perm: 'panels.view', element: <PanelInListPage /> },
+  { path: 'panel-in/:id', perm: 'panels.view', element: <PanelInPage /> },
+  { path: 'recut-slips', perm: 'panels.view', element: <RecutListPage /> },
+  { path: 'recut-slips/:id', perm: 'panels.view', element: <RecutPage /> },
+  { path: 'sewing-issues', perm: 'sewing.view', element: <SewingIssuesPage /> },
+  { path: 'sewing-issues/:id', perm: 'sewing.view', element: <SewingIssuePage /> },
+  { path: 'sewing-entries', perm: 'sewing.view', element: <SewingEntriesPage /> },
+  { path: 'sewing-entries/:id', perm: 'sewing.view', element: <SewingEntryPage /> },
+  { path: 'cartons', perm: 'packing.view', element: <CartonsPage /> },
+  { path: 'cartons/:id', perm: 'packing.view', element: <CartonPage /> },
+  { path: 'packing-lists', perm: 'packing.view', element: <PackingListsPage /> },
+  { path: 'packing-lists/:id', perm: 'packing.view', element: <PackingListPage /> },
+  { path: 'trims-docs', perm: 'trims.view', element: <TrimsDocsPage /> },
+  { path: 'trims-docs/:id', perm: 'trims.view', element: <TrimsDocPage /> },
   { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },
   { path: 'masters/buyers', perm: 'masters.view', element: <BuyersPage /> },
   { path: 'masters/items', perm: 'masters.view', element: <ItemsPage /> },

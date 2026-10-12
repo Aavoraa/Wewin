@@ -18,10 +18,10 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState, LoadingState } from '@/components/states';
 import { type OrderDetail, pickers } from './api';
 
-const TABS = ['Costing', 'Fabric programs', 'Trims BOM'] as const;
+const TABS = ['WIP', 'Costing', 'Fabric programs', 'Trims BOM'] as const;
 
 export function OrderTabs({ order }: { order: OrderDetail }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Costing');
+  const [tab, setTab] = useState<(typeof TABS)[number]>(order.status === 'DRAFT' ? 'Costing' : 'WIP');
   return (
     <Card>
       <div className="flex gap-1 border-b px-2 pt-2">
@@ -36,7 +36,7 @@ export function OrderTabs({ order }: { order: OrderDetail }) {
         ))}
       </div>
       <CardContent>
-        {tab === 'Costing' ? <CostingPanel order={order} /> : tab === 'Fabric programs' ? <ProgramsPanel order={order} /> : <TrimsBomPanel order={order} />}
+        {tab === 'WIP' ? <WipPanel order={order} /> : tab === 'Costing' ? <CostingPanel order={order} /> : tab === 'Fabric programs' ? <ProgramsPanel order={order} /> : <TrimsBomPanel order={order} />}
       </CardContent>
     </Card>
   );
@@ -286,6 +286,97 @@ function TrimsBomPanel({ order }: { order: OrderDetail }) {
           <Button onClick={() => save.mutate()} loading={save.isPending}>
             Save trims BOM
           </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ───────── WIP ─────────
+interface Wip {
+  poPcs: number;
+  stages: { key: string; label: string; unit: string; qty: string; pctOfPo?: string }[];
+  cells: { colour: string; size: string; po: number; cutSets: number; sewn: number; packed: number; shipped: number }[];
+  trims: { itemId: string; code: string; name: string; unit: string; colour: string | null; size: string | null; required: string; issued: string }[];
+}
+
+/** Order WIP (B-Step 8): yarn → knitted → dyed → cut → sewn → packed → shipped vs PO. */
+function WipPanel({ order }: { order: OrderDetail }) {
+  const q = useQuery({ queryKey: ['wip', order.id], queryFn: () => api.get<Wip>(`/orders/${order.id}/wip`) });
+  if (q.isLoading) return <LoadingState />;
+  if (!q.data) return null;
+  const w = q.data;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {w.stages.map((s) => (
+          <div key={s.key} className="rounded-md border p-2">
+            <div className="text-[11px] text-muted-foreground">{s.label}</div>
+            <div className="text-lg font-semibold">{s.unit === 'KG' ? `${formatKg(s.qty)} kg` : formatQty(s.qty)}</div>
+            {s.pctOfPo ? (
+              <>
+                <div className="mt-1 h-1.5 rounded bg-muted">
+                  <div className="h-1.5 rounded bg-primary" style={{ width: `${Math.min(100, Number(s.pctOfPo))}%` }} />
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {s.pctOfPo}% of {formatQty(w.poPcs)}
+                </div>
+              </>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <Table>
+        <THead>
+          <TR>
+            <TH>Colour / size</TH>
+            <TH className="text-right">PO</TH>
+            <TH className="text-right">Cut sets</TH>
+            <TH className="text-right">Sewn</TH>
+            <TH className="text-right">Packed</TH>
+            <TH className="text-right">Shipped</TH>
+            <TH className="text-right">Balance to pack</TH>
+          </TR>
+        </THead>
+        <TBody>
+          {w.cells.map((c) => (
+            <TR key={`${c.colour}|${c.size}`}>
+              <TD>
+                {c.colour} / {c.size}
+              </TD>
+              <TD className="num">{formatQty(c.po)}</TD>
+              <TD className="num">{formatQty(c.cutSets)}</TD>
+              <TD className="num">{formatQty(c.sewn)}</TD>
+              <TD className="num">{formatQty(c.packed)}</TD>
+              <TD className="num">{formatQty(c.shipped)}</TD>
+              <TD className={cn('num', c.po - c.packed <= 0 && 'text-success')}>{formatQty(Math.max(0, c.po - c.packed))}</TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+      {w.trims.length ? (
+        <div>
+          <div className="mb-1 text-sm font-semibold">Trims issued vs BOM</div>
+          <Table>
+            <THead>
+              <TR>
+                <TH>Trim</TH>
+                <TH>For</TH>
+                <TH className="text-right">Required</TH>
+                <TH className="text-right">Issued</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {w.trims.map((x) => (
+                <TR key={`${x.itemId}${x.colour}${x.size}`}>
+                  <TD>{x.name}</TD>
+                  <TD className="text-xs">{[x.colour, x.size].filter(Boolean).join(' / ') || 'all'}</TD>
+                  <TD className="num">{formatQty(x.required)}</TD>
+                  <TD className="num">{formatQty(x.issued)}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
         </div>
       ) : null}
     </div>
