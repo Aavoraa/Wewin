@@ -1,5 +1,5 @@
 import { Prisma } from '@wewin/db';
-import { prisma } from '../../core/db';
+import { type Tx, prisma } from '../../core/db';
 
 export interface BalanceFilter {
   itemId?: string;
@@ -106,6 +106,10 @@ export const stockRepo = {
       }),
       prisma.stockMovement.count({ where }),
     ]);
+  },
+
+  movementCountForOrder(orderId: string, db: Tx | typeof prisma = prisma) {
+    return db.stockMovement.count({ where: { orderId } });
   },
 
   lastRefresh() {

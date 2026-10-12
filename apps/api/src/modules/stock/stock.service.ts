@@ -1,3 +1,4 @@
+import { type Tx, type prisma } from '../../core/db';
 import { refreshStockBalancesNow } from '../../jobs/queue';
 import { type BalanceFilter, stockRepo } from './stock.repo';
 
@@ -60,6 +61,11 @@ export const stockService = {
   /** Material held at vendors (job workers) — live from the ledger, never the cache. */
   async atVendors(f: Omit<BalanceFilter, 'locationKind' | 'live'>) {
     return this.balances({ ...f, locationKind: 'VENDOR', live: true });
+  },
+
+  /** Used by other modules' cancellation dependency checks. */
+  movementCountForOrder(orderId: string, db?: Tx | typeof prisma) {
+    return stockRepo.movementCountForOrder(orderId, db);
   },
 
   async refreshCache() {

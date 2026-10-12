@@ -1,4 +1,6 @@
 import {
+  ClipboardSignature,
+  Route,
   Building2,
   Factory,
   MapPin,
@@ -35,6 +37,13 @@ export const NAV: NavGroup[] = [
   {
     label: 'Overview',
     items: [{ label: 'Dashboard', to: '/', icon: LayoutDashboard, perm: 'dashboard.view' }],
+  },
+  {
+    label: 'Orders',
+    items: [
+      { label: 'Orders', to: '/orders', icon: ClipboardSignature, perm: 'orders.view' },
+      { label: 'Fabric programs', to: '/programs', icon: Route, perm: 'programs.view' },
+    ],
   },
   {
     label: 'Stores',

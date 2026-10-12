@@ -17,9 +17,16 @@ import { VendorsPage } from '@/features/masters/VendorsPage';
 import { BuyersPage, ItemsPage, LocationsPage, ProcessesPage } from '@/features/masters/SimpleMastersPages';
 import { UsersPage } from '@/features/masters/UsersPage';
 import { RolesPage } from '@/features/masters/RolesPage';
+import { OrdersListPage } from '@/features/orders/OrdersListPage';
+import { OrderPage } from '@/features/orders/OrderPage';
+import { ProgramPage, ProgramsListPage } from '@/features/programs/ProgramsPages';
 
 /** Module pages: path → required permission → element. Modules append here as they are completed. */
 const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
+  { path: 'orders', perm: 'orders.view', element: <OrdersListPage /> },
+  { path: 'orders/:id', perm: 'orders.view', element: <OrderPage /> },
+  { path: 'programs', perm: 'programs.view', element: <ProgramsListPage /> },
+  { path: 'programs/:id', perm: 'programs.view', element: <ProgramPage /> },
   { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },
   { path: 'masters/buyers', perm: 'masters.view', element: <BuyersPage /> },
   { path: 'masters/items', perm: 'masters.view', element: <ItemsPage /> },

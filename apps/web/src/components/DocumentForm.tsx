@@ -38,6 +38,15 @@ export interface DocumentFormProps {
   postWarning?: ReactNode;
   closeDescription?: ReactNode;
   extraActions?: ReactNode;
+  /** Override header editability (e.g. confirmed orders allow amendments). */
+  editable?: boolean;
+  /** Label of the primary state action: Post (default), Confirm, Approve… */
+  postLabel?: string;
+  postDescription?: ReactNode;
+  /** Statuses in which Cancel / Close are offered (default POSTED). */
+  cancelStatuses?: string[];
+  closeStatuses?: string[];
+  cancelDescription?: ReactNode;
 }
 
 /**
@@ -48,7 +57,10 @@ export function DocumentForm(p: DocumentFormProps) {
   const headerRef = useRef<HTMLDivElement>(null);
   const [confirm, setConfirm] = useState<null | 'post' | 'cancel' | 'close' | 'delete'>(null);
   const isDraft = p.status === 'DRAFT';
-  const editable = isDraft && p.canEdit !== false;
+  const editable = p.editable ?? (isDraft && p.canEdit !== false);
+  const postLabel = p.postLabel ?? 'Post';
+  const cancelOk = (p.cancelStatuses ?? ['POSTED']).includes(p.status);
+  const closeOk = (p.closeStatuses ?? ['POSTED']).includes(p.status);
 
   async function run(fn: (() => Promise<unknown>) | undefined, ok: string) {
     if (!fn) return;
@@ -64,7 +76,7 @@ export function DocumentForm(p: DocumentFormProps) {
   useDocumentHotkeys(
     {
       save: () => {
-        if (editable && p.onSave) void run(p.onSave, 'Draft saved').catch(() => undefined);
+        if (editable && p.onSave) void run(p.onSave, 'Saved').catch(() => undefined);
       },
       post: () => {
         if (isDraft && p.canPost && p.onPost) setConfirm('post');
@@ -94,9 +106,9 @@ export function DocumentForm(p: DocumentFormProps) {
             {p.title} {p.docNo ? <span className="font-mono text-base text-muted-foreground">{p.docNo}</span> : null}
           </h1>
           <StatusBadge status={p.status} />
-          {!isDraft ? (
+          {!editable && !isDraft ? (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Lock className="size-3" /> Posted documents cannot be edited
+              <Lock className="size-3" /> Read-only
               {p.postedAt ? ` · ${formatDateTimeIst(p.postedAt)}` : ''}
             </span>
           ) : null}
@@ -135,24 +147,24 @@ export function DocumentForm(p: DocumentFormProps) {
               </Link>
             </Button>
           ) : null}
-          {p.status === 'POSTED' && p.canClose && p.onClose ? (
+          {closeOk && p.canClose && p.onClose ? (
             <Button variant="outline" onClick={() => setConfirm('close')}>
               <CheckCircle2 /> Close
             </Button>
           ) : null}
-          {p.status === 'POSTED' && p.canCancel && p.onCancel ? (
+          {cancelOk && p.canCancel && p.onCancel ? (
             <Button variant="outline" className="text-destructive" onClick={() => setConfirm('cancel')}>
               <Ban /> Cancel document
             </Button>
           ) : null}
           {editable && p.onSave ? (
-            <Button variant="secondary" onClick={() => void run(p.onSave, 'Draft saved').catch(() => undefined)} loading={p.saving}>
-              <Save /> Save draft <kbd className="ml-1 text-[10px] opacity-60">Ctrl+S</kbd>
+            <Button variant="secondary" onClick={() => void run(p.onSave, 'Saved').catch(() => undefined)} loading={p.saving}>
+              <Save /> {isDraft ? 'Save draft' : 'Save changes'} <kbd className="ml-1 text-[10px] opacity-60">Ctrl+S</kbd>
             </Button>
           ) : null}
           {isDraft && p.canPost && p.onPost ? (
             <Button onClick={() => setConfirm('post')}>
-              <Send /> Post <kbd className="ml-1 text-[10px] opacity-70">Ctrl+Enter</kbd>
+              <Send /> {postLabel} <kbd className="ml-1 text-[10px] opacity-70">Ctrl+Enter</kbd>
             </Button>
           ) : null}
         </div>
@@ -161,10 +173,13 @@ export function DocumentForm(p: DocumentFormProps) {
       <ConfirmDialog
         open={confirm === 'post'}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={`Post ${p.title.toLowerCase()}?`}
-        description="Posting assigns the document number and updates stock and ledgers. A posted document cannot be edited; corrections need cancellation."
-        confirmLabel="Post"
-        onConfirm={() => run(p.onPost, 'Posted')}
+        title={`${postLabel} ${p.title.toLowerCase()}?`}
+        description={
+          p.postDescription ??
+          'Posting assigns the document number and updates stock and ledgers. A posted document cannot be edited; corrections need cancellation.'
+        }
+        confirmLabel={postLabel}
+        onConfirm={() => run(p.onPost, `${postLabel} done`)}
       >
         {p.postWarning}
       </ConfirmDialog>
@@ -172,7 +187,10 @@ export function DocumentForm(p: DocumentFormProps) {
         open={confirm === 'cancel'}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={`Cancel ${p.docNo ?? 'document'}?`}
-        description="Reversing entries will be written. The number is kept and marked CANCELLED. This is refused if later documents depend on it."
+        description={
+          p.cancelDescription ??
+          'Reversing entries will be written. The number is kept and marked CANCELLED. This is refused if later documents depend on it.'
+        }
         confirmLabel="Cancel document"
         destructive
         requireReason
