@@ -362,6 +362,12 @@ export const jobworkService = {
       const expected = dateOnly(o.expectedReturnDate) ?? addDays(docDate, o.process.defaultReturnDays);
       const { docNo } = await numbering.next('OUTWARD_DC', docDate, tx);
       const vendorLoc = await mastersService.vendorLocationId(o.vendorId, tx);
+      await ledger.assertUnitsAvailable(
+        tx,
+        'roll',
+        o.lines.filter((l) => l.rollId).map((l) => ({ id: l.rollId!, qty: l.qtyKg.toFixed(3), label: l.roll?.rollNo ?? l.rollId! })),
+        o.fromLocationId,
+      );
       await ledger.post(
         tx,
         { type: DOC_OUT, id, docDate },
@@ -403,6 +409,12 @@ export const jobworkService = {
         throw new AppError('DOC_HAS_DEPENDENTS', 'Inward D.C.s have been received against this D.C.; cancel them first', 409);
       }
       try {
+        await ledger.assertUnitsAvailable(
+          tx,
+          'roll',
+          o.lines.filter((l) => l.rollId).map((l) => ({ id: l.rollId!, qty: l.qtyKg.toFixed(3), label: l.roll?.rollNo ?? l.rollId! })),
+          await mastersService.vendorLocationId(o.vendorId, tx),
+        );
         await ledger.reverse(tx, { type: DOC_OUT, id }, user.id);
       } catch (e) {
         if (e instanceof AppError && e.code === 'NEGATIVE_STOCK') {
@@ -697,6 +709,12 @@ export const jobworkService = {
       }
       await repo.lockOutward(tx, i.links.map((k) => k.outwardDcId));
       try {
+        await ledger.assertUnitsAvailable(
+          tx,
+          'roll',
+          i.lines.filter((l) => l.roll).map((l) => ({ id: l.roll!.id, qty: l.kg.toFixed(3), label: l.rollNo })),
+          i.toLocationId,
+        );
         await ledger.reverse(tx, { type: DOC_IN, id }, user.id);
       } catch (e) {
         if (e instanceof AppError && e.code === 'NEGATIVE_STOCK') {

@@ -108,3 +108,47 @@ export async function createProgram(c: Client, m: Masters, orderId: string, opts
   const prog = (await c.get(`/api/v1/programs/${res.body.data.id}`)).body.data;
   return prog as { id: string; programNo: string; processes: { id: string; sequence: number }[] };
 }
+
+/**
+ * Real dyed fabric rolls in FABRIC_STORE for an order, produced through the API:
+ * yarn receipt → knitting outward/inward → dyeing outward (greige roll) / inward (dyed rolls).
+ */
+export async function dyedRolls(
+  c: Client,
+  m: Masters,
+  program: { processes: { id: string; sequence: number }[] },
+  colour: string,
+  kgs: string[],
+): Promise<{ id: string; rollNo: string; kg: string }[]> {
+  const D = (await import('@wewin/shared')).D;
+  const total = kgs.reduce((a, k) => a.plus(D(k)), D(0));
+  const pp = (seq: number) => program.processes.find((p) => p.sequence === seq)!.id;
+  const lot = uid('Y');
+  const ok = (r: { status: number; body: unknown }, s = 200) => expect(r.status, JSON.stringify(r.body)).toBe(s);
+  const yarn = await c.post('/api/v1/yarn-receipts', { docDate: '2026-10-01', vendorId: m.vendors.mill.id, lines: [{ itemId: m.items.yarn.id, lot, qtyKg: total.times(1.2).toFixed(3), ratePerKg: '280' }] });
+  ok(yarn, 201);
+  ok(await c.post(`/api/v1/yarn-receipts/${yarn.body.data.id}/post`));
+  const ko = await c.post('/api/v1/outward-dcs', { docDate: '2026-10-02', vendorId: m.vendors.knitter.id, programProcessId: pp(1), lines: [{ itemId: m.items.yarn.id, lot, qtyKg: total.times(1.15).toFixed(3) }] });
+  ok(ko, 201);
+  ok(await c.post(`/api/v1/outward-dcs/${ko.body.data.id}/post`));
+  const greigeKg = total.times(1.1).toFixed(3);
+  const ki = await c.post('/api/v1/inward-dcs', { docDate: '2026-10-05', vendorId: m.vendors.knitter.id, lines: [{ itemId: m.items.greige.id, kg: greigeKg, lot }], links: [{ outwardDcId: ko.body.data.id, receivedKg: greigeKg }] });
+  ok(ki, 201);
+  const kiPosted = await c.post(`/api/v1/inward-dcs/${ki.body.data.id}/post`);
+  ok(kiPosted);
+  const greigeRoll = kiPosted.body.data.lines[0].roll.id;
+  const dout = await c.post('/api/v1/outward-dcs', { docDate: '2026-10-06', vendorId: m.vendors.dyer.id, programProcessId: pp(2), lines: [{ itemId: m.items.greige.id, rollId: greigeRoll, qtyKg: greigeKg }] });
+  ok(dout, 201);
+  ok(await c.post(`/api/v1/outward-dcs/${dout.body.data.id}/post`));
+  const dyeLot = uid('DL');
+  const din = await c.post('/api/v1/inward-dcs', {
+    docDate: '2026-10-08',
+    vendorId: m.vendors.dyer.id,
+    lines: kgs.map((kg) => ({ itemId: m.items.dyed.id, kg, lot: dyeLot, colour })),
+    links: [{ outwardDcId: dout.body.data.id, receivedKg: total.toFixed(3) }],
+  });
+  ok(din, 201);
+  const dinPosted = await c.post(`/api/v1/inward-dcs/${din.body.data.id}/post`);
+  ok(dinPosted);
+  return dinPosted.body.data.lines.map((l: { roll: { id: string; rollNo: string }; kg: string }) => ({ id: l.roll.id, rollNo: l.roll.rollNo, kg: l.kg }));
+}

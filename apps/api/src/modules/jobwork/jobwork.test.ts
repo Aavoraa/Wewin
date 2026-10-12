@@ -331,6 +331,28 @@ describe('job work validation', () => {
     await assertLedgerInvariants();
   });
 
+  it('a roll cannot be sent twice even when other stock of the same lot exists', async () => {
+    const lot = uid('RR');
+    await postedYarn(lot, '300');
+    const knit = await outward({ vendorId: m.vendors.knitter.id, programProcessId: pp(1), lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '300' }] });
+    const g = await inward({
+      vendorId: m.vendors.knitter.id,
+      lines: [
+        { itemId: m.items.greige.id, kg: '140', lot },
+        { itemId: m.items.greige.id, kg: '150', lot },
+      ],
+      links: [{ outwardDcId: knit.id, receivedKg: '290' }],
+    });
+    const roll = g.lines[0].roll.id;
+    await outward({ vendorId: m.vendors.dyer.id, programProcessId: pp(2), lines: [{ itemId: m.items.greige.id, rollId: roll, qtyKg: '140' }] });
+    // Same lot still has 150 kg in the store (the other roll) — the item-level check alone would pass.
+    const again = await outward({ vendorId: m.vendors.dyer.id, programProcessId: pp(2), lines: [{ itemId: m.items.greige.id, rollId: roll, qtyKg: '140' }] }, false);
+    const r = await owner.post(`/api/v1/outward-dcs/${again.id}/post`);
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe('NEGATIVE_STOCK');
+    expect(r.body.error.details[0]).toMatchObject({ requested: '140.000', available: '0.000' });
+  });
+
   it('roll lookup for scanners', async () => {
     const roll = await prisma.fabricRoll.findFirstOrThrow();
     const r = await owner.get(`/api/v1/rolls/${encodeURIComponent(roll.rollNo)}`);

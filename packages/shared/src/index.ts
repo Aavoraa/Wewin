@@ -11,3 +11,4 @@ export * from './orders';
 export * from './documents';
 export * from './loss';
 export * from './jobwork';
+export * from './production';

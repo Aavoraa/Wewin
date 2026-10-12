@@ -2,6 +2,10 @@ import { Prisma } from '@wewin/db';
 import { type Tx, type prisma } from '../db';
 import { type NormalisedMovement } from './ledger.validate';
 
+export type UnitKind = 'roll' | 'bundle' | 'carton';
+const UNIT_COLUMN: Record<UnitKind, string> = { roll: 'roll_id', bundle: 'bundle_id', carton: 'carton_id' };
+const UNIT_TABLE: Record<UnitKind, string> = { roll: 'fabric_rolls', bundle: 'cut_bundles', carton: 'cartons' };
+
 export interface BalanceKey {
   itemId: string;
   locationId: string;
@@ -100,6 +104,41 @@ export const ledgerRepo = {
       WHERE m.source_type = ${sourceType} AND m.source_id = ${sourceId}::uuid AND m.is_reversal = false
         AND NOT EXISTS (SELECT 1 FROM stock_movements r WHERE r.reversal_of_id = m.id)
       ORDER BY m.source_line_key`;
+  },
+
+  /** Net quantity of each roll / bundle / carton at a location (live from the ledger). */
+  async unitBalanceAt(db: Tx | typeof prisma, kind: UnitKind, ids: string[], locationId: string): Promise<Map<string, string>> {
+    if (!ids.length) return new Map();
+    const col = UNIT_COLUMN[kind];
+    const rows = await db.$queryRawUnsafe<{ unit_id: string; qty: Prisma.Decimal }[]>(
+      `SELECT u.id AS unit_id,
+              COALESCE((SELECT SUM(qty) FROM stock_movements WHERE ${col} = u.id AND to_location_id = $2::uuid), 0)
+            - COALESCE((SELECT SUM(qty) FROM stock_movements WHERE ${col} = u.id AND from_location_id = $2::uuid), 0) AS qty
+       FROM unnest($1::uuid[]) AS u(id)`,
+      ids,
+      locationId,
+    );
+    return new Map(rows.map((x) => [x.unit_id, new Prisma.Decimal(x.qty).toFixed(3)]));
+  },
+
+  /** Where each unit currently is: locations holding a positive balance. */
+  unitLocations(db: Tx | typeof prisma, kind: UnitKind, ids: string[]) {
+    if (!ids.length) return Promise.resolve([] as { unit_id: string; location_id: string; qty: Prisma.Decimal }[]);
+    const col = UNIT_COLUMN[kind];
+    return db.$queryRawUnsafe<{ unit_id: string; location_id: string; qty: Prisma.Decimal }[]>(
+      `SELECT unit_id, location_id, SUM(q) AS qty FROM (
+          SELECT ${col} AS unit_id, to_location_id AS location_id, qty AS q FROM stock_movements WHERE ${col} = ANY($1::uuid[])
+          UNION ALL
+          SELECT ${col}, from_location_id, -qty FROM stock_movements WHERE ${col} = ANY($1::uuid[])
+        ) x GROUP BY unit_id, location_id HAVING SUM(q) > 0`,
+      ids,
+    );
+  },
+
+  /** Lock unit rows (sorted) so two postings cannot use the same roll / bundle / carton concurrently. */
+  async lockUnits(tx: Tx, kind: UnitKind, ids: string[]) {
+    if (!ids.length) return;
+    await tx.$queryRawUnsafe(`SELECT 1 FROM ${UNIT_TABLE[kind]} WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`, [...new Set(ids)].sort());
   },
 
   movementsOfSource(db: Tx | typeof prisma, sourceType: string, sourceId: string) {

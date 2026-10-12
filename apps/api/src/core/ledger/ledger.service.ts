@@ -104,6 +104,32 @@ export const ledger = {
 
   /** Live balances for specific keys (used by services for pending / availability checks). */
   balances: ledgerRepo.balances,
+  unitBalanceAt: ledgerRepo.unitBalanceAt,
+  unitLocations: ledgerRepo.unitLocations,
+  lockUnits: ledgerRepo.lockUnits,
+
+  /**
+   * Unit-level guard: each roll / bundle / carton must hold at least the requested quantity at the
+   * source location (the item-level negative check cannot see individual units).
+   */
+  async assertUnitsAvailable(
+    tx: Tx,
+    kind: 'roll' | 'bundle' | 'carton',
+    wanted: { id: string; qty: string; label: string }[],
+    locationId: string,
+  ): Promise<void> {
+    if (!wanted.length) return;
+    await ledgerRepo.lockUnits(tx, kind, wanted.map((w) => w.id));
+    const need = new Map<string, ReturnType<typeof D>>();
+    for (const w of wanted) need.set(w.id, (need.get(w.id) ?? D(0)).plus(D(w.qty)));
+    const have = await ledgerRepo.unitBalanceAt(tx, kind, [...need.keys()], locationId);
+    const short = [...need.entries()]
+      .filter(([id, q]) => q.greaterThan(D(have.get(id) ?? '0')))
+      .map(([id, q]) => ({ [kind]: wanted.find((w) => w.id === id)!.label, requested: q.toFixed(3), available: D(have.get(id) ?? '0').toFixed(3) }));
+    if (short.length) {
+      throw new AppError('NEGATIVE_STOCK', `Not enough at the source location for ${short.length} ${kind}(s)`, 409, short);
+    }
+  },
   movementsOfSource: ledgerRepo.movementsOfSource,
 };
 
