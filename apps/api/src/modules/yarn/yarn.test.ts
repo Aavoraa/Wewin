@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma, withTx } from '../../core/db';
 import { ledger } from '../../core/ledger/ledger.service';
-import { type Client, asUser, assertLedgerInvariants, locationId } from '../../../test/helpers';
+import { type Client, asUser, assertLedgerInvariants, locationId, uid } from '../../../test/helpers';
 import { type Masters, createOrder, masters } from '../../../test/fixtures';
 
 let owner: Client;
@@ -127,8 +127,9 @@ describe('yarn receipts', () => {
   });
 
   it('registers search by lot and filters by status', async () => {
-    const r = (await owner.post('/api/v1/yarn-receipts', body({ lines: [{ itemId: m.items.yarn.id, lot: 'FINDME-77', qtyKg: '5' }] }))).body.data;
-    const res = await owner.get('/api/v1/yarn-receipts?q=FINDME-77&status=DRAFT');
+    const lot = uid('FIND');
+    const r = (await owner.post('/api/v1/yarn-receipts', body({ lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '5' }] }))).body.data;
+    const res = await owner.get(`/api/v1/yarn-receipts?q=${lot}&status=DRAFT`);
     expect(res.body.data.map((x: { id: string }) => x.id)).toEqual([r.id]);
   });
 });
