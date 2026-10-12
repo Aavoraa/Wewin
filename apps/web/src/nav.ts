@@ -1,4 +1,11 @@
 import {
+  Building2,
+  Factory,
+  MapPin,
+  Package,
+  ShieldCheck,
+  Users,
+  Workflow,
   Boxes,
   ClipboardList,
   Cog,
@@ -34,6 +41,18 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Stock balances', to: '/stock/balances', icon: Boxes, perm: 'stock.view' },
       { label: 'Stock movements', to: '/stock/movements', icon: History, perm: 'stock.view' },
+    ],
+  },
+  {
+    label: 'Masters',
+    items: [
+      { label: 'Vendors', to: '/masters/vendors', icon: Factory, perm: 'masters.view' },
+      { label: 'Buyers', to: '/masters/buyers', icon: Building2, perm: 'masters.view' },
+      { label: 'Items', to: '/masters/items', icon: Package, perm: 'masters.view' },
+      { label: 'Processes', to: '/masters/processes', icon: Workflow, perm: 'masters.view' },
+      { label: 'Locations', to: '/masters/locations', icon: MapPin, perm: 'masters.view' },
+      { label: 'Users', to: '/masters/users', icon: Users, perm: 'users.view' },
+      { label: 'Roles', to: '/masters/roles', icon: ShieldCheck, perm: 'users.view' },
     ],
   },
   {

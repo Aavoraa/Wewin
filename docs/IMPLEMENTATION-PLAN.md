@@ -32,28 +32,29 @@ Step 0 bootstrap
 
 ## Step 0 — Bootstrap
 Acceptance: install, DB reachable, `pnpm dev` serves API :4000 + web :5173, `/api/health` through proxy.
-- [ ] pnpm workspace + Turborepo + shared tsconfig/eslint/prettier
-- [ ] docker-compose.yml, .env.example, .env (local), .gitignore
-- [ ] .vscode settings / extensions / launch
-- [ ] CLAUDE.md + .github/copilot-instructions.md
-- [ ] git init + first commit
+- [x] pnpm workspace + Turborepo + shared tsconfig/eslint/prettier
+- [x] docker-compose.yml, .env.example, .env (local), .gitignore
+- [x] .vscode settings / extensions / launch
+- [x] CLAUDE.md + .github/copilot-instructions.md
+- [x] git init + first commit
 
 ## Phase 1 — Fabric flow
 
 ### Step 1 — Platform foundation
 Acceptance: login/refresh/logout/me with lockout; permission guard on all routes; audit trigger rows in same tx; numbering concurrency test; ledger post/reverse + negative-stock + invariant tests; web shell with login and reusable components; seed; CI file.
-- [ ] Prisma base models + migration (users, roles, permissions, sessions, login_events, company_settings, app_settings, document_series, number_series, audit_log, locations, items, units, stock_movements, attachments, alerts, notifications, notification_deliveries, report_exports)
-- [ ] SQL: audit trigger, append-only triggers, `stock_balances` materialised view
-- [ ] core/config, core/db (`withTx` + request context), core/errors
-- [ ] Auth endpoints + `requirePermission()` + rate limit + lockout
-- [ ] Audit service (explicit post/cancel/close/approve rows)
-- [ ] Numbering service (+ FY function, concurrency test)
-- [ ] Ledger service post/reverse + invariants + tests
-- [ ] Settings endpoints (company + business settings)
-- [ ] pg-boss bootstrap + refresh-stock-balances job
-- [ ] Web shell: login, auth context, api client, sidebar layout, DataTable, DocumentForm, LineGrid, print base, formatters
-- [ ] Seed: owner, six roles, locations, series FY 26-27
-- [ ] GitHub Actions CI
+- [x] Prisma base models + migration (users, roles, permissions, sessions, login_events, company_settings, app_settings, document_series, number_series, audit_log, locations, items, units, stock_movements, attachments, alerts, notifications, notification_deliveries, report_exports)
+- [x] SQL: audit trigger, append-only triggers, `stock_balances` materialised view
+- [x] core/config, core/db (`withTx` + request context), core/errors
+- [x] Auth endpoints + `requirePermission()` + rate limit + lockout
+- [x] Audit service (explicit post/cancel/close/approve rows)
+- [x] Numbering service (+ FY function, concurrency test)
+- [x] Ledger service post/reverse + invariants + tests
+- [x] Settings endpoints (company + business settings)
+- [x] pg-boss bootstrap + refresh-stock-balances job
+- [x] Web shell: login, auth context, api client, sidebar layout, DataTable, DocumentForm, LineGrid, print base, formatters
+- [x] Seed: owner, six roles, locations, series FY 26-27
+- [x] GitHub Actions CI (workflow written; runs once the repo is pushed to GitHub)
+- [ ] OpenAPI document from Zod schemas at /api/docs (dev) — deferred to Step 12 hardening
 
 ### Step 2 — Masters
 - [ ] Vendors (auto location), buyers, items, processes, locations, users, roles — API + tests + screens + pickers
@@ -95,3 +96,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
+
+### 2026-10-12 — Step 0 + Step 1 verified
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` (59 tests: 11 shared, 48 API), `pnpm build` all green.
+- Migration `20261012115611_foundation` applied to `wewin_erp` and `wewin_erp_test`; seed loaded (71 permissions, 6 roles, 13 locations, 19 series).
+- Ledger: negative-stock refusal + rollback, per-lot checks, vendor locations non-virtual, reversal idempotent and refused after consumption, DB-level append-only + CHECK constraints, 5 parallel overdraws → exactly 2 succeed.
+- Numbering: 25 concurrent posts → numbers 1..25 unique and gap-free; rollback consumes no number; FY reset.
+- Auth: lockout after 5 failures (423), refresh rotation + reuse detection revokes family, logout, 401/403 enforcement, password policy.
+- Audit: trigger rows carry acting user, written in the same transaction (rollback → none), password hashes excluded, append-only.
+- Browser check: login → dashboard, settings, audit register (real rows), `/api/health` via Vite proxy; production bundle boots (`/api/health/ready` → db up); pg-boss queues started.

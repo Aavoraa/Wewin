@@ -418,6 +418,99 @@ model ReportExport {
   @@map("report_exports")
 }
 
+// ───────────────────────────── Masters (Step 2) ─────────────────────────────
+
+enum ProcessStage {
+  KG
+  PCS
+}
+
+/// Job-work and supply processes (knitting, dyeing, compacting, printing, embroidery …).
+model Process {
+  id                String          @id @default(uuid()) @db.Uuid
+  code              String          @unique
+  name              String
+  stage             ProcessStage
+  defaultReturnDays Int             @default(15) @map("default_return_days")
+  isActive          Boolean         @default(true) @map("is_active")
+  version           Int             @default(1)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendors           VendorProcess[]
+
+  @@map("processes")
+}
+
+/// Vendors: mills, job workers (knitters, dyers, compactors, printers, embroiderers), trims suppliers.
+/// Creating a vendor auto-creates its stock location (B-Step 2).
+model Vendor {
+  id                     String          @id @default(uuid()) @db.Uuid
+  code                   String          @unique
+  name                   String
+  gstin                  String?
+  pan                    String?
+  addressLine1           String?         @map("address_line1")
+  addressLine2           String?         @map("address_line2")
+  city                   String?
+  state                  String?
+  stateCode              String?         @map("state_code")
+  pincode                String?
+  contactPerson          String?         @map("contact_person")
+  phone                  String?
+  email                  String?
+  creditDays             Int             @default(0) @map("credit_days")
+  /// TDS u/s 194C — configured per vendor, confirmed with auditor (Q-008). Never applied automatically when false.
+  tdsApplicable          Boolean         @default(false) @map("tds_applicable")
+  tdsRatePct             Decimal?        @map("tds_rate_pct") @db.Decimal(6, 3)
+  /// Whether debit notes to this vendor carry GST (Q-008). Default false.
+  debitNoteGstApplicable Boolean         @default(false) @map("debit_note_gst_applicable")
+  debitNoteGstRatePct    Decimal?        @map("debit_note_gst_rate_pct") @db.Decimal(6, 3)
+  bankName               String?         @map("bank_name")
+  bankAccount            String?         @map("bank_account")
+  bankIfsc               String?         @map("bank_ifsc")
+  whatsappNumber         String?         @map("whatsapp_number")
+  isActive               Boolean         @default(true) @map("is_active")
+  version                Int             @default(1)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  processes              VendorProcess[]
+
+  @@index([name])
+  @@map("vendors")
+}
+
+model VendorProcess {
+  vendorId  String  @map("vendor_id") @db.Uuid
+  processId String  @map("process_id") @db.Uuid
+  vendor    Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  process   Process @relation(fields: [processId], references: [id], onDelete: Restrict)
+
+  @@id([vendorId, processId])
+  @@map("vendor_processes")
+}
+
+model Buyer {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique
+  name          String
+  country       String?
+  addressLine1  String?  @map("address_line1")
+  addressLine2  String?  @map("address_line2")
+  city          String?
+  contactPerson String?  @map("contact_person")
+  phone         String?
+  email         String?
+  currency      String   @default("USD")
+  paymentTerms  String?  @map("payment_terms")
+  isActive      Boolean  @default(true) @map("is_active")
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([name])
+  @@map("buyers")
+}
+
 /// Idempotency ledger for business events processed by services and jobs.
 model ProcessedEvent {
   key         String   @id

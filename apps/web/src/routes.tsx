@@ -13,6 +13,21 @@ import { AuditPage } from '@/features/settings/AuditPage';
 import { StockBalancesPage } from '@/features/stock/StockBalancesPage';
 import { StockMovementsPage } from '@/features/stock/StockMovementsPage';
 import { PrintRoute } from '@/print/PrintRoute';
+import { VendorsPage } from '@/features/masters/VendorsPage';
+import { BuyersPage, ItemsPage, LocationsPage, ProcessesPage } from '@/features/masters/SimpleMastersPages';
+import { UsersPage } from '@/features/masters/UsersPage';
+import { RolesPage } from '@/features/masters/RolesPage';
+
+/** Module pages: path → required permission → element. Modules append here as they are completed. */
+const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
+  { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },
+  { path: 'masters/buyers', perm: 'masters.view', element: <BuyersPage /> },
+  { path: 'masters/items', perm: 'masters.view', element: <ItemsPage /> },
+  { path: 'masters/processes', perm: 'masters.view', element: <ProcessesPage /> },
+  { path: 'masters/locations', perm: 'masters.view', element: <LocationsPage /> },
+  { path: 'masters/users', perm: 'users.view', element: <UsersPage /> },
+  { path: 'masters/roles', perm: 'users.view', element: <RolesPage /> },
+];
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -54,6 +69,9 @@ export function AppRoutes() {
         <Route path="settings" element={<Perm perm="settings.view"><SettingsPage /></Perm>} />
         <Route path="settings/series" element={<Perm perm="settings.view"><SeriesPage /></Perm>} />
         <Route path="audit" element={<Perm perm="audit.view"><AuditPage /></Perm>} />
+        {PAGES.map((p) => (
+          <Route key={p.path} path={p.path} element={<Perm perm={p.perm}>{p.element}</Perm>} />
+        ))}
         <Route path="*" element={<EmptyState title="Page not found" />} />
       </Route>
     </Routes>
