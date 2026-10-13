@@ -34,7 +34,7 @@ export function DialogContent({
               {description ?? title}
             </D.Description>
           </div>
-          <D.Close className="rounded p-1 text-muted-foreground hover:bg-accent" aria-label="Close">
+          <D.Close className="rounded p-1 text-muted-foreground hover:bg-accent" aria-label="Dismiss dialog">
             <X className="size-4" />
           </D.Close>
         </div>

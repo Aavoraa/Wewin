@@ -199,7 +199,7 @@ export function OutwardDcPage() {
   async function addRoll(code: string) {
     try {
       const r = await api.get<{ id: string; rollNo: string; itemId: string; lot: string; colour: string; kg: string; item: { name: string } }>(`/rolls/${encodeURIComponent(code)}`);
-      const cur = form.getValues('lines').filter((l) => l.itemId || l.qtyKg);
+      const cur = form.getValues('lines').filter((l) => l.rollId || l.qtyKg);
       if (cur.some((l) => l.rollId === r.id)) {
         toast.warning(`Roll ${r.rollNo} is already on this D.C.`);
         return;

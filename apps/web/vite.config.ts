@@ -7,9 +7,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   server: {
-    port: 5173,
+    port: Number(process.env.WEB_PORT ?? 5173),
     strictPort: true,
-    proxy: { '/api': 'http://localhost:4000' },
+    proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:4000' },
   },
   preview: { port: 4173, proxy: { '/api': 'http://localhost:4000' } },
   build: { sourcemap: true, chunkSizeWarningLimit: 1500 },
