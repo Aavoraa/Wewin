@@ -128,6 +128,28 @@ const inFrom = (d: PanelDcDetail): InInput => ({
   lines: d.lines.map((l) => ({ outLineId: l.outLineId!, goodPcs: l.goodPcs, rejectedPcs: l.rejectedPcs })),
 });
 
+function shapeBillableIn(d: Awaited<ReturnType<typeof repo.billableIns>>[number]) {
+  return {
+    id: d.id,
+    docNo: d.docNo!,
+    docDate: dateOnly(d.docDate)!,
+    qty: String(d.lines.reduce((a, l) => a + l.goodPcs, 0)),
+    unit: 'PCS' as const,
+    processId: d.processId,
+    processName: d.process.name,
+    orderId: d.orderId,
+    itemId: d.lines[0]?.panelItemId ?? null,
+    against: '',
+  };
+}
+
+/** Hooks other modules register (accounts: panel shortfall debits when an OUT closes). */
+type PanelClosedHook = (tx: Tx, outDcId: string, user: CurrentUser) => Promise<void>;
+const panelClosedHooks: PanelClosedHook[] = [];
+export function onPanelOutClosed(h: PanelClosedHook) {
+  panelClosedHooks.push(h);
+}
+
 const nf = () => notFound('Panel D.C.');
 
 export const panelsService = {
@@ -374,9 +396,78 @@ export const panelsService = {
       if (movements.length) await ledger.post(tx, { type: DOC_PANEL_OUT_CLOSE, id, docDate: todayIst() }, movements, user.id);
       await repo.setState(tx, id, { status: 'CLOSED', closedAt: new Date(), closedById: user.id, closeReason: reason });
       await audit.log(tx, { docType: DOC_PANEL_OUT, recordId: id, action: 'CLOSE', reason, docNo: d.docNo, data: s.totals });
+      for (const h of panelClosedHooks) await h(tx, id, user);
     });
     return this.get(id);
   },
+
+  // ───────── For accounts (A§7.2 / A§7.3) ─────────
+  /** Posted, unbilled panel inwards: billable qty = good pieces. */
+  async billableIns(vendorId: string, orderId: string | null, db: Tx | typeof prisma = prisma) {
+    const rows = await repo.billableIns({ vendorId, status: 'POSTED', billId: null, ...(orderId ? { orderId } : {}) }, db);
+    return rows.map(shapeBillableIn);
+  },
+  async insForBill(ids: string[], db: Tx | typeof prisma = prisma) {
+    const rows = await repo.billableIns({ id: { in: ids } }, db);
+    return rows.map((d) => ({ ...shapeBillableIn(d), status: d.status, vendorId: d.vendorId, billId: d.billId }));
+  },
+  lockIns: (tx: Tx, ids: string[]) => repo.lock(tx, ids),
+  async markBilled(tx: Tx, ids: string[], billId: string) {
+    const r = await repo.setBill(tx, ids, billId);
+    if (r.count !== ids.length) throw new AppError('ALREADY_BILLED', 'A panel inward on this bill is already billed or no longer posted', 409);
+  },
+  clearBilled: (tx: Tx, billId: string) => repo.clearBill(tx, billId),
+  /** Rejected pieces on the billed inwards → debit events at the order's panel cost (A§7.2). */
+  async rejectEvents(tx: Tx, inIds: string[]) {
+    return (await repo.rejectLines(tx, inIds)).map((l) => ({
+      lineId: l.id,
+      orderId: l.dc.orderId,
+      pcs: l.rejectedPcs,
+      label: `${l.bundle.bundleNo} ${l.bundle.componentCode} ${l.colour}/${l.size} rejected (${l.dc.docNo})`,
+    }));
+  },
+  /** Missing pieces of closed outward panel D.C.s behind these inwards (final shortfall). */
+  async missingEvents(tx: Tx, inIds: string[]) {
+    const outs = await repo.closedOutsOfIns(tx, inIds);
+    const returned = await repo.returnedByOutLine(outs.flatMap((o) => o.lines.map((l) => l.id)), tx);
+    return outs.flatMap((o) =>
+      o.lines
+        .map((l) => {
+          const r = returned.get(l.id) ?? { good: 0, rejected: 0 };
+          return { lineId: l.id, orderId: o.orderId, pcs: l.pcs - r.good - r.rejected, label: `${l.bundle.bundleNo} ${l.bundle.componentCode} ${l.colour}/${l.size} missing (${o.docNo})` };
+        })
+        .filter((x) => x.pcs > 0),
+    );
+  },
+  billedInOf: (tx: Tx, outDcId: string) => repo.billedInOf(tx, outDcId),
+
+  /** Open outward panel D.C.s with pieces still at the vendor (pending-D.C. report). */
+  async openOuts() {
+    const rows: Awaited<ReturnType<typeof this.list>>['rows'] = [];
+    for (let page = 1; ; page++) {
+      const r = await this.list({ page, pageSize: 500, type: 'OUT', status: 'POSTED' } as z.output<typeof zProductionListQuery>);
+      rows.push(...r.rows);
+      if (!r.rows.length || rows.length >= r.total) break;
+    }
+    return rows
+      .map((d) => ({ d, sent: d.lines.reduce((a, l) => a + l.pcs, 0), pending: d.lines.reduce((a, l) => a + l.pendingPcs, 0) }))
+      .filter((x) => x.pending > 0)
+      .map(({ d, sent, pending }) => ({
+        kind: 'PANEL_OUT' as const,
+        id: d.id,
+        docNo: d.docNo!,
+        docDate: d.docDate,
+        expectedReturnDate: d.expectedReturnDate,
+        vendorId: d.vendorId,
+        vendorName: d.vendor.name,
+        process: d.process.name,
+        orderNo: d.order.orderNo,
+        sent: String(sent),
+        pending: String(pending),
+        unit: 'PCS' as const,
+      }));
+  },
+  gstLines: (type: 'OUT' | 'IN', from: Date, to: Date) => repo.gstLines(type, from, to),
 
   // ───────── Recut slips (non-stock) ─────────
   async listRecut(q: z.output<typeof zProductionListQuery>) {

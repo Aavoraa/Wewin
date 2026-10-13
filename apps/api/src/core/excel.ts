@@ -60,6 +60,12 @@ export async function buildWorkbook(opts: { title: string; columns: ExportColumn
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Wewin ERP';
   wb.created = new Date();
+  addSheet(wb, opts);
+  return wb;
+}
+
+/** One formatted sheet (frozen bold header, Indian number formats); a note row goes above the header. */
+export function addSheet(wb: ExcelJS.Workbook, opts: { title: string; columns: ExportColumn[]; rows: unknown[]; note?: string }) {
   const ws = wb.addWorksheet(opts.title.slice(0, 31).replace(/[\\/?*[\]:]/g, '-'), {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
@@ -74,6 +80,18 @@ export async function buildWorkbook(opts: { title: string; columns: ExportColumn
   for (const r of opts.rows) {
     ws.addRow(Object.fromEntries(opts.columns.map((c) => [c.key, cellValue(getPath(r, c.key), c.type)])));
   }
+  if (opts.note) {
+    ws.insertRow(1, [opts.note]);
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFB45309' } };
+    ws.views = [{ state: 'frozen', ySplit: 2 }];
+  }
+  return ws;
+}
+
+export function newWorkbook() {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Wewin ERP';
+  wb.created = new Date();
   return wb;
 }
 

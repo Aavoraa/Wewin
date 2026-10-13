@@ -225,6 +225,23 @@ function inwardInputFrom(i: InwardDetail): InInput {
   };
 }
 
+function shapeBillable(i: Awaited<ReturnType<typeof repo.billableInwards>>[number]) {
+  const kg = i.lines.reduce((a, l) => a.plus(D(l.kg.toString())), D(0));
+  const out = i.links[0]?.outward;
+  return {
+    id: i.id,
+    docNo: i.docNo!,
+    docDate: dateOnly(i.docDate)!,
+    qty: kg.toFixed(3),
+    unit: 'KG' as const,
+    processId: out?.processId ?? null,
+    processName: out?.process.name ?? '',
+    orderId: out?.orderId ?? null,
+    itemId: i.lines[0]?.itemId ?? null,
+    against: i.links.map((k) => k.outward.docNo).filter(Boolean).join(', '),
+  };
+}
+
 const notFoundOut = () => notFound('Outward D.C.');
 const notFoundIn = () => notFound('Inward D.C.');
 
@@ -727,6 +744,67 @@ export const jobworkService = {
     });
     return this.getInward(id);
   },
+
+  // ═════════ For accounts (A§7.3) ═════════
+  /** Posted, unbilled inward D.C.s of a vendor (optionally one order): billable qty = received kg. */
+  async billableInwards(vendorId: string, orderId: string | null, db: Tx | typeof prisma = prisma) {
+    const rows = await repo.billableInwards(vendorId, orderId, db);
+    return rows.map(shapeBillable);
+  },
+  async inwardsForBill(ids: string[], db: Tx | typeof prisma = prisma) {
+    return (await repo.inwardsByIds(ids, db)).map((i) => ({ ...shapeBillable(i), status: i.status, vendorId: i.vendorId, billId: i.billId }));
+  },
+  lockInwards: (tx: Tx, ids: string[]) => repo.lockInwards(tx, ids),
+  async markBilled(tx: Tx, ids: string[], billId: string) {
+    const r = await repo.setBill(tx, ids, billId);
+    if (r.count !== ids.length) throw new AppError('ALREADY_BILLED', 'An inward D.C. on this bill is already billed or no longer posted', 409);
+  },
+  clearBilled: (tx: Tx, billId: string) => repo.clearBill(tx, billId),
+  /** Excess-loss debit events for closed outwards linked to these inwards (Q-012). */
+  async excessLossEvents(tx: Tx, inwardIds: string[]) {
+    const outs = await repo.closedOutwardsOf(tx, inwardIds);
+    return outs.filter((o) => o.finalExcessKg && o.finalExcessKg.greaterThan(0)).map((o) => ({
+      outwardId: o.id,
+      docNo: o.docNo!,
+      vendorId: o.vendorId,
+      processName: o.process.name,
+      excessKg: o.finalExcessKg!.toFixed(3),
+      lossPct: o.finalLossPct!.toFixed(4),
+      allowedPct: (o.allowedLossPct ?? new Prisma.Decimal(0)).toString(),
+      materialCostPerKg: o.programProcess.materialCostPerKg?.toString() ?? null,
+      inputItemId: o.programProcess.inputItemId,
+    }));
+  },
+  billedInwardOf: (tx: Tx, outwardId: string) => repo.billedInwardOf(tx, outwardId),
+
+  // ═════════ GST job-work reporting ═════════
+  /** Every open outward D.C. with kg still at the vendor (pending-D.C. report, GST time limit). */
+  async openOutwards() {
+    const rows: Awaited<ReturnType<typeof this.listOutward>>['rows'] = [];
+    for (let page = 1; ; page++) {
+      const r = await this.listOutward({ page, pageSize: 500, open: 'true' } as z.output<typeof zOutwardListQuery>);
+      rows.push(...r.rows);
+      if (!r.rows.length || rows.length >= r.total) break;
+    }
+    return rows
+      .filter((o) => D(o.pendingKg).greaterThan(0))
+      .map((o) => ({
+        kind: 'OUTWARD_DC' as const,
+        id: o.id,
+        docNo: o.docNo!,
+        docDate: o.docDate,
+        expectedReturnDate: o.expectedReturnDate,
+        vendorId: o.vendorId,
+        vendorName: o.vendor.name,
+        process: o.process.name,
+        orderNo: o.order.orderNo,
+        sent: o.totals.sentKg,
+        pending: o.pendingKg,
+        unit: 'KG' as const,
+      }));
+  },
+  /** ITC-04 source rows: goods sent, received back, and losses written off on closing (Q-016). */
+  gstData: (from: Date, to: Date) => Promise.all([repo.gstSent(from, to), repo.gstReceived(from, to), repo.gstClosed(from, to)]),
 
   async rollByNo(rollNo: string) {
     const r = await repo.findRoll(rollNo);

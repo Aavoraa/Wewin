@@ -218,11 +218,100 @@ export const jobworkRepo = {
     return prisma.fabricRoll.findUnique({ where: { rollNo }, include: { item: { select: { code: true, name: true } } } });
   },
 
+  // ───────── Billing (accounts) ─────────
+  billableInwards(vendorId: string, orderId: string | null, db: Db = prisma) {
+    return db.inwardDc.findMany({
+      where: {
+        vendorId,
+        status: 'POSTED',
+        billId: null,
+        ...(orderId ? { links: { some: { outward: { orderId } } } } : {}),
+      },
+      orderBy: { docDate: 'asc' },
+      include: {
+        lines: { select: { kg: true, itemId: true } },
+        links: { include: { outward: { select: { id: true, docNo: true, orderId: true, processId: true, process: { select: { name: true } } } } } },
+      },
+    });
+  },
+  inwardsByIds(ids: string[], db: Db = prisma) {
+    return db.inwardDc.findMany({
+      where: { id: { in: ids } },
+      include: {
+        lines: { select: { kg: true, itemId: true } },
+        links: { include: { outward: { select: { id: true, docNo: true, orderId: true, processId: true, status: true, process: { select: { name: true } } } } } },
+      },
+    });
+  },
+  async lockInwards(tx: Tx, ids: string[]) {
+    if (!ids.length) return;
+    await tx.$queryRaw`SELECT 1 FROM inward_dcs WHERE id = ANY(${[...new Set(ids)].sort()}::uuid[]) ORDER BY id FOR UPDATE`;
+  },
+  setBill(tx: Tx, ids: string[], billId: string) {
+    return tx.inwardDc.updateMany({ where: { id: { in: ids }, billId: null, status: 'POSTED' }, data: { billId } });
+  },
+  clearBill(tx: Tx, billId: string) {
+    return tx.inwardDc.updateMany({ where: { billId }, data: { billId: null } });
+  },
+  /** Closed outwards linked to the given inwards, with what is needed to value excess loss. */
+  closedOutwardsOf(tx: Tx, inwardIds: string[]) {
+    return tx.outwardDc.findMany({
+      where: { status: 'CLOSED', links: { some: { inwardDcId: { in: inwardIds } } } },
+      include: {
+        vendor: { select: { name: true } },
+        process: { select: { name: true } },
+        programProcess: { select: { materialCostPerKg: true, inputItemId: true } },
+      },
+    });
+  },
+  /** Latest bill among inwards linked to an outward (for debits raised when the outward closes). */
+  billedInwardOf(tx: Tx, outwardId: string) {
+    return tx.inwardDc.findFirst({
+      where: { billId: { not: null }, links: { some: { outwardDcId: outwardId } } },
+      orderBy: { docDate: 'desc' },
+      select: { billId: true },
+    });
+  },
+
   // ───────── Lookups ─────────
   itemsByIds(ids: string[], db: Db = prisma) {
     return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, type: true, isActive: true, code: true, unit: true } });
   },
   vendorHasProcess(vendorId: string, processId: string, db: Db = prisma) {
     return db.vendorProcess.count({ where: { vendorId, processId } });
+  },
+
+  // ───────── GST job-work reporting (ITC-04) ─────────
+  gstSent(from: Date, to: Date) {
+    return prisma.outwardDc.findMany({
+      where: { status: { in: ['POSTED', 'CLOSED'] }, docDate: { gte: from, lte: to } },
+      orderBy: [{ docDate: 'asc' }, { docNo: 'asc' }],
+      select: {
+        docNo: true,
+        docDate: true,
+        vendor: { select: { name: true, gstin: true, state: true, stateCode: true } },
+        process: { select: { name: true } },
+        lines: { orderBy: { lineNo: 'asc' }, select: { qtyKg: true, valuePerKg: true, item: { select: { name: true, hsnCode: true, type: true } } } },
+      },
+    });
+  },
+  gstReceived(from: Date, to: Date) {
+    return prisma.dcLink.findMany({
+      where: { inward: { status: 'POSTED', docDate: { gte: from, lte: to } } },
+      orderBy: { inward: { docDate: 'asc' } },
+      select: {
+        receivedKg: true,
+        inward: { select: { docNo: true, docDate: true, vendorDcNo: true, vendorDcDate: true, vendor: { select: { name: true, gstin: true, state: true } } } },
+        outward: { select: { docNo: true, docDate: true, process: { select: { name: true } } } },
+      },
+    });
+  },
+  gstClosed(from: Date, to: Date) {
+    return prisma.outwardDc.findMany({
+      // from/to are IST calendar days stored as UTC midnight; shift by IST offset (+05:30) for the timestamp window.
+      where: { status: 'CLOSED', closedAt: { gte: new Date(from.getTime() - 19_800_000), lt: new Date(to.getTime() + 86_400_000 - 19_800_000) } },
+      orderBy: { closedAt: 'asc' },
+      select: { docNo: true, docDate: true, closedAt: true, finalLossKg: true, vendor: { select: { name: true, gstin: true, state: true } }, process: { select: { name: true } } },
+    });
   },
 };

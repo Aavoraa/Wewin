@@ -97,6 +97,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-10-13 — Phase 3 API (Steps 9–10) verified; screens in progress
+- Migration `accounts`: rate contracts, vendor bills + lines, debit notes + lines (partial unique `debit_note_lines_once`), payment vouchers + allocations, ageing snapshots; unique vendor invoice no. per vendor (case-insensitive, non-cancelled).
+- API: `/rate-contracts`, `/vendor-bills` (+ `/match`, `/preview`, `/:id/approve`), `/debit-notes`, `/payments` (+ `/suggest`), `/vendors/:id/ledger`, `/vendors/:id/open-bills`, `/reports/ageing`, `/reports/pending-dcs`, `/reports/itc-04` (draft workbook, Q-016), `/alerts` (+ summary, acknowledge, check). Jobs: ageing snapshot 23:30, D.C. overdue/GST 08:00, payment due 08:15 IST.
+- Tests: 48 shared + 160 API green. New integration tests cover: overlap refusal, rate-editor permission, expected amounts, within-tolerance post + auto excess-loss debit note, ALREADY_BILLED, duplicate invoice no., cancel → D.C. freed + auto note cancelled → re-bill raises once, approval required/forbidden/approved, debit raised when D.C. closes after billing, panel reject + missing debits, oldest-first suggestion, over-allocation, advance creation/use/exhaustion, cancel guards (bill with payments, payment whose advance was used), ledger closing, ageing live + snapshot (same-day rerun), ITC-04 permission + xlsx, alert raise/refresh/resolve, payment-due alert + acknowledge permission.
+- Decisions recorded: Q-037…Q-041. `apps/web` Vitest now excludes the Playwright `e2e/` folder.
+
 ### 2026-10-13 — Phase 2 (Steps 6–8) verified
 - Migration `production`; 170 automated tests (32 shared, 138 API) + Playwright E2E 12/12 through the UI (order → yarn → knit → dye → close → cut → print → sew → pack → WIP), re-runnable.
 - Unit-level ledger guards (roll / bundle / carton) on issue and on every reversing cancel.

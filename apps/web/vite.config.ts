@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -13,4 +14,6 @@ export default defineConfig({
   },
   preview: { port: 4173, proxy: { '/api': 'http://localhost:4000' } },
   build: { sourcemap: true, chunkSizeWarningLimit: 1500 },
+  // Unit tests only; e2e/ is Playwright (pnpm e2e).
+  test: { include: ['src/**/*.test.{ts,tsx}'] },
 });

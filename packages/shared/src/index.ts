@@ -12,3 +12,5 @@ export * from './documents';
 export * from './loss';
 export * from './jobwork';
 export * from './production';
+export * from './accounts';
+export * from './alerts';

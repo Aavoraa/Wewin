@@ -88,6 +88,39 @@ export const panelsRepo = {
       select: { id: true, docNo: true, docDate: true, status: true, billId: true },
     });
   },
+  // ── Billing (accounts) ──
+  billableIns(where: Prisma.PanelDcWhereInput, db: Db = prisma) {
+    return db.panelDc.findMany({
+      where: { ...where, type: 'IN' },
+      orderBy: { docDate: 'asc' },
+      include: { process: { select: { name: true } }, lines: { select: { id: true, goodPcs: true, rejectedPcs: true, panelItemId: true, outLineId: true } } },
+    });
+  },
+  setBill(tx: Tx, ids: string[], billId: string) {
+    return tx.panelDc.updateMany({ where: { id: { in: ids }, type: 'IN', billId: null, status: 'POSTED' }, data: { billId } });
+  },
+  clearBill(tx: Tx, billId: string) {
+    return tx.panelDc.updateMany({ where: { billId }, data: { billId: null } });
+  },
+  rejectLines(tx: Tx, inIds: string[]) {
+    return tx.panelDcLine.findMany({
+      where: { dcId: { in: inIds }, rejectedPcs: { gt: 0 } },
+      include: { bundle: { select: { bundleNo: true, componentCode: true } }, dc: { select: { orderId: true, docNo: true } } },
+    });
+  },
+  closedOutsOfIns(tx: Tx, inIds: string[]) {
+    return tx.panelDc.findMany({
+      where: { type: 'OUT', status: 'CLOSED', lines: { some: { returns: { some: { dcId: { in: inIds } } } } } },
+      include: { lines: { include: { bundle: { select: { bundleNo: true, componentCode: true } } } } },
+    });
+  },
+  billedInOf(tx: Tx, outDcId: string) {
+    return tx.panelDc.findFirst({
+      where: { type: 'IN', billId: { not: null }, lines: { some: { outLine: { dcId: outDcId } } } },
+      orderBy: { docDate: 'desc' },
+      select: { billId: true },
+    });
+  },
   vendorHasProcess(vendorId: string, processId: string, db: Db = prisma) {
     return db.vendorProcess.count({ where: { vendorId, processId } });
   },
@@ -129,5 +162,21 @@ export const panelsRepo = {
   },
   deleteRecut(tx: Tx, id: string) {
     return tx.recutSlip.delete({ where: { id } });
+  },
+
+  // ───────── GST job-work reporting (ITC-04) ─────────
+  gstLines(type: 'OUT' | 'IN', from: Date, to: Date) {
+    return prisma.panelDcLine.findMany({
+      where: { dc: { type, status: { in: ['POSTED', 'CLOSED'] }, docDate: { gte: from, lte: to } } },
+      orderBy: [{ dc: { docDate: 'asc' } }, { lineNo: 'asc' }],
+      select: {
+        pcs: true,
+        goodPcs: true,
+        rejectedPcs: true,
+        panelItem: { select: { name: true, hsnCode: true } },
+        dc: { select: { docNo: true, docDate: true, vendorDcNo: true, vendor: { select: { name: true, gstin: true, state: true, stateCode: true } }, process: { select: { name: true } } } },
+        outLine: { select: { dc: { select: { docNo: true, docDate: true } } } },
+      },
+    });
   },
 };

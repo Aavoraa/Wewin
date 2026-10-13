@@ -296,6 +296,7 @@ model Item {
   panelDcLines     PanelDcLine[]          @relation("panelDcItem")
   recutLines       RecutSlipLine[]        @relation("recutPanel")
   trimsDocLines    TrimsDocLine[]         @relation("trimsDocItem")
+  rateContracts    RateContract[]         @relation("rateItem")
 
   @@index([type])
   @@map("items")
@@ -456,6 +457,7 @@ model Process {
   programProcesses  FabricProgramProcess[]
   outwardDcs        OutwardDc[]            @relation("outwardProcess")
   panelDcs          PanelDc[]              @relation("panelProcess")
+  rateContracts     RateContract[]         @relation("rateProcess")
 
   @@map("processes")
 }
@@ -463,41 +465,45 @@ model Process {
 /// Vendors: mills, job workers (knitters, dyers, compactors, printers, embroiderers), trims suppliers.
 /// Creating a vendor auto-creates its stock location (B-Step 2).
 model Vendor {
-  id                     String          @id @default(uuid()) @db.Uuid
-  code                   String          @unique
+  id                     String           @id @default(uuid()) @db.Uuid
+  code                   String           @unique
   name                   String
   gstin                  String?
   pan                    String?
-  addressLine1           String?         @map("address_line1")
-  addressLine2           String?         @map("address_line2")
+  addressLine1           String?          @map("address_line1")
+  addressLine2           String?          @map("address_line2")
   city                   String?
   state                  String?
-  stateCode              String?         @map("state_code")
+  stateCode              String?          @map("state_code")
   pincode                String?
-  contactPerson          String?         @map("contact_person")
+  contactPerson          String?          @map("contact_person")
   phone                  String?
   email                  String?
-  creditDays             Int             @default(0) @map("credit_days")
+  creditDays             Int              @default(0) @map("credit_days")
   /// TDS u/s 194C — configured per vendor, confirmed with auditor (Q-008). Never applied automatically when false.
-  tdsApplicable          Boolean         @default(false) @map("tds_applicable")
-  tdsRatePct             Decimal?        @map("tds_rate_pct") @db.Decimal(6, 3)
+  tdsApplicable          Boolean          @default(false) @map("tds_applicable")
+  tdsRatePct             Decimal?         @map("tds_rate_pct") @db.Decimal(6, 3)
   /// Whether debit notes to this vendor carry GST (Q-008). Default false.
-  debitNoteGstApplicable Boolean         @default(false) @map("debit_note_gst_applicable")
-  debitNoteGstRatePct    Decimal?        @map("debit_note_gst_rate_pct") @db.Decimal(6, 3)
-  bankName               String?         @map("bank_name")
-  bankAccount            String?         @map("bank_account")
-  bankIfsc               String?         @map("bank_ifsc")
-  whatsappNumber         String?         @map("whatsapp_number")
-  isActive               Boolean         @default(true) @map("is_active")
-  version                Int             @default(1)
-  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  debitNoteGstApplicable Boolean          @default(false) @map("debit_note_gst_applicable")
+  debitNoteGstRatePct    Decimal?         @map("debit_note_gst_rate_pct") @db.Decimal(6, 3)
+  bankName               String?          @map("bank_name")
+  bankAccount            String?          @map("bank_account")
+  bankIfsc               String?          @map("bank_ifsc")
+  whatsappNumber         String?          @map("whatsapp_number")
+  isActive               Boolean          @default(true) @map("is_active")
+  version                Int              @default(1)
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   processes              VendorProcess[]
   yarnReceipts           YarnReceipt[]
-  outwardDcs             OutwardDc[]     @relation("outwardVendor")
-  inwardDcs              InwardDc[]      @relation("inwardVendor")
-  panelDcs               PanelDc[]       @relation("panelVendor")
-  trimsDocs              TrimsDoc[]      @relation("trimsVendor")
+  outwardDcs             OutwardDc[]      @relation("outwardVendor")
+  inwardDcs              InwardDc[]       @relation("inwardVendor")
+  panelDcs               PanelDc[]        @relation("panelVendor")
+  trimsDocs              TrimsDoc[]       @relation("trimsVendor")
+  rateContracts          RateContract[]   @relation("rateVendor")
+  bills                  VendorBill[]     @relation("billVendor")
+  debitNotes             DebitNote[]      @relation("dnVendor")
+  payments               PaymentVoucher[] @relation("payVendor")
 
   @@index([name])
   @@map("vendors")
@@ -591,6 +597,8 @@ model Order {
   cartons       Carton[]         @relation("cartonOrder")
   packingLists  PackingList[]    @relation("packingOrder")
   trimsDocs     TrimsDoc[]       @relation("trimsOrder")
+  rateContracts RateContract[]   @relation("rateOrder")
+  bills         VendorBill[]     @relation("billOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -1295,6 +1303,224 @@ model TrimsDocLine {
   item   Item     @relation("trimsDocItem", fields: [itemId], references: [id], onDelete: Restrict)
 
   @@map("trims_doc_lines")
+}
+
+// ───────────────────────────── Accounts (Phase 3: Steps 9–10) ─────────────────────────────
+
+enum ApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+}
+
+/// Vendor job-work rate with effective dates (A§7.3). Most specific match wins: order + item > item > process.
+model RateContract {
+  id            String    @id @default(uuid()) @db.Uuid
+  vendorId      String    @map("vendor_id") @db.Uuid
+  processId     String    @map("process_id") @db.Uuid
+  itemId        String?   @map("item_id") @db.Uuid
+  orderId       String?   @map("order_id") @db.Uuid
+  unit          Unit
+  rate          Decimal   @db.Decimal(12, 4)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  remarks       String?
+  isActive      Boolean   @default(true) @map("is_active")
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor        Vendor    @relation("rateVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  process       Process   @relation("rateProcess", fields: [processId], references: [id], onDelete: Restrict)
+  item          Item?     @relation("rateItem", fields: [itemId], references: [id], onDelete: Restrict)
+  order         Order?    @relation("rateOrder", fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([vendorId, processId, effectiveFrom])
+  @@map("rate_contracts")
+}
+
+/// Vendor bill matched against posted inward D.C.s / panel inwards (3-way match, A§7.3).
+model VendorBill {
+  id                String              @id @default(uuid()) @db.Uuid
+  docNo             String?             @unique @map("doc_no")
+  docDate           DateTime            @map("doc_date") @db.Date
+  vendorId          String              @map("vendor_id") @db.Uuid
+  orderId           String?             @map("order_id") @db.Uuid
+  vendorInvoiceNo   String              @map("vendor_invoice_no")
+  vendorInvoiceDate DateTime            @map("vendor_invoice_date") @db.Date
+  dueDate           DateTime            @map("due_date") @db.Date
+  taxableAmount     Decimal             @map("taxable_amount") @db.Decimal(14, 2)
+  cgstAmount        Decimal             @default(0) @map("cgst_amount") @db.Decimal(14, 2)
+  sgstAmount        Decimal             @default(0) @map("sgst_amount") @db.Decimal(14, 2)
+  igstAmount        Decimal             @default(0) @map("igst_amount") @db.Decimal(14, 2)
+  expectedTaxable   Decimal             @default(0) @map("expected_taxable") @db.Decimal(14, 2)
+  variance          Decimal             @default(0) @db.Decimal(14, 2)
+  withinTolerance   Boolean             @default(false) @map("within_tolerance")
+  approvalStatus    ApprovalStatus      @default(NOT_REQUIRED) @map("approval_status")
+  approvedById      String?             @map("approved_by_id") @db.Uuid
+  approvedAt        DateTime?           @map("approved_at") @db.Timestamptz(3)
+  approvalNote      String?             @map("approval_note")
+  remarks           String?
+  status            DocStatus           @default(DRAFT)
+  version           Int                 @default(1)
+  postedAt          DateTime?           @map("posted_at") @db.Timestamptz(3)
+  postedById        String?             @map("posted_by_id") @db.Uuid
+  cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById     String?             @map("cancelled_by_id") @db.Uuid
+  cancelReason      String?             @map("cancel_reason")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById       String?             @map("created_by_id") @db.Uuid
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor            Vendor              @relation("billVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  order             Order?              @relation("billOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  lines             VendorBillLine[]
+  debitNotes        DebitNote[]
+  allocations       PaymentAllocation[]
+
+  @@index([vendorId, status])
+  @@map("vendor_bills")
+}
+
+model VendorBillLine {
+  id             String     @id @default(uuid()) @db.Uuid
+  billId         String     @map("bill_id") @db.Uuid
+  lineNo         Int        @map("line_no")
+  /// INWARD_DC (billable = received kg) or PANEL_IN (billable = good pcs).
+  sourceType     String     @map("source_type")
+  sourceId       String     @map("source_id") @db.Uuid
+  sourceDocNo    String     @map("source_doc_no")
+  sourceDate     DateTime   @map("source_date") @db.Date
+  processId      String     @map("process_id") @db.Uuid
+  itemId         String?    @map("item_id") @db.Uuid
+  billableQty    Decimal    @map("billable_qty") @db.Decimal(12, 3)
+  unit           Unit
+  rate           Decimal?   @db.Decimal(12, 4)
+  rateContractId String?    @map("rate_contract_id") @db.Uuid
+  expectedAmount Decimal?   @map("expected_amount") @db.Decimal(14, 2)
+  invoicedAmount Decimal?   @map("invoiced_amount") @db.Decimal(14, 2)
+  bill           VendorBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([sourceType, sourceId])
+  @@map("vendor_bill_lines")
+}
+
+/// Debit note to a vendor: automatic (excess loss, panel rejects / shortages) or manual.
+model DebitNote {
+  id            String          @id @default(uuid()) @db.Uuid
+  docNo         String?         @unique @map("doc_no")
+  docDate       DateTime        @map("doc_date") @db.Date
+  vendorId      String          @map("vendor_id") @db.Uuid
+  billId        String?         @map("bill_id") @db.Uuid
+  isAuto        Boolean         @default(false) @map("is_auto")
+  taxableAmount Decimal         @default(0) @map("taxable_amount") @db.Decimal(14, 2)
+  gstRatePct    Decimal?        @map("gst_rate_pct") @db.Decimal(6, 3)
+  gstAmount     Decimal         @default(0) @map("gst_amount") @db.Decimal(14, 2)
+  totalAmount   Decimal         @default(0) @map("total_amount") @db.Decimal(14, 2)
+  remarks       String?
+  status        DocStatus       @default(DRAFT)
+  version       Int             @default(1)
+  postedAt      DateTime?       @map("posted_at") @db.Timestamptz(3)
+  postedById    String?         @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?       @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?         @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?         @map("cancel_reason")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor        Vendor          @relation("dnVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  bill          VendorBill?     @relation(fields: [billId], references: [id], onDelete: Restrict)
+  lines         DebitNoteLine[]
+
+  @@index([vendorId, status])
+  @@map("debit_notes")
+}
+
+model DebitNoteLine {
+  id          String    @id @default(uuid()) @db.Uuid
+  noteId      String    @map("note_id") @db.Uuid
+  lineNo      Int       @map("line_no")
+  /// EXCESS_LOSS | PANEL_REJECT | PANEL_MISSING | MANUAL
+  reason      String
+  /// The business event debited (OUTWARD_DC id, PANEL_DC line id …). One active debit per (originType, originId, reason).
+  originType  String?   @map("origin_type")
+  originId    String?   @map("origin_id") @db.Uuid
+  description String
+  qty         Decimal   @db.Decimal(12, 3)
+  unit        String
+  rate        Decimal   @db.Decimal(12, 4)
+  amount      Decimal   @db.Decimal(14, 2)
+  active      Boolean   @default(true)
+  note        DebitNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@map("debit_note_lines")
+}
+
+enum PaymentMode {
+  NEFT
+  RTGS
+  CHEQUE
+  UPI
+  CASH
+  ADJUSTMENT
+}
+
+/// Payment voucher allocated to bills (oldest first by default, A§7.4). Unallocated = vendor advance.
+model PaymentVoucher {
+  id            String              @id @default(uuid()) @db.Uuid
+  docNo         String?             @unique @map("doc_no")
+  docDate       DateTime            @map("doc_date") @db.Date
+  vendorId      String              @map("vendor_id") @db.Uuid
+  mode          PaymentMode
+  reference     String?
+  bankAccount   String?             @map("bank_account")
+  amount        Decimal             @db.Decimal(14, 2)
+  tdsAmount     Decimal             @default(0) @map("tds_amount") @db.Decimal(14, 2)
+  /// Allocations may also draw on the vendor's existing advance.
+  useAdvance    Boolean             @default(false) @map("use_advance")
+  remarks       String?
+  status        DocStatus           @default(DRAFT)
+  version       Int                 @default(1)
+  postedAt      DateTime?           @map("posted_at") @db.Timestamptz(3)
+  postedById    String?             @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?             @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?             @map("cancel_reason")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?             @map("created_by_id") @db.Uuid
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor        Vendor              @relation("payVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  allocations   PaymentAllocation[]
+
+  @@index([vendorId, status])
+  @@map("payment_vouchers")
+}
+
+model PaymentAllocation {
+  id        String         @id @default(uuid()) @db.Uuid
+  paymentId String         @map("payment_id") @db.Uuid
+  billId    String         @map("bill_id") @db.Uuid
+  amount    Decimal        @db.Decimal(14, 2)
+  payment   PaymentVoucher @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill      VendorBill     @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, billId])
+  @@map("payment_allocations")
+}
+
+/// Nightly ageing snapshot so month-end figures can be reproduced (A§7.5).
+model AgeingSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  snapshotDate DateTime @map("snapshot_date") @db.Date
+  vendorId     String   @map("vendor_id") @db.Uuid
+  billId       String   @map("bill_id") @db.Uuid
+  billDocNo    String   @map("bill_doc_no")
+  ageFrom      DateTime @map("age_from") @db.Date
+  ageDays      Int      @map("age_days")
+  bucket       String
+  outstanding  Decimal  @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([snapshotDate, billId])
+  @@index([snapshotDate, vendorId])
+  @@map("ageing_snapshots")
 }
 
 /// Idempotency ledger for business events processed by services and jobs.

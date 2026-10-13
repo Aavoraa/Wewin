@@ -12,6 +12,7 @@ let rolls: { id: string; rollNo: string; kg: string }[];
 let L: Record<string, string>;
 let lay: { id: string; docNo: string; bundles: { id: string; bundleNo: string; componentCode: string; size: string; pcs: number }[] };
 let pdcOut: { id: string; lines: { id: string; bundleId: string }[] };
+let pdcIn: { id: string };
 
 const ok = (r: { status: number; body: unknown }, s = 200) => expect(r.status, JSON.stringify(r.body)).toBe(s);
 async function bal(itemId: string, loc: string, colour = 'NAVY', size = '2Y') {
@@ -145,7 +146,7 @@ describe('panel job work', () => {
     const out4y = pdcOut.lines.find((l) => l.bundleId === front('4Y').id)!;
     const pending = await owner.get(`/api/v1/panel-dcs/pending?vendorId=${m.vendors.printer.id}`);
     expect(pending.body.data.filter((x: { dcId: string }) => x.dcId === pdcOut.id)).toHaveLength(2);
-    await doc('/api/v1/panel-dcs', {
+    pdcIn = await doc('/api/v1/panel-dcs', {
       type: 'IN',
       docDate: '2026-10-13',
       vendorId: m.vendors.printer.id,
@@ -174,6 +175,26 @@ describe('panel job work', () => {
     expect(r.body.data.status).toBe('CLOSED');
     expect((await bal(m.items.front.id, L.PROCESS_LOSS!)) - before).toBe(1);
     expect(await bal(m.items.front.id, m.vendors.printer.locationId)).toBe(0);
+  });
+
+  it('billing the panel inward: good pcs × rate, rejected + missing debited at the panel cost (A§7.2)', async () => {
+    ok(await owner.post('/api/v1/rate-contracts', { vendorId: m.vendors.printer.id, processId: m.processes.printing.id, unit: 'PCS', rate: '2.5', effectiveFrom: '2026-04-01' }), 201);
+    const match = await owner.get(`/api/v1/vendor-bills/match?vendorId=${m.vendors.printer.id}`);
+    expect(match.body.data.find((d: { sourceId: string }) => d.sourceId === pdcIn.id)).toMatchObject({ qty: '38', unit: 'PCS', expected: '95.00' });
+    const bill = await doc('/api/v1/vendor-bills', {
+      docDate: '2026-10-14',
+      vendorId: m.vendors.printer.id,
+      vendorInvoiceNo: `PR-${pdcIn.id.slice(0, 8)}`,
+      vendorInvoiceDate: '2026-10-14',
+      taxableAmount: '95',
+      lines: [{ sourceType: 'PANEL_IN', sourceId: pdcIn.id }],
+    });
+    const notes = await prisma.debitNoteLine.findMany({ where: { note: { billId: bill.id, status: 'POSTED' } }, orderBy: { reason: 'asc' } });
+    expect(notes.map((n) => [n.reason, n.qty.toString(), n.amount.toFixed(2)])).toEqual([
+      ['PANEL_MISSING', '1', '7.50'],
+      ['PANEL_REJECT', '1', '7.50'],
+    ]);
+    expect(bill.figures).toMatchObject({ debitNotesTotal: '15.00', netPayable: '80.00' });
   });
 
   it('recut slip for the rejected / missing pieces (non-stock, numbered)', async () => {
