@@ -72,15 +72,15 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ### Step 5 — Fabric job work
 - [x] Outward D.C. (store → vendor, vendor → vendor), expected return date
 - [x] Inward D.C. with rolls + dc_links, consumption at vendor, pending kg
-- [x] Loss functions + live badge + close (residual → PROCESS_LOSS, frozen) — API verified by tests; live badge UI pending browser pass
-- [~] Rule 55 D.C. print, inward/GRN print, material-at-vendors — built; print preview check in Chrome pending
+- [x] Loss functions + live badge + close (residual → PROCESS_LOSS, frozen) — API tests + Playwright E2E
+- [~] Rule 55 D.C. print, inward/GRN print, material-at-vendors — built; manual print-preview check on paper sizes pending
 - [~] **Gate — Fabric flow live** — software ready; gate requires Wewin entering current D.C.s (UAT)
 
 ## Phase 2 — Production
-- [ ] Step 6 Cutting: lays, roll consumption, bundles, QR tickets
-- [ ] Step 7 Panels: OUT/IN, good/rejected/missing, close, recut slip
-- [ ] Step 8 Sewing issue/output (phone), cartons, packing list, carton labels, trims receipts/issues, order WIP
-- [ ] **Gate — Order WIP visible**
+- [x] Step 6 Cutting: lays, roll consumption, bundles, QR tickets
+- [x] Step 7 Panels: OUT/IN, good/rejected/missing, close, recut slip
+- [x] Step 8 Sewing issue/output (phone), cartons, packing list, carton labels, trims receipts/issues, order WIP
+- [x] **Gate — Order WIP visible** (software: one order followed yarn → packed in Playwright E2E; client demo pending)
 
 ## Phase 3 — Accounts
 - [ ] Step 9 Rate contracts, 3-way match, approval, debit notes (+ print)
@@ -96,6 +96,10 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
+
+### 2026-10-13 — Phase 2 (Steps 6–8) verified
+- Migration `production`; 170 automated tests (32 shared, 138 API) + Playwright E2E 12/12 through the UI (order → yarn → knit → dye → close → cut → print → sew → pack → WIP), re-runnable.
+- Unit-level ledger guards (roll / bundle / carton) on issue and on every reversing cancel.
 
 ### 2026-10-12 — Steps 2–5 (Phase 1) implemented
 - Migrations: `masters`, `orders_programs`, `yarn_store`, `jobwork` applied (dev + test DBs).
