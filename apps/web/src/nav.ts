@@ -27,6 +27,14 @@ import {
   FileClock,
   History,
   LayoutDashboard,
+  BellRing,
+  FileText,
+  FileMinus,
+  Wallet,
+  BookOpen,
+  CalendarClock,
+  Hourglass,
+  BadgeIndianRupee,
   type LucideIcon,
 } from 'lucide-react';
 import { type PermissionKey } from '@wewin/shared';
@@ -49,7 +57,10 @@ export interface NavGroup {
 export const NAV: NavGroup[] = [
   {
     label: 'Overview',
-    items: [{ label: 'Dashboard', to: '/', icon: LayoutDashboard, perm: 'dashboard.view' }],
+    items: [
+      { label: 'Dashboard', to: '/', icon: LayoutDashboard, perm: 'dashboard.view' },
+      { label: 'Alerts', to: '/alerts', icon: BellRing, perm: 'alerts.view' },
+    ],
   },
   {
     label: 'Orders',
@@ -79,6 +90,18 @@ export const NAV: NavGroup[] = [
       { label: 'Cartons', to: '/cartons', icon: Box, perm: 'packing.view' },
       { label: 'Packing lists', to: '/packing-lists', icon: PackageCheck, perm: 'packing.view' },
       { label: 'Trims', to: '/trims-docs', icon: Ribbon, perm: 'trims.view' },
+    ],
+  },
+  {
+    label: 'Accounts',
+    items: [
+      { label: 'Vendor bills', to: '/vendor-bills', icon: FileText, perm: 'accounts.view' },
+      { label: 'Debit notes', to: '/debit-notes', icon: FileMinus, perm: 'accounts.view' },
+      { label: 'Payments', to: '/payments', icon: Wallet, perm: 'accounts.view' },
+      { label: 'Vendor ledger', to: '/reports/vendor-ledger', icon: BookOpen, perm: 'accounts.view' },
+      { label: 'Payables ageing', to: '/reports/ageing', icon: CalendarClock, perm: 'accounts.view' },
+      { label: 'Pending D.C.s / ITC-04', to: '/reports/pending-dcs', icon: Hourglass, perm: 'jobwork.view' },
+      { label: 'Rate contracts', to: '/rate-contracts', icon: BadgeIndianRupee, perm: 'accounts.view' },
     ],
   },
   {

@@ -6,6 +6,14 @@ import { Prisma, type PrismaClient } from '@prisma/client';
  * 2 buyers, and one order with a 3-colour × 5-size matrix (added by the orders seed).
  * Idempotent: everything is upserted by code.
  */
+const DEMO_RATES: Record<string, { unit: 'KG' | 'PCS'; rate: string }> = {
+  KNITTING: { unit: 'KG', rate: '18' },
+  DYEING: { unit: 'KG', rate: '95' },
+  COMPACTING: { unit: 'KG', rate: '9' },
+  PRINTING: { unit: 'PCS', rate: '2.5' },
+  EMBROIDERY: { unit: 'PCS', rate: '4' },
+};
+
 export async function seedDemo(prisma: PrismaClient): Promise<void> {
   const processes = [
     { code: 'KNITTING', name: 'Knitting', stage: 'KG' as const, defaultReturnDays: 15 },
@@ -48,6 +56,14 @@ export async function seedDemo(prisma: PrismaClient): Promise<void> {
         create: { vendorId: row.id, processId: proc[pc]! },
         update: {},
       });
+      // Demo job-work rate so bill matching can be tried; replace with the agreed contract rates.
+      const demo = DEMO_RATES[pc];
+      const exists = await prisma.rateContract.findFirst({ where: { vendorId: row.id, processId: proc[pc]!, itemId: null, orderId: null } });
+      if (demo && !exists) {
+        await prisma.rateContract.create({
+          data: { vendorId: row.id, processId: proc[pc]!, unit: demo.unit, rate: new Prisma.Decimal(demo.rate), effectiveFrom: new Date('2026-04-01T00:00:00Z'), remarks: 'Demo rate — replace with the agreed rate' },
+        });
+      }
     }
   }
 

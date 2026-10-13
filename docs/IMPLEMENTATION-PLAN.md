@@ -83,9 +83,9 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 - [x] **Gate — Order WIP visible** (software: one order followed yarn → packed in Playwright E2E; client demo pending)
 
 ## Phase 3 — Accounts
-- [ ] Step 9 Rate contracts, 3-way match, approval, debit notes (+ print)
-- [ ] Step 10 Payments + allocation + advances + TDS, vendor ledger, ageing + snapshot job, pending D.C. + GST flags, ITC-04 export
-- [ ] **Gate — Bills only vs D.C.s**
+- [x] Step 9 Rate contracts, 3-way match, approval, debit notes (+ print)
+- [x] Step 10 Payments + allocation + advances + TDS, vendor ledger, ageing + snapshot job, pending D.C. + GST flags, ITC-04 export
+- [x] **Gate — Bills only vs D.C.s** (software: a bill can only be built from posted, unbilled D.C.s, enforced in API + DB and exercised in Playwright; client demo pending)
 
 ## Phase 4 — Export and go-live
 - [ ] Step 11 Export invoice from cartons, packing list, LUT/IGST, shipments, buyer receipts/realisation
@@ -97,10 +97,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
-### 2026-10-13 — Phase 3 API (Steps 9–10) verified; screens in progress
+### 2026-10-13 — Phase 3 (Steps 9–10) verified
 - Migration `accounts`: rate contracts, vendor bills + lines, debit notes + lines (partial unique `debit_note_lines_once`), payment vouchers + allocations, ageing snapshots; unique vendor invoice no. per vendor (case-insensitive, non-cancelled).
 - API: `/rate-contracts`, `/vendor-bills` (+ `/match`, `/preview`, `/:id/approve`), `/debit-notes`, `/payments` (+ `/suggest`), `/vendors/:id/ledger`, `/vendors/:id/open-bills`, `/reports/ageing`, `/reports/pending-dcs`, `/reports/itc-04` (draft workbook, Q-016), `/alerts` (+ summary, acknowledge, check). Jobs: ageing snapshot 23:30, D.C. overdue/GST 08:00, payment due 08:15 IST.
 - Tests: 48 shared + 160 API green. New integration tests cover: overlap refusal, rate-editor permission, expected amounts, within-tolerance post + auto excess-loss debit note, ALREADY_BILLED, duplicate invoice no., cancel → D.C. freed + auto note cancelled → re-bill raises once, approval required/forbidden/approved, debit raised when D.C. closes after billing, panel reject + missing debits, oldest-first suggestion, over-allocation, advance creation/use/exhaustion, cancel guards (bill with payments, payment whose advance was used), ledger closing, ageing live + snapshot (same-day rerun), ITC-04 permission + xlsx, alert raise/refresh/resolve, payment-due alert + acknowledge permission.
+- Screens: rate contracts, vendor bills (match table with per-D.C. expected / invoiced / diff, live server preview, approve with note), debit notes (auto + manual, print), payments (open bills, allocate oldest first, advance, voucher print), vendor ledger (Excel), payables ageing (live / snapshot, Excel), pending D.C.s with GST flags + ITC-04 download, alerts (run checks, acknowledge), notifications bell. Demo seed adds clearly-labelled demo rate contracts.
+- Playwright: 19/19 green and re-runnable — full workflow now continues bill (variance → approval → post → auto excess-loss debit note ₹741) → payment → ledger / ageing / debit-note print; second spec covers rates, manual debit note + print, pending D.C.s, alerts check, bell.
 - Decisions recorded: Q-037…Q-041. `apps/web` Vitest now excludes the Playwright `e2e/` folder.
 
 ### 2026-10-13 — Phase 2 (Steps 6–8) verified

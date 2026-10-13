@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover';
 import { StatusBadge } from '../StatusBadge';
+import { NotificationBell } from './NotificationBell';
 
 interface Hit {
   id: string;
@@ -73,8 +74,15 @@ function OrderSearch() {
   );
 }
 
-/** Top-bar slot: order search now; the alerts bell is added with the notification automation (A6/A7). */
+/** Top-bar slot: order search and the notifications bell (A7). */
 export function TopbarExtras() {
   const { can } = useAuth();
-  return can('orders.view') ? <OrderSearch /> : null;
+  return (
+    <div className="flex flex-1 items-center gap-2">
+      {can('orders.view') ? <OrderSearch /> : null}
+      <div className="ml-auto">
+        <NotificationBell />
+      </div>
+    </div>
+  );
 }

@@ -86,7 +86,7 @@ export const alertsService = {
   /** A6: open job-work D.C.s past their expected return date, and GST job-work time limits. */
   async checkDcs() {
     const { rows } = await statementsService.pendingDcs({});
-    const link = (r: (typeof rows)[number]) => (r.kind === 'OUTWARD_DC' ? `/outward-dcs/${r.id}` : `/panel-dcs/${r.id}`);
+    const link = (r: (typeof rows)[number]) => (r.kind === 'OUTWARD_DC' ? `/outward-dcs/${r.id}` : `/panel-out/${r.id}`);
     const pending = (r: (typeof rows)[number]) => `${r.pending} ${r.unit === 'KG' ? 'kg' : 'pcs'}`;
     const overdue: AlertInput[] = rows
       .filter((r) => r.overdueDays > 0)

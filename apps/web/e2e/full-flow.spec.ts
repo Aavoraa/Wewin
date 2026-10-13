@@ -3,7 +3,8 @@ import { apiClient, cell, docNo, expectStatus, field, gridPick, idFromUrl, login
 
 /**
  * Full workflow through the UI (Brief §8): order → yarn receipt → outward D.C. → inward D.C. →
- * cutting → panels → sewing → packing (→ accounts and export are added with Phases 3–4).
+ * cutting → panels → sewing → packing → vendor bill (3-way match, approval, auto debit note) →
+ * payment (export is added with Phase 4).
  */
 test.describe.serial('full order workflow', () => {
   let page: Page;
@@ -136,6 +137,7 @@ test.describe.serial('full order workflow', () => {
     const api = await apiClient();
     const inw = (await (await api.get(`/api/v1/inward-dcs/${idFromUrl(page)}`)).json()).data;
     s.greigeRoll = inw.lines[0].rollNo;
+    s.knitInNo = inw.docNo;
   });
 
   test('dyeing: send the greige roll by scanning it, receive dyed rolls', async () => {
@@ -263,5 +265,58 @@ test.describe.serial('full order workflow', () => {
     const wip = page.locator('div.rounded-md.border', { hasText: 'Packed' }).first();
     await expect(wip).toContainText('9');
     await expect(page.locator('div.rounded-md.border', { hasText: 'Sewn' }).first()).toContainText('9');
+  });
+
+  test('vendor bill: tick the inward D.C.; variance needs owner approval; posting raises the excess-loss debit note', async () => {
+    await page.goto('/vendor-bills/new');
+    await pick(page, 'Vendor *', 'Sri Murugan');
+    await page.getByLabel(`Bill ${s.knitInNo}`).check();
+    await (await field(page, /Vendor invoice no/)).fill(uid('SMK'));
+    // 66 kg × ₹18 (demo contract) = ₹1,188 expected; invoice ₹1,238 is ₹50 over → outside tolerance.
+    await (await field(page, /Taxable amount/)).fill('1238');
+    await expect(page.getByText('Needs approval')).toBeVisible();
+    await saveDraft(page);
+    await expect(page.getByText('PENDING', { exact: true })).toBeVisible();
+    await withReason(page, /Approve variance/, 'Approve', 'Extra charged for urgent knitting; agreed');
+    await expect(page.getByText('APPROVED', { exact: true })).toBeVisible();
+    await primary(page);
+    await expectStatus(page, 'POSTED');
+    s.billNo = await docNo(page, 'BILL');
+    s.billId = idFromUrl(page);
+    // Knitting closed at 5.71 % vs 2 % allowed: excess 2.6 kg × ₹285 = ₹741 debited automatically.
+    await expect(page.getByText('Less debit notes').locator('xpath=..')).toContainText('741.00');
+    await expect(page.getByText('Net payable').locator('xpath=..')).toContainText('497.00');
+    await page.getByRole('link', { name: /^DN\// }).first().click();
+    await expect(page.getByRole('heading', { name: /Debit note \(automatic\)/ })).toBeVisible();
+    await expect(page.getByText('Excess process loss')).toBeVisible();
+    s.dnId = idFromUrl(page);
+  });
+
+  test('payment allocated to the bill settles it', async () => {
+    await page.goto('/payments/new');
+    await pick(page, 'Vendor *', 'Sri Murugan');
+    await (await field(page, /UTR \/ cheque/)).fill(uid('UTR'));
+    await (await field(page, /Amount paid/)).fill('497');
+    await page.getByLabel(`Allocate to ${s.billNo}`).fill('497');
+    await expect(page.getByText('Left as advance').locator('xpath=..')).toContainText('0.00');
+    await saveDraft(page);
+    await primary(page);
+    await expectStatus(page, 'POSTED');
+    await docNo(page, 'PAY');
+    await page.goto(`/vendor-bills/${s.billId}`);
+    await expect(page.getByText('Outstanding').locator('xpath=..')).toContainText('0.00');
+    await expect(page.locator('main').getByText('PAID', { exact: true })).toBeVisible();
+  });
+
+  test('vendor ledger and ageing show the bill, debit note and payment', async () => {
+    await page.goto('/reports/vendor-ledger');
+    await pick(page, 'Vendor', 'Sri Murugan');
+    await expect(page.getByRole('link', { name: s.billNo! })).toBeVisible();
+    await page.goto('/reports/ageing');
+    await expect(page.getByRole('heading', { name: 'Payables ageing' })).toBeVisible();
+    await expect(page.getByText('Live')).toBeVisible();
+    await page.goto('/print/debit-note/'+s.dnId);
+    await expect(page.getByText('DEBIT NOTE', { exact: true })).toBeVisible();
+    await expect(page.getByText('Total debit').locator('xpath=..')).toContainText('741.00');
   });
 });

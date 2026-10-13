@@ -38,6 +38,12 @@ import {
   TrimsDocPage,
   TrimsDocsPage,
 } from '@/features/production/FloorPages';
+import { RatesPage } from '@/features/accounts/RatesPage';
+import { VendorBillPage, VendorBillsPage } from '@/features/accounts/BillPages';
+import { DebitNotePage, DebitNotesPage } from '@/features/accounts/DebitNotePages';
+import { PaymentPage, PaymentsPage } from '@/features/accounts/PaymentPages';
+import { AgeingPage, PendingDcsPage, VendorLedgerPage } from '@/features/accounts/ReportPages';
+import { AlertsPage } from '@/features/accounts/AlertsPage';
 
 /** Module pages: path → required permission → element. Modules append here as they are completed. */
 const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
@@ -71,6 +77,17 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'packing-lists/:id', perm: 'packing.view', element: <PackingListPage /> },
   { path: 'trims-docs', perm: 'trims.view', element: <TrimsDocsPage /> },
   { path: 'trims-docs/:id', perm: 'trims.view', element: <TrimsDocPage /> },
+  { path: 'rate-contracts', perm: 'accounts.view', element: <RatesPage /> },
+  { path: 'vendor-bills', perm: 'accounts.view', element: <VendorBillsPage /> },
+  { path: 'vendor-bills/:id', perm: 'accounts.view', element: <VendorBillPage /> },
+  { path: 'debit-notes', perm: 'accounts.view', element: <DebitNotesPage /> },
+  { path: 'debit-notes/:id', perm: 'accounts.view', element: <DebitNotePage /> },
+  { path: 'payments', perm: 'accounts.view', element: <PaymentsPage /> },
+  { path: 'payments/:id', perm: 'accounts.view', element: <PaymentPage /> },
+  { path: 'reports/vendor-ledger', perm: 'accounts.view', element: <VendorLedgerPage /> },
+  { path: 'reports/ageing', perm: 'accounts.view', element: <AgeingPage /> },
+  { path: 'reports/pending-dcs', perm: 'jobwork.view', element: <PendingDcsPage /> },
+  { path: 'alerts', perm: 'alerts.view', element: <AlertsPage /> },
   { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },
   { path: 'masters/buyers', perm: 'masters.view', element: <BuyersPage /> },
   { path: 'masters/items', perm: 'masters.view', element: <ItemsPage /> },
