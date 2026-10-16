@@ -25,6 +25,12 @@ const zEnv = z.object({
   WHATSAPP_PROVIDER: z.string().optional().default(''),
   WHATSAPP_API_URL: z.string().optional().default(''),
   WHATSAPP_API_TOKEN: z.string().optional().default(''),
+  // Invoice scanning. Local extraction (PDF text + Tesseract OCR) needs no credentials; AI extraction is opt-in.
+  SCAN_AI_PROVIDER: z.enum(['', 'anthropic']).optional().default(''),
+  SCAN_AI_MODEL: z.string().optional().default('claude-opus-5-5'),
+  OCR_LANG_PATH: z.string().optional().default(''),
+  SCAN_MAX_PAGES: z.coerce.number().int().min(1).max(200).default(30),
+  SCAN_OCR_TIMEOUT_MS: z.coerce.number().int().min(5000).default(120000),
 });
 
 export type Env = z.infer<typeof zEnv>;

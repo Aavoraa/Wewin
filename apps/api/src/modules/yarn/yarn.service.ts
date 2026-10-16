@@ -107,13 +107,18 @@ export const yarnService = {
     return shape(r);
   },
 
-  async create(input: Input, user: CurrentUser) {
+  async create(input: Input, user: CurrentUser, opts: { sourceScanId?: string } = {}) {
     await validate(input, prisma);
     return withTx(async (tx) => {
-      const r = await repo.create(tx, { ...header(input), createdById: user.id }, input.lines);
+      const r = await repo.create(tx, { ...header(input), createdById: user.id, sourceScanId: opts.sourceScanId ?? null }, input.lines);
       return shape((await repo.get(r.id, tx))!);
     }, { isolation: 'ReadCommitted' });
   },
+
+  async bySupplierInvoice(vendorId: string, invoiceNo: string) {
+    return (await repo.bySupplierInvoice(vendorId, invoiceNo)).map((r) => ({ ...r, lines: r.lines.map((l) => ({ itemId: l.itemId, qty: l.qtyKg.toString(), rate: l.ratePerKg?.toString() ?? null })) }));
+  },
+  bySourceScan: (scanId: string) => repo.bySourceScan(scanId),
 
   async update(id: string, input: z.output<typeof zYarnReceiptUpdate>) {
     await validate(input, prisma);

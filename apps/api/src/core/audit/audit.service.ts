@@ -2,7 +2,7 @@ import { Prisma } from '@wewin/db';
 import { getContext } from '../context';
 import { type Tx, prisma } from '../db';
 
-export type AuditAction = 'POST' | 'CANCEL' | 'CLOSE' | 'APPROVE' | 'REJECT' | 'CONFIRM' | 'REOPEN' | 'EXPORT' | 'LOGIN' | 'ACKNOWLEDGE';
+export type AuditAction = 'POST' | 'CANCEL' | 'CLOSE' | 'APPROVE' | 'REJECT' | 'CONFIRM' | 'REOPEN' | 'EXPORT' | 'LOGIN' | 'ACKNOWLEDGE' | 'APPLY' | 'DISCARD';
 
 /**
  * Explicit business-action audit rows (post / cancel / close / approve with reason).

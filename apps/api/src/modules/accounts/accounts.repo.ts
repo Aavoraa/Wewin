@@ -108,6 +108,12 @@ export const accountsRepo = {
     if (!ids.length) return;
     await tx.$queryRaw`SELECT 1 FROM vendor_bills WHERE id = ANY(${[...new Set(ids)].sort()}::uuid[]) ORDER BY id FOR UPDATE`;
   },
+  billsByVendorInvoice(vendorId: string, invoiceNo: string) {
+    return prisma.vendorBill.findMany({ where: { vendorId, vendorInvoiceNo: { equals: invoiceNo, mode: 'insensitive' }, status: { not: 'CANCELLED' } }, select: { id: true, docNo: true, status: true, sourceScanId: true } });
+  },
+  billBySourceScan(scanId: string) {
+    return prisma.vendorBill.findUnique({ where: { sourceScanId: scanId }, select: { id: true, docNo: true, status: true } });
+  },
   createBill(tx: Tx, data: Omit<Prisma.VendorBillUncheckedCreateInput, 'lines'>, lines: BillLineData[]) {
     return tx.vendorBill.create({ data: { ...data, lines: { create: lineRows(lines) } } });
   },

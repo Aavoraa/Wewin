@@ -13,6 +13,7 @@ import { trimsRouter } from './trims/trims.routes';
 import { wipRouter } from './wip/wip.routes';
 import { accountsRouter } from './accounts/accounts.routes';
 import { alertsRouter } from './alerts/alerts.routes';
+import { scansRouter } from './scans/scans.routes';
 
 /** Business module routers, mounted under /api/v1 after authentication. */
-export const moduleRouters: Router[] = [stockRouter, mastersRouter, ordersRouter, programsRouter, yarnRouter, jobworkRouter, cuttingRouter, panelsRouter, sewingRouter, packingRouter, trimsRouter, wipRouter, accountsRouter, alertsRouter];
+export const moduleRouters: Router[] = [stockRouter, mastersRouter, ordersRouter, programsRouter, yarnRouter, jobworkRouter, cuttingRouter, panelsRouter, sewingRouter, packingRouter, trimsRouter, wipRouter, accountsRouter, alertsRouter, scansRouter];

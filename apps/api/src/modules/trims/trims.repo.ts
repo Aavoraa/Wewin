@@ -27,6 +27,15 @@ export const trimsRepo = {
   async lock(tx: Tx, id: string) {
     await tx.$queryRaw`SELECT 1 FROM trims_docs WHERE id = ${id}::uuid FOR UPDATE`;
   },
+  bySupplierInvoice(vendorId: string, invoiceNo: string) {
+    return prisma.trimsDoc.findMany({
+      where: { type: 'RECEIPT', vendorId, supplierInvoiceNo: { equals: invoiceNo, mode: 'insensitive' }, status: { not: 'CANCELLED' } },
+      select: { id: true, docNo: true, status: true, sourceScanId: true, lines: { select: { itemId: true, qty: true, rate: true } } },
+    });
+  },
+  bySourceScan(scanId: string) {
+    return prisma.trimsDoc.findUnique({ where: { sourceScanId: scanId }, select: { id: true, docNo: true, status: true } });
+  },
   create(tx: Tx, data: Omit<Prisma.TrimsDocUncheckedCreateInput, 'lines'>, lines: LineData[]) {
     return tx.trimsDoc.create({ data: { ...data, lines: { create: rows(lines) } } });
   },

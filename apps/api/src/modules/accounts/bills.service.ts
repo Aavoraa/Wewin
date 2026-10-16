@@ -174,8 +174,11 @@ export const billsService = {
     const [ins, pns] = await Promise.all([jobworkService.billableInwards(vendorId, orderId), panelsService.billableIns(vendorId, orderId)]);
     const docs = [...ins.map((d) => ({ d, t: 'INWARD_DC' as const })), ...pns.map((d) => ({ d, t: 'PANEL_IN' as const }))];
     const priced = await price(vendorId, docs.map(({ d, t }) => toBillable(d, t)), prisma);
-    return priced.map((p, i) => ({ ...p, processName: docs[i]!.d.processName, against: docs[i]!.d.against }));
+    return priced.map((p, i) => ({ ...p, processName: docs[i]!.d.processName, against: docs[i]!.d.against, vendorDcNo: 'vendorDcNo' in docs[i]!.d ? (docs[i]!.d.vendorDcNo ?? null) : null }));
   },
+
+  byVendorInvoice: (vendorId: string, invoiceNo: string) => repo.billsByVendorInvoice(vendorId, invoiceNo),
+  bySourceScan: (scanId: string) => repo.billBySourceScan(scanId),
 
   /** Preview the match for a draft before saving (no writes). */
   async preview(input: Input) {
@@ -205,10 +208,10 @@ export const billsService = {
     return shape(b);
   },
 
-  async create(input: Input, user: CurrentUser) {
+  async create(input: Input, user: CurrentUser, opts: { sourceScanId?: string } = {}) {
     const { lines, match } = await buildLines(input, prisma);
     const h = await header(input, match, prisma);
-    const id = await withTx(async (tx) => (await repo.createBill(tx, { ...h, createdById: user.id }, lines)).id, RC);
+    const id = await withTx(async (tx) => (await repo.createBill(tx, { ...h, createdById: user.id, sourceScanId: opts.sourceScanId ?? null }, lines)).id, RC);
     return this.get(id);
   },
 

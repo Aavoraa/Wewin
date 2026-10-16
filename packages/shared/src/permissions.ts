@@ -79,6 +79,11 @@ export const PERMISSIONS = {
   'accounts.payment.create': 'Create and allocate payment vouchers',
   'accounts.payment.post': 'Post payment vouchers',
   'accounts.payment.cancel': 'Cancel payment vouchers',
+  // Invoice scanning
+  'scans.view': 'View scanned invoices and their source files',
+  'scans.upload': 'Upload invoices, review and correct extracted values',
+  'scans.apply': 'Create Wewin draft documents from a reviewed scan',
+  'scans.aliases.approve': 'Approve learned vendor item descriptions for automatic matching',
   // Reports
   'reports.view': 'View reports',
   'reports.export': 'Export reports to Excel',
@@ -144,6 +149,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, PermissionKey[]> = {
     'trims.view',
     'trims.create',
     'trims.post',
+    'scans.view',
+    'scans.upload',
+    'scans.apply',
     'reports.view',
     'attachments.upload',
   ],
@@ -181,6 +189,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, PermissionKey[]> = {
   ],
   ACCOUNTANT: [
     ...common,
+    'scans.view',
+    'scans.upload',
+    'scans.apply',
     'masters.rates.edit',
     'programs.view',
     'yarn.view',

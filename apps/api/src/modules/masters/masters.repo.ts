@@ -28,6 +28,15 @@ export const mastersRepo = {
   },
 
   // ── Vendors ──
+  vendorsForMatching() {
+    return prisma.vendor.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true, gstin: true, pan: true, stateCode: true, isActive: true } });
+  },
+  itemsForMatching(types: ('YARN' | 'TRIM' | 'FABRIC' | 'PANEL' | 'GARMENT')[]) {
+    return prisma.item.findMany({ where: { isActive: true, type: { in: types } }, select: { id: true, code: true, name: true, spec: true, hsnCode: true, unit: true, type: true, isActive: true } });
+  },
+  itemsByIdsBrief(ids: string[]) {
+    return prisma.item.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true, unit: true, type: true, isActive: true } });
+  },
   listVendors(where: Prisma.VendorWhereInput, order: Prisma.VendorOrderByWithRelationInput, p: Paging) {
     return prisma.$transaction([
       prisma.vendor.findMany({

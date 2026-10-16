@@ -736,6 +736,8 @@ model YarnReceipt {
   orderId             String?           @map("order_id") @db.Uuid
   supplierInvoiceNo   String?           @map("supplier_invoice_no")
   supplierInvoiceDate DateTime?         @map("supplier_invoice_date") @db.Date
+  /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
+  sourceScanId String? @unique @map("source_scan_id") @db.Uuid
   vehicleNo           String?           @map("vehicle_no")
   remarks             String?
   status              DocStatus         @default(DRAFT)
@@ -1272,6 +1274,8 @@ model TrimsDoc {
   vendorId          String?        @map("vendor_id") @db.Uuid
   orderId           String?        @map("order_id") @db.Uuid
   supplierInvoiceNo String?        @map("supplier_invoice_no")
+  /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
+  sourceScanId String? @unique @map("source_scan_id") @db.Uuid
   remarks           String?
   status            DocStatus      @default(DRAFT)
   version           Int            @default(1)
@@ -1347,6 +1351,8 @@ model VendorBill {
   orderId           String?             @map("order_id") @db.Uuid
   vendorInvoiceNo   String              @map("vendor_invoice_no")
   vendorInvoiceDate DateTime            @map("vendor_invoice_date") @db.Date
+  /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
+  sourceScanId String? @unique @map("source_scan_id") @db.Uuid
   dueDate           DateTime            @map("due_date") @db.Date
   taxableAmount     Decimal             @map("taxable_amount") @db.Decimal(14, 2)
   cgstAmount        Decimal             @default(0) @map("cgst_amount") @db.Decimal(14, 2)
@@ -1530,4 +1536,107 @@ model ProcessedEvent {
   result      Json?
 
   @@map("processed_events")
+}
+
+// ═════════════════════════ Invoice intelligence ═════════════════════════
+
+enum ScanStatus {
+  QUEUED
+  PROCESSING
+  NEEDS_REVIEW
+  READY
+  APPLIED
+  FAILED
+  DISCARDED
+}
+
+enum AliasStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+/// An uploaded invoice / supporting document and its extraction, review and outcome.
+/// Scanning never changes stock or accounts: it only creates a DRAFT of an existing document.
+model InvoiceScan {
+  id              String     @id @default(uuid()) @db.Uuid
+  /// Server-generated storage key (never the user's file name).
+  fileKey         String     @unique @map("file_key")
+  originalName    String     @map("original_name")
+  mimeType        String     @map("mime_type")
+  sizeBytes       Int        @map("size_bytes")
+  sha256          String
+  pageCount       Int?       @map("page_count")
+  status          ScanStatus @default(QUEUED)
+  /// YARN_RECEIPT | TRIMS_RECEIPT | VENDOR_BILL (chosen or confirmed by the reviewer).
+  target          String?
+  classification  String?
+  extractor       String?
+  textSource      String?    @map("text_source")
+  extraction      Json?
+  layout          Json?
+  review          Json?
+  validation      Json?
+  vendorId        String?    @map("vendor_id") @db.Uuid
+  vendorInvoiceNo String?    @map("vendor_invoice_no")
+  invoiceDate     DateTime?  @map("invoice_date") @db.Date
+  totalAmount     Decimal?   @map("total_amount") @db.Decimal(14, 2)
+  appliedDocType  String?    @map("applied_doc_type")
+  appliedDocId    String?    @map("applied_doc_id") @db.Uuid
+  error           String?
+  attempts        Int        @default(0)
+  uploadedById    String     @map("uploaded_by_id") @db.Uuid
+  reviewedById    String?    @map("reviewed_by_id") @db.Uuid
+  version         Int        @default(1)
+  processedAt     DateTime?  @map("processed_at") @db.Timestamptz(3)
+  appliedAt       DateTime?  @map("applied_at") @db.Timestamptz(3)
+  discardedAt     DateTime?  @map("discarded_at") @db.Timestamptz(3)
+  purgedAt        DateTime?  @map("purged_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  events          InvoiceScanEvent[]
+
+  @@index([status, createdAt])
+  @@index([vendorId, vendorInvoiceNo])
+  @@index([sha256])
+  @@map("invoice_scans")
+}
+
+/// Append-only history of a scan: upload, extraction, each correction, confirmations, file views, apply.
+model InvoiceScanEvent {
+  id        String      @id @default(uuid()) @db.Uuid
+  scanId    String      @map("scan_id") @db.Uuid
+  kind      String
+  field     String?
+  before    Json?
+  after     Json?
+  note      String?
+  userId    String?     @map("user_id") @db.Uuid
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  scan      InvoiceScan @relation(fields: [scanId], references: [id], onDelete: Restrict)
+
+  @@index([scanId, createdAt])
+  @@map("invoice_scan_events")
+}
+
+/// Learned vendor wording for an item. PROPOSED when a reviewer confirms a match; used for
+/// automatic matching only after someone with scans.aliases.approve approves it.
+model VendorItemAlias {
+  id                String      @id @default(uuid()) @db.Uuid
+  vendorId          String      @map("vendor_id") @db.Uuid
+  normDescription   String      @map("norm_description")
+  sampleDescription String      @map("sample_description")
+  itemId            String      @map("item_id") @db.Uuid
+  status            AliasStatus @default(PROPOSED)
+  timesConfirmed    Int         @default(1) @map("times_confirmed")
+  proposedById      String      @map("proposed_by_id") @db.Uuid
+  decidedById       String?     @map("decided_by_id") @db.Uuid
+  decidedAt         DateTime?   @map("decided_at") @db.Timestamptz(3)
+  version           Int         @default(1)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([vendorId, normDescription, itemId])
+  @@index([vendorId, status])
+  @@map("vendor_item_aliases")
 }

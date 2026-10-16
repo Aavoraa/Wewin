@@ -43,6 +43,16 @@ export const yarnRepo = {
     await tx.$queryRaw`SELECT 1 FROM yarn_receipts WHERE id = ${id}::uuid FOR UPDATE`;
     return tx.yarnReceipt.findUnique({ where: { id }, include });
   },
+  /** Receipts already entered for a supplier invoice (duplicate check / reconciliation of a scan). */
+  bySupplierInvoice(vendorId: string, invoiceNo: string) {
+    return prisma.yarnReceipt.findMany({
+      where: { vendorId, supplierInvoiceNo: { equals: invoiceNo, mode: 'insensitive' }, status: { not: 'CANCELLED' } },
+      select: { id: true, docNo: true, status: true, sourceScanId: true, lines: { select: { itemId: true, qtyKg: true, ratePerKg: true } } },
+    });
+  },
+  bySourceScan(scanId: string) {
+    return prisma.yarnReceipt.findUnique({ where: { sourceScanId: scanId }, select: { id: true, docNo: true, status: true } });
+  },
   create(tx: Tx, data: Omit<Prisma.YarnReceiptUncheckedCreateInput, 'lines'>, lines: YarnLineData[]) {
     return tx.yarnReceipt.create({ data: { ...data, lines: { create: lineRows(lines) } } });
   },

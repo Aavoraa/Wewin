@@ -73,11 +73,15 @@ export const trimsService = {
     if (!d) throw notFound('Trims document');
     return shape(d);
   },
-  async create(input: Input, user: CurrentUser) {
+  async create(input: Input, user: CurrentUser, opts: { sourceScanId?: string } = {}) {
     await validate(input, prisma);
-    const id = await withTx(async (tx) => (await repo.create(tx, { ...header(input), createdById: user.id }, input.lines)).id, RC);
+    const id = await withTx(async (tx) => (await repo.create(tx, { ...header(input), createdById: user.id, sourceScanId: opts.sourceScanId ?? null }, input.lines)).id, RC);
     return this.get(id);
   },
+  async bySupplierInvoice(vendorId: string, invoiceNo: string) {
+    return (await repo.bySupplierInvoice(vendorId, invoiceNo)).map((r) => ({ ...r, lines: r.lines.map((l) => ({ itemId: l.itemId, qty: l.qty.toString(), rate: l.rate?.toString() ?? null })) }));
+  },
+  bySourceScan: (scanId: string) => repo.bySourceScan(scanId),
   async update(id: string, input: Input & { version: number }) {
     await validate(input, prisma);
     await withTx(async (tx) => {

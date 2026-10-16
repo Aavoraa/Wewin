@@ -23,6 +23,9 @@ export default defineConfig({
       JOBS_ENABLED: 'false',
       AUTH_RATE_LIMIT: '1000',
       TZ: 'Asia/Kolkata',
+      // Scans in tests: private test storage, local extraction only (never calls an external AI service).
+      STORAGE_DIR: path.join(root, 'storage', 'test'),
+      SCAN_AI_PROVIDER: '',
     },
     coverage: {
       provider: 'v8',

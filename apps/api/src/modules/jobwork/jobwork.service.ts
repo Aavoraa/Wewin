@@ -239,6 +239,7 @@ function shapeBillable(i: Awaited<ReturnType<typeof repo.billableInwards>>[numbe
     orderId: out?.orderId ?? null,
     itemId: i.lines[0]?.itemId ?? null,
     against: i.links.map((k) => k.outward.docNo).filter(Boolean).join(', '),
+    vendorDcNo: i.vendorDcNo,
   };
 }
 

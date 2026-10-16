@@ -41,6 +41,26 @@ export const SETTINGS_SCHEMA = {
     default: 7,
     description: 'Notify when a bill falls due within this many days.',
   },
+  'scan.minConfidence': {
+    schema: zPct(),
+    default: '85.0000',
+    description: 'Scanned-invoice values read below this confidence % must be confirmed by the reviewer (Q-042).',
+  },
+  'scan.amountTolerance': {
+    schema: zMoney(),
+    default: '1.00',
+    description: 'Rounding allowed in ₹ when checking qty × rate, tax and totals on a scanned invoice (Q-042).',
+  },
+  'scan.dateOrder': {
+    schema: z.enum(['DMY', 'MDY']),
+    default: 'DMY',
+    description: 'How numeric invoice dates are read: DMY = 09-10-2026 is 9 October (Q-042).',
+  },
+  'scan.retentionDays': {
+    schema: z.number().int().min(7).max(3650),
+    default: 90,
+    description: 'Days after which discarded or failed scans and their files are deleted. Applied scans are kept (Q-044).',
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;

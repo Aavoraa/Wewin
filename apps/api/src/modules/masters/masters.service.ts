@@ -135,6 +135,10 @@ export const mastersService = {
     return loc.id;
   },
 
+  vendorsForMatching: () => repo.vendorsForMatching(),
+  itemsForMatching: (types: ('YARN' | 'TRIM' | 'FABRIC' | 'PANEL' | 'GARMENT')[]) => repo.itemsForMatching(types),
+  itemsByIdsBrief: (ids: string[]) => repo.itemsByIdsBrief(ids),
+
   async vendorById(id: string, tx: Tx | typeof prisma = prisma) {
     const v = await repo.getVendor(id, tx);
     if (!v) throw notFound('Vendor');
