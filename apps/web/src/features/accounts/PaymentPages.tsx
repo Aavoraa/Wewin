@@ -120,7 +120,7 @@ export function PaymentPage() {
         useAdvance: useAdvance ? 'true' : 'false',
       });
       setAlloc(Object.fromEntries(r.allocations.map((a) => [a.billId, a.amount])));
-      toast.success(D(r.remainder).greaterThan(0) ? `Allocated oldest first; ₹${formatInr(r.remainder)} will stay as advance` : 'Allocated oldest first');
+      toast.success(D(r.remainder).greaterThan(0) ? `Allocated oldest first; ${formatInr(r.remainder)} will stay as advance` : 'Allocated oldest first');
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -206,7 +206,7 @@ export function PaymentPage() {
           </Field>
           <label className="flex items-center gap-2 pt-5 text-sm">
             <Checkbox {...form.register('useAdvance')} /> Also use vendor advance
-            {editable && vendorId ? <span className="text-xs text-muted-foreground">(available ₹{formatInr(advance.greaterThan(0) ? advance.toFixed(2) : '0')})</span> : null}
+            {editable && vendorId ? <span className="text-xs text-muted-foreground">(available {formatInr(advance.greaterThan(0) ? advance.toFixed(2) : '0')})</span> : null}
           </label>
           <Field label="Remarks" className="sm:col-span-2 xl:col-span-4">
             <Input {...form.register('remarks')} />
@@ -331,7 +331,7 @@ export function PaymentPage() {
                 <Line label="Allocated" value={allocated.toFixed(2)} />
                 <div className={cn('flex justify-between font-semibold', leftover.isNegative() && 'text-destructive')}>
                   <span>{leftover.isNegative() ? 'Over-allocated' : 'Left as advance'}</span>
-                  <span className="tabular-nums">₹{formatInr(leftover.abs().toFixed(2))}</span>
+                  <span className="tabular-nums">{formatInr(leftover.abs().toFixed(2))}</span>
                 </div>
               </>
             ) : doc ? (
@@ -353,7 +353,7 @@ function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
       <span className="text-muted-foreground">{label}</span>
-      <span className="tabular-nums">₹{formatInr(value)}</span>
+      <span className="tabular-nums">{formatInr(value)}</span>
     </div>
   );
 }

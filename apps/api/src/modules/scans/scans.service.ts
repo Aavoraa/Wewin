@@ -124,6 +124,8 @@ async function buildReview(ex: Extraction, prev: Review | null): Promise<Review>
 // ───────── Validation against live ERP data ─────────
 interface Checked {
   issues: Issue[];
+  /** Documents already entered for this vendor invoice (for "reconcile against the existing receipt"). */
+  duplicates: { docType: string; docNo: string | null; id: string; status: string | null }[];
   reconciliation: ReturnType<typeof validateReview>['reconciliation'];
   ready: boolean;
   checkedAt: string;
@@ -141,6 +143,7 @@ async function check(scan: Scan, review: Review): Promise<Checked> {
   const vendor = review.vendor.id ? await mastersService.vendorById(review.vendor.id).catch(() => null) : null;
   const invoiceNo = review.header.invoiceNo.value;
   let duplicates: ValidationContext['duplicates'] = [];
+  let dupDocs: Checked['duplicates'] = [];
   let existingLines: ValidationContext['existingLines'] = null;
   const extra: Issue[] = [];
   if (review.target && vendor && invoiceNo) {
@@ -149,6 +152,7 @@ async function check(scan: Scan, review: Review): Promise<Checked> {
     if (review.existingDocId && !existing) extra.push({ level: 'ERROR', code: 'EXISTING_NOT_FOUND', field: 'existingDocId', message: 'The receipt chosen for reconciliation is not an entry of this invoice', ackKey: null, acknowledged: false });
     if (existing) existingLines = existing.lines;
     duplicates = docs.filter((d) => d.id !== review.existingDocId).map((d) => ({ docType: d.docType, docNo: d.docNo, id: d.id }));
+    dupDocs = docs.map((d) => ({ docType: d.docType, docNo: d.docNo, id: d.id, status: d.status }));
     const otherScans = await repo.sameInvoice(vendor.id, invoiceNo, scan.id);
     for (const o of otherScans) {
       if (o.status === 'APPLIED' && o.appliedDocId === review.existingDocId) continue; // reconciling against the receipt that scan created
@@ -183,7 +187,7 @@ async function check(scan: Scan, review: Review): Promise<Checked> {
     existingLines,
   });
   const issues = [...r.issues, ...extra];
-  return { issues, reconciliation: r.reconciliation, ready: r.ready && !extra.some((i) => i.level === 'ERROR'), checkedAt: new Date().toISOString() };
+  return { issues, duplicates: dupDocs, reconciliation: r.reconciliation, ready: r.ready && !extra.some((i) => i.level === 'ERROR'), checkedAt: new Date().toISOString() };
 }
 
 /** Denormalised columns that make duplicates and lists queryable. */
@@ -220,6 +224,7 @@ async function shape(scan: Scan) {
     applied: await appliedDoc(scan),
     fileUrl: scan.purgedAt ? null : `/api/v1/invoice-scans/${scan.id}/file`,
     aiAvailable: aiEnabled(),
+    minConfidence: (await scanSettings()).minConfidence,
   };
 }
 

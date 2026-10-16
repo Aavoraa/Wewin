@@ -26,6 +26,7 @@
     "cmdk": "^1.1.1",
     "decimal.js": "^10.6.0",
     "lucide-react": "^0.544.0",
+    "pdfjs-dist": "5.4.296",
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

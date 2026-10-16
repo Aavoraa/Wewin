@@ -195,6 +195,9 @@ importers:
       lucide-react:
         specifier: ^0.544.0
         version: 0.544.0(react@19.3.0)
+      pdfjs-dist:
+        specifier: 5.4.296
+        version: 5.4.296
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4

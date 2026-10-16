@@ -46,6 +46,7 @@ export function DocRegister<T extends { id: string }>({
   newLabel,
   extraFilters,
   statuses,
+  extraActions,
 }: {
   id: string;
   title: string;
@@ -57,6 +58,7 @@ export function DocRegister<T extends { id: string }>({
   newLabel: string;
   extraFilters?: Record<string, string | undefined>;
   statuses?: string[];
+  extraActions?: React.ReactNode;
 }) {
   const { can } = useAuth();
   const fy = useFy();
@@ -67,13 +69,16 @@ export function DocRegister<T extends { id: string }>({
         title={title}
         description={description}
         actions={
-          can(createPerm) ? (
-            <Button asChild>
-              <Link to={`/${route}/new`}>
-                <Plus /> {newLabel}
-              </Link>
-            </Button>
-          ) : null
+          <>
+            {extraActions}
+            {can(createPerm) ? (
+              <Button asChild>
+                <Link to={`/${route}/new`}>
+                  <Plus /> {newLabel}
+                </Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
       <DataTable<T>

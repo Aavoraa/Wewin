@@ -21,6 +21,7 @@ import { Checkbox, Input, Select } from '@/components/ui/input';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { pickers, useOrder } from '../orders/api';
 import { DocRegister, docNoCol, lookupBundle } from './common';
+import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 
 function OrderField({ value, onChange, label, disabled, labels }: { value: string; onChange(id: string, label?: string): void; label?: string; disabled?: boolean; labels: Record<string, string> }) {
   return (
@@ -653,6 +654,7 @@ export function TrimsDocsPage() {
       route="trims-docs"
       createPerm="trims.create"
       newLabel="New trims document"
+      extraActions={<ScanInvoiceButton target="TRIMS_RECEIPT" />}
       columns={[
         docNoCol(),
         { key: 'type', header: 'Type' },

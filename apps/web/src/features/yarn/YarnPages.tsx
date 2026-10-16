@@ -13,6 +13,7 @@ import { DocumentForm, Field } from '@/components/DocumentForm';
 import { EntityPicker } from '@/components/EntityPicker';
 import { LineGrid, newKey, type GridRow } from '@/components/LineGrid';
 import { ErrorState, LoadingState, PageHeader } from '@/components/states';
+import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
@@ -61,13 +62,16 @@ export function YarnReceiptsPage() {
         title="Yarn receipts"
         description="Yarn received from mills. Posting moves stock SUPPLIER → YARN_STORE by lot."
         actions={
-          can('yarn.create') ? (
-            <Button asChild>
-              <Link to="/yarn-receipts/new">
-                <Plus /> New receipt
-              </Link>
-            </Button>
-          ) : null
+          <>
+            <ScanInvoiceButton target="YARN_RECEIPT" />
+            {can('yarn.create') ? (
+              <Button asChild>
+                <Link to="/yarn-receipts/new">
+                  <Plus /> New receipt
+                </Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
       <DataTable<YarnReceipt>

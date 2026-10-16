@@ -89,7 +89,7 @@ export function DebitNotePrint({ id }: { id: string }) {
             <td colSpan={4} className="py-1 text-right">
               Total debit
             </td>
-            <td className="py-1 text-right">₹{formatInr(n.totalAmount)}</td>
+            <td className="py-1 text-right">{formatInr(n.totalAmount)}</td>
           </tr>
         </tfoot>
       </table>
@@ -158,21 +158,21 @@ export function PaymentVoucherPrint({ id }: { id: string }) {
             <td colSpan={3} className="pt-1 text-right">
               Amount paid
             </td>
-            <td className="pt-1 text-right font-bold">₹{formatInr(p.amount)}</td>
+            <td className="pt-1 text-right font-bold">{formatInr(p.amount)}</td>
           </tr>
           {p.tdsAmount !== '0.00' ? (
             <tr>
               <td colSpan={3} className="text-right">
                 TDS deducted
               </td>
-              <td className="text-right">₹{formatInr(p.tdsAmount)}</td>
+              <td className="text-right">{formatInr(p.tdsAmount)}</td>
             </tr>
           ) : null}
           <tr>
             <td colSpan={3} className="text-right">
               {p.unallocated.startsWith('-') ? 'Adjusted from advance' : 'On account (advance)'}
             </td>
-            <td className="text-right">₹{formatInr(p.unallocated.replace('-', ''))}</td>
+            <td className="text-right">{formatInr(p.unallocated.replace('-', ''))}</td>
           </tr>
         </tfoot>
       </table>

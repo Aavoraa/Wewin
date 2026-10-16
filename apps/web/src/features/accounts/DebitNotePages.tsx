@@ -150,7 +150,7 @@ export function DebitNotePage() {
                 <option value="">— not linked —</option>
                 {(bills.data?.data ?? []).map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.docNo} · inv {b.vendorInvoiceNo} · outstanding ₹{formatInr(b.outstanding)}
+                    {b.docNo} · inv {b.vendorInvoiceNo} · outstanding {formatInr(b.outstanding)}
                   </option>
                 ))}
               </Select>

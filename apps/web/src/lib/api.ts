@@ -114,6 +114,12 @@ export const api = {
   async del(path: string): Promise<void> {
     await parse(await raw('DELETE', path));
   },
+  /** Fetch a private file with auth (e.g. a scanned invoice to preview); never a public URL. */
+  async blob(path: string): Promise<Blob> {
+    const res = await raw('GET', path);
+    if (!res.ok) await parse(res);
+    return res.blob();
+  },
   /** Download a file (Excel exports, attachments) with auth, then save it. */
   async download(path: string, query?: Query, fallbackName = 'export.xlsx'): Promise<void> {
     const res = await raw('GET', path, { query });

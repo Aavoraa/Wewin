@@ -97,6 +97,14 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-10-16 — Invoice scanning & auto-fill (brief: "Intelligent Invoice Scanning")
+- Built inside the existing modules (no new transaction types): scans fill draft Yarn receipts, Trims receipts and job-work Vendor bills through their own services; posting / approval unchanged. See `docs/INVOICE-SCANNING.md`.
+- Migration `invoice_scans`: `invoice_scans`, append-only `invoice_scan_events`, `vendor_item_aliases`, `source_scan_id` (unique) on the three targets; row audit no longer copies invoice content.
+- Extraction: pdf.js text + Tesseract OCR (local, no credentials); optional Claude extraction behind `SCAN_AI_PROVIDER` (not exercised live — needs a key).
+- Tests: shared 69, API 177 (17 new scan integration tests incl. OCR), Playwright 20 (new upload → review → draft). Browser check: demo-data sample invoice reviewed with source highlighting and turned into a draft yarn receipt.
+- Fixed in passing: duplicated ₹ sign on payment / debit-note screens and prints.
+- Decisions: Q-042 … Q-047 (thresholds, material purchase bills, retention, vendor POs, AI data sharing, learned-wording approval).
+
 ### 2026-10-13 — Phase 3 (Steps 9–10) verified
 - Migration `accounts`: rate contracts, vendor bills + lines, debit notes + lines (partial unique `debit_note_lines_once`), payment vouchers + allocations, ageing snapshots; unique vendor invoice no. per vendor (case-insensitive, non-cancelled).
 - API: `/rate-contracts`, `/vendor-bills` (+ `/match`, `/preview`, `/:id/approve`), `/debit-notes`, `/payments` (+ `/suggest`), `/vendors/:id/ledger`, `/vendors/:id/open-bills`, `/reports/ageing`, `/reports/pending-dcs`, `/reports/itc-04` (draft workbook, Q-016), `/alerts` (+ summary, acknowledge, check). Jobs: ageing snapshot 23:30, D.C. overdue/GST 08:00, payment due 08:15 IST.

@@ -44,6 +44,9 @@ import { DebitNotePage, DebitNotesPage } from '@/features/accounts/DebitNotePage
 import { PaymentPage, PaymentsPage } from '@/features/accounts/PaymentPages';
 import { AgeingPage, PendingDcsPage, VendorLedgerPage } from '@/features/accounts/ReportPages';
 import { AlertsPage } from '@/features/accounts/AlertsPage';
+import { ScansPage } from '@/features/scans/ScansPage';
+import { ScanReviewPage } from '@/features/scans/ScanReviewPage';
+import { AliasesPage } from '@/features/scans/AliasesPage';
 
 /** Module pages: path → required permission → element. Modules append here as they are completed. */
 const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
@@ -88,6 +91,9 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'reports/ageing', perm: 'accounts.view', element: <AgeingPage /> },
   { path: 'reports/pending-dcs', perm: 'jobwork.view', element: <PendingDcsPage /> },
   { path: 'alerts', perm: 'alerts.view', element: <AlertsPage /> },
+  { path: 'scans', perm: 'scans.view', element: <ScansPage /> },
+  { path: 'scans/learned', perm: 'scans.view', element: <AliasesPage /> },
+  { path: 'scans/:id', perm: 'scans.view', element: <ScanReviewPage /> },
   { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },
   { path: 'masters/buyers', perm: 'masters.view', element: <BuyersPage /> },
   { path: 'masters/items', perm: 'masters.view', element: <ItemsPage /> },

@@ -26,6 +26,7 @@ import { Table, TBody, TD, TFoot, TH, THead, TR } from '@/components/ui/table';
 import { StatusFilter } from '../yarn/YarnPages';
 import { pickers } from '../orders/api';
 import { docNoCol } from '../production/common';
+import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { type BillCandidate, type MatchResult, type VendorBill } from './types';
 
 const qtyText = (q: string, unit: string) => (unit === 'KG' ? `${formatKg(q)} kg` : `${formatQty(q)} pcs`);
@@ -43,13 +44,16 @@ export function VendorBillsPage() {
         title="Vendor bills"
         description="Job-work invoices matched against inward D.C.s at contract rates (3-way match)."
         actions={
-          can('accounts.bill.create') ? (
-            <Button asChild>
-              <Link to="/vendor-bills/new">
-                <Plus /> New bill
-              </Link>
-            </Button>
-          ) : null
+          <>
+            <ScanInvoiceButton target="VENDOR_BILL" />
+            {can('accounts.bill.create') ? (
+              <Button asChild>
+                <Link to="/vendor-bills/new">
+                  <Plus /> New bill
+                </Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
       <DataTable<VendorBill>

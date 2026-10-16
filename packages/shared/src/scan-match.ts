@@ -129,8 +129,8 @@ export function matchItem(line: { description: string | null; vendorItemCode: st
   if (desc) {
     const attrs = parseAttributes(line.description ?? '');
     for (const it of items) {
-      const name = normText(`${it.name} ${it.spec ?? ''}`);
-      let s = Math.max(dice(desc, name), 0.6 * tokenCover(name, desc) + 0.4 * dice(desc, name));
+      const sim = (name: string) => Math.max(dice(desc, name), 0.6 * tokenCover(name, desc) + 0.4 * dice(desc, name));
+      let s = Math.max(sim(normText(it.name)), sim(normText(`${it.name} ${it.spec ?? ''}`)));
       const ia = parseAttributes(`${it.name} ${it.spec ?? ''} ${it.code}`);
       if (attrs.count && ia.count) s = attrs.count === ia.count ? s + 0.1 : s - 0.3; // a different yarn count is a different item
       if (line.hsn && it.hsnCode && line.hsn.slice(0, 4) !== it.hsnCode.slice(0, 4)) s -= 0.15;

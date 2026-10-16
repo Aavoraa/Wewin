@@ -35,6 +35,7 @@ import {
   CalendarClock,
   Hourglass,
   BadgeIndianRupee,
+  ScanText,
   type LucideIcon,
 } from 'lucide-react';
 import { type PermissionKey } from '@wewin/shared';
@@ -107,6 +108,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Stores',
     items: [
+      { label: 'Scan invoices', to: '/scans', icon: ScanText, perm: 'scans.view' },
       { label: 'Yarn receipts', to: '/yarn-receipts', icon: PackageOpen, perm: 'yarn.view' },
       { label: 'Stock balances', to: '/stock/balances', icon: Boxes, perm: 'stock.view' },
       { label: 'Stock movements', to: '/stock/movements', icon: History, perm: 'stock.view' },
