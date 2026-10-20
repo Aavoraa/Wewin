@@ -32,6 +32,13 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/main.ts', 'src/**/*.test.ts'],
       reporter: ['text-summary', 'html', 'json-summary'],
+      // Ledger, numbering, matching and loss must stay ≥ 90 % covered (IMPLEMENTATION-PLAN).
+      thresholds: {
+        'src/core/ledger/**': { lines: 90, statements: 90, functions: 90 },
+        'src/core/numbering/**': { lines: 90, statements: 90, functions: 90 },
+        'src/**/*.match.ts': { lines: 90, statements: 90, functions: 90, branches: 90 },
+        'src/**/*.loss.ts': { lines: 90, statements: 90, functions: 90, branches: 90 },
+      },
     },
   },
 });

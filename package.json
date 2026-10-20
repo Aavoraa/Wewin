@@ -11,7 +11,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:coverage": "pnpm --filter @wewin/api test:coverage",
+    "test:coverage": "pnpm --filter @wewin/shared test:coverage && pnpm --filter @wewin/api test:coverage",
     "e2e": "pnpm --filter @wewin/web e2e",
     "format": "prettier --write .",
     "db:migrate": "pnpm --filter @wewin/db exec prisma migrate dev",
