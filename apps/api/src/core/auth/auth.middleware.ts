@@ -5,6 +5,7 @@ import { setContextUser } from '../context';
 import { authRepo } from './auth.repo';
 import { verifyAccessToken } from './tokens';
 import { type CurrentUser } from './auth.types';
+import { tagPermission } from '../openapi';
 
 /** Short cache of user permissions; invalidated when roles/users change in this process. */
 const CACHE_MS = 10_000;
@@ -54,7 +55,7 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
 
 /** Route guard: the user must hold every listed permission (server-side, A§10). */
 export function requirePermission(...keys: PermissionKey[]): RequestHandler {
-  return (req, _res, next) => {
+  const mw: RequestHandler = (req, _res, next) => {
     const user = req.user;
     if (!user) throw new AppError('UNAUTHENTICATED', 'Login required', 401);
     const missing = keys.filter((k) => !user.permissions.has(k));
@@ -63,6 +64,8 @@ export function requirePermission(...keys: PermissionKey[]): RequestHandler {
     }
     next();
   };
+  tagPermission(mw, keys);
+  return mw;
 }
 
 /** Service-level re-check for sensitive rules. */

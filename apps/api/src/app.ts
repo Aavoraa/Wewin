@@ -14,6 +14,7 @@ import { errorHandler, notFoundHandler } from './core/errors/error-middleware';
 import { settingsRouter } from './core/settings/settings.routes';
 import { notifyRouter } from './core/notify/notify.routes';
 import { moduleRouters } from './modules';
+import { docsRouter } from './core/docs.routes';
 
 export function createApp() {
   const app = express();
@@ -60,6 +61,9 @@ export function createApp() {
   v1.use(notifyRouter);
   for (const r of moduleRouters) v1.use(r);
   app.use('/api/v1', v1);
+  if (env.API_DOCS === 'true' || (env.API_DOCS === '' && env.NODE_ENV !== 'production')) {
+    app.use('/api/docs', docsRouter([{ prefix: '/auth', router: authRouter }, ...[settingsRouter, notifyRouter, ...moduleRouters].map((router) => ({ prefix: '', router }))]));
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

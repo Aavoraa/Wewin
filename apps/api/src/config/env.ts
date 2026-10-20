@@ -19,6 +19,8 @@ const zEnv = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  // /api/docs (OpenAPI + Swagger UI). Default: on outside production.
+  API_DOCS: z.enum(['true', 'false', '']).optional().default(''),
   AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(30),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().min(60).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(7),

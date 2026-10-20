@@ -35,8 +35,10 @@
     "pino": "^9.9.5",
     "pino-http": "^10.5.0",
     "qrcode": "^1.5.4",
+    "swagger-ui-dist": "5.29.0",
     "tesseract.js": "6.0.1",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "3.24.6"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.9",

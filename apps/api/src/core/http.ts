@@ -3,6 +3,7 @@ import { type z, type ZodTypeAny } from 'zod';
 import { type ListMeta } from '@wewin/shared';
 import { AppError } from './errors/app-error';
 import { type CurrentUser } from './auth/auth.types';
+import { tagHandler } from './openapi';
 import { EXPORT_MAX_ROWS, buildWorkbook, sendWorkbook, zExportColumns } from './excel';
 
 interface Schemas {
@@ -42,7 +43,7 @@ export function handle<S extends Schemas>(
   fn: (input: HandlerInput<S>) => Promise<unknown>,
   opts: { status?: number; public?: boolean } = {},
 ): RequestHandler {
-  return async (req, res) => {
+  const h: RequestHandler = async (req, res) => {
     const params = schemas.params ? schemas.params.parse(req.params) : undefined;
     const query = schemas.query ? schemas.query.parse(req.query) : undefined;
     const body = schemas.body ? schemas.body.parse(req.body ?? {}) : undefined;
@@ -73,4 +74,6 @@ export function handle<S extends Schemas>(
     }
     res.status(opts.status ?? 200).json({ data: result ?? null });
   };
+  tagHandler(h, { schemas, status: opts.status ?? 200, public: opts.public ?? false });
+  return h;
 }
