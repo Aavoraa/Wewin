@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { KeyRound, LogOut, Menu, PanelLeftClose, PanelLeftOpen, UserCircle2, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
 import { cn } from '@/lib/utils';
 import { NAV } from '@/nav';
+import { LoadingState } from '../states';
 import { Button } from '../ui/button';
 import { Select } from '../ui/input';
 import {
@@ -169,7 +170,9 @@ export function AppShell() {
           </div>
         </header>
         <main className="min-w-0 flex-1 p-3 sm:p-5">
-          <Outlet />
+          <Suspense fallback={<LoadingState label="Loading…" />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

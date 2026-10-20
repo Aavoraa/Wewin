@@ -13,7 +13,20 @@ export default defineConfig({
     proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:4000' },
   },
   preview: { port: 4173, proxy: { '/api': 'http://localhost:4000' } },
-  build: { sourcemap: true, chunkSizeWarningLimit: 1500 },
+  build: {
+    sourcemap: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Framework code changes rarely: its own long-cached chunks; pages are split per route (routes.tsx).
+        manualChunks(id) {
+          if (/\/node_modules\/(react|react-dom|react-router|scheduler)\//.test(id)) return 'react';
+          if (/\/node_modules\/(zod|decimal\.js|@tanstack\/[^/]+|react-hook-form|@hookform\/[^/]+)\//.test(id)) return 'vendor';
+          return undefined;
+        },
+      },
+    },
+  },
   // Unit tests only; e2e/ is Playwright (pnpm e2e).
   test: { include: ['src/**/*.test.{ts,tsx}'] },
 });

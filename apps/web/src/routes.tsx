@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { type PermissionKey } from '@wewin/shared';
 import { useAuth } from '@/lib/auth';
@@ -6,50 +6,75 @@ import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState, LoadingState } from '@/components/states';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
-import { DashboardPage } from '@/features/dashboard/DashboardPage';
-import { SettingsPage } from '@/features/settings/SettingsPage';
-import { SeriesPage } from '@/features/settings/SeriesPage';
-import { AuditPage } from '@/features/settings/AuditPage';
-import { StockBalancesPage } from '@/features/stock/StockBalancesPage';
-import { StockMovementsPage } from '@/features/stock/StockMovementsPage';
-import { PrintRoute } from '@/print/PrintRoute';
-import { VendorsPage } from '@/features/masters/VendorsPage';
-import { BuyersPage, ItemsPage, LocationsPage, ProcessesPage } from '@/features/masters/SimpleMastersPages';
-import { UsersPage } from '@/features/masters/UsersPage';
-import { RolesPage } from '@/features/masters/RolesPage';
-import { OrdersListPage } from '@/features/orders/OrdersListPage';
-import { OrderPage } from '@/features/orders/OrderPage';
-import { ProgramPage, ProgramsListPage } from '@/features/programs/ProgramsPages';
-import { YarnReceiptPage, YarnReceiptsPage } from '@/features/yarn/YarnPages';
-import '@/print/register';
-import { OutwardDcPage, OutwardDcsPage } from '@/features/jobwork/OutwardPages';
-import { AtVendorsPage, InwardDcPage, InwardDcsPage } from '@/features/jobwork/InwardPages';
-import { BundlesPage, CutLayPage, CutLaysPage } from '@/features/production/CuttingPages';
-import { PanelInListPage, PanelInPage, PanelOutListPage, PanelOutPage, RecutListPage, RecutPage } from '@/features/production/PanelPages';
-import {
-  CartonPage,
-  CartonsPage,
-  PackingListPage,
-  PackingListsPage,
-  SewingEntriesPage,
-  SewingEntryPage,
-  SewingIssuePage,
-  SewingIssuesPage,
-  TrimsDocPage,
-  TrimsDocsPage,
-} from '@/features/production/FloorPages';
-import { RatesPage } from '@/features/accounts/RatesPage';
-import { VendorBillPage, VendorBillsPage } from '@/features/accounts/BillPages';
-import { DebitNotePage, DebitNotesPage } from '@/features/accounts/DebitNotePages';
-import { PaymentPage, PaymentsPage } from '@/features/accounts/PaymentPages';
-import { AgeingPage, PendingDcsPage, VendorLedgerPage } from '@/features/accounts/ReportPages';
-import { AlertsPage } from '@/features/accounts/AlertsPage';
-import { ScansPage } from '@/features/scans/ScansPage';
-import { ReportsPage } from '@/features/reports/ReportsPage';
-import { ExportInvoicePage, ExportInvoicesPage } from '@/features/export/InvoicePages';
-import { BuyerReceiptPage, BuyerReceiptsPage, ExportReceivablesPage, ShipmentPage, ShipmentsPage } from '@/features/export/ShipmentReceiptPages';
-import { ScanReviewPage } from '@/features/scans/ScanReviewPage';
-import { AliasesPage } from '@/features/scans/AliasesPage';
+
+/** Pages load on first visit (route-level code splitting); login stays in the main bundle. */
+const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const SeriesPage = lazy(() => import('@/features/settings/SeriesPage').then((m) => ({ default: m.SeriesPage })));
+const AuditPage = lazy(() => import('@/features/settings/AuditPage').then((m) => ({ default: m.AuditPage })));
+const StockBalancesPage = lazy(() => import('@/features/stock/StockBalancesPage').then((m) => ({ default: m.StockBalancesPage })));
+const StockMovementsPage = lazy(() => import('@/features/stock/StockMovementsPage').then((m) => ({ default: m.StockMovementsPage })));
+const VendorsPage = lazy(() => import('@/features/masters/VendorsPage').then((m) => ({ default: m.VendorsPage })));
+const BuyersPage = lazy(() => import('@/features/masters/SimpleMastersPages').then((m) => ({ default: m.BuyersPage })));
+const ItemsPage = lazy(() => import('@/features/masters/SimpleMastersPages').then((m) => ({ default: m.ItemsPage })));
+const LocationsPage = lazy(() => import('@/features/masters/SimpleMastersPages').then((m) => ({ default: m.LocationsPage })));
+const ProcessesPage = lazy(() => import('@/features/masters/SimpleMastersPages').then((m) => ({ default: m.ProcessesPage })));
+const UsersPage = lazy(() => import('@/features/masters/UsersPage').then((m) => ({ default: m.UsersPage })));
+const RolesPage = lazy(() => import('@/features/masters/RolesPage').then((m) => ({ default: m.RolesPage })));
+const OrdersListPage = lazy(() => import('@/features/orders/OrdersListPage').then((m) => ({ default: m.OrdersListPage })));
+const OrderPage = lazy(() => import('@/features/orders/OrderPage').then((m) => ({ default: m.OrderPage })));
+const ProgramPage = lazy(() => import('@/features/programs/ProgramsPages').then((m) => ({ default: m.ProgramPage })));
+const ProgramsListPage = lazy(() => import('@/features/programs/ProgramsPages').then((m) => ({ default: m.ProgramsListPage })));
+const YarnReceiptPage = lazy(() => import('@/features/yarn/YarnPages').then((m) => ({ default: m.YarnReceiptPage })));
+const YarnReceiptsPage = lazy(() => import('@/features/yarn/YarnPages').then((m) => ({ default: m.YarnReceiptsPage })));
+const OutwardDcPage = lazy(() => import('@/features/jobwork/OutwardPages').then((m) => ({ default: m.OutwardDcPage })));
+const OutwardDcsPage = lazy(() => import('@/features/jobwork/OutwardPages').then((m) => ({ default: m.OutwardDcsPage })));
+const AtVendorsPage = lazy(() => import('@/features/jobwork/InwardPages').then((m) => ({ default: m.AtVendorsPage })));
+const InwardDcPage = lazy(() => import('@/features/jobwork/InwardPages').then((m) => ({ default: m.InwardDcPage })));
+const InwardDcsPage = lazy(() => import('@/features/jobwork/InwardPages').then((m) => ({ default: m.InwardDcsPage })));
+const BundlesPage = lazy(() => import('@/features/production/CuttingPages').then((m) => ({ default: m.BundlesPage })));
+const CutLayPage = lazy(() => import('@/features/production/CuttingPages').then((m) => ({ default: m.CutLayPage })));
+const CutLaysPage = lazy(() => import('@/features/production/CuttingPages').then((m) => ({ default: m.CutLaysPage })));
+const PanelInListPage = lazy(() => import('@/features/production/PanelPages').then((m) => ({ default: m.PanelInListPage })));
+const PanelInPage = lazy(() => import('@/features/production/PanelPages').then((m) => ({ default: m.PanelInPage })));
+const PanelOutListPage = lazy(() => import('@/features/production/PanelPages').then((m) => ({ default: m.PanelOutListPage })));
+const PanelOutPage = lazy(() => import('@/features/production/PanelPages').then((m) => ({ default: m.PanelOutPage })));
+const RecutListPage = lazy(() => import('@/features/production/PanelPages').then((m) => ({ default: m.RecutListPage })));
+const RecutPage = lazy(() => import('@/features/production/PanelPages').then((m) => ({ default: m.RecutPage })));
+const CartonPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.CartonPage })));
+const CartonsPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.CartonsPage })));
+const PackingListPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.PackingListPage })));
+const PackingListsPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.PackingListsPage })));
+const SewingEntriesPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.SewingEntriesPage })));
+const SewingEntryPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.SewingEntryPage })));
+const SewingIssuePage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.SewingIssuePage })));
+const SewingIssuesPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.SewingIssuesPage })));
+const TrimsDocPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.TrimsDocPage })));
+const TrimsDocsPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.TrimsDocsPage })));
+const RatesPage = lazy(() => import('@/features/accounts/RatesPage').then((m) => ({ default: m.RatesPage })));
+const VendorBillPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillPage })));
+const VendorBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillsPage })));
+const DebitNotePage = lazy(() => import('@/features/accounts/DebitNotePages').then((m) => ({ default: m.DebitNotePage })));
+const DebitNotesPage = lazy(() => import('@/features/accounts/DebitNotePages').then((m) => ({ default: m.DebitNotesPage })));
+const PaymentPage = lazy(() => import('@/features/accounts/PaymentPages').then((m) => ({ default: m.PaymentPage })));
+const PaymentsPage = lazy(() => import('@/features/accounts/PaymentPages').then((m) => ({ default: m.PaymentsPage })));
+const AgeingPage = lazy(() => import('@/features/accounts/ReportPages').then((m) => ({ default: m.AgeingPage })));
+const PendingDcsPage = lazy(() => import('@/features/accounts/ReportPages').then((m) => ({ default: m.PendingDcsPage })));
+const VendorLedgerPage = lazy(() => import('@/features/accounts/ReportPages').then((m) => ({ default: m.VendorLedgerPage })));
+const AlertsPage = lazy(() => import('@/features/accounts/AlertsPage').then((m) => ({ default: m.AlertsPage })));
+const ScansPage = lazy(() => import('@/features/scans/ScansPage').then((m) => ({ default: m.ScansPage })));
+const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const ExportInvoicePage = lazy(() => import('@/features/export/InvoicePages').then((m) => ({ default: m.ExportInvoicePage })));
+const ExportInvoicesPage = lazy(() => import('@/features/export/InvoicePages').then((m) => ({ default: m.ExportInvoicesPage })));
+const BuyerReceiptPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.BuyerReceiptPage })));
+const BuyerReceiptsPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.BuyerReceiptsPage })));
+const ExportReceivablesPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.ExportReceivablesPage })));
+const ShipmentPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.ShipmentPage })));
+const ShipmentsPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.ShipmentsPage })));
+const ScanReviewPage = lazy(() => import('@/features/scans/ScanReviewPage').then((m) => ({ default: m.ScanReviewPage })));
+const AliasesPage = lazy(() => import('@/features/scans/AliasesPage').then((m) => ({ default: m.AliasesPage })));
+// Print templates (QR / barcode libraries) load only when a print opens.
+const PrintRoute = lazy(() => import('@/print/register').then(() => import('@/print/PrintRoute')).then((m) => ({ default: m.PrintRoute })));
 
 /** Module pages: path → required permission → element. Modules append here as they are completed. */
 const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
@@ -136,7 +161,9 @@ export function AppRoutes() {
         path="/print/:docType/:id"
         element={
           <RequireAuth>
-            <PrintRoute />
+            <Suspense fallback={<LoadingState label="Loading…" />}>
+              <PrintRoute />
+            </Suspense>
           </RequireAuth>
         }
       />
