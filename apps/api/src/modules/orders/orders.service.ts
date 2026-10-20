@@ -113,6 +113,25 @@ export const ordersService = {
     return shape(o);
   },
 
+  /** For export invoices: buyer, currency, garment item and the price of each colour × size. */
+  async forExport(ids: string[], db: Tx | typeof prisma = prisma) {
+    const out = new Map<string, { id: string; orderNo: string; buyerId: string; currency: string; garmentItemId: string; status: string; prices: Map<string, string | null> }>();
+    for (const id of [...new Set(ids)]) {
+      const o = await repo.get(id, db);
+      if (!o) throw notFound('Order');
+      out.set(id, {
+        id: o.id,
+        orderNo: o.orderNo,
+        buyerId: o.buyerId,
+        currency: o.currency,
+        garmentItemId: o.garmentItemId,
+        status: o.status,
+        prices: new Map(o.lines.map((l) => [`${l.colour}|${l.size}`, l.unitPrice?.toString() ?? null])),
+      });
+    }
+    return out;
+  },
+
   /** For other modules: order header + components, throws if the order cannot take new documents. */
   async requireOpen(id: string, db: Tx | typeof prisma = prisma) {
     const o = await repo.get(id, db);

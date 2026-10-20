@@ -36,6 +36,10 @@ import {
   Hourglass,
   BadgeIndianRupee,
   ScanText,
+  Ship,
+  FileOutput,
+  HandCoins,
+  Landmark,
   type LucideIcon,
 } from 'lucide-react';
 import { type PermissionKey } from '@wewin/shared';
@@ -91,6 +95,15 @@ export const NAV: NavGroup[] = [
       { label: 'Cartons', to: '/cartons', icon: Box, perm: 'packing.view' },
       { label: 'Packing lists', to: '/packing-lists', icon: PackageCheck, perm: 'packing.view' },
       { label: 'Trims', to: '/trims-docs', icon: Ribbon, perm: 'trims.view' },
+    ],
+  },
+  {
+    label: 'Export',
+    items: [
+      { label: 'Export invoices', to: '/export-invoices', icon: FileOutput, perm: 'export.view' },
+      { label: 'Shipments', to: '/shipments', icon: Ship, perm: 'export.view' },
+      { label: 'Buyer receipts', to: '/buyer-receipts', icon: HandCoins, perm: 'export.view' },
+      { label: 'Export receivables', to: '/reports/export-receivables', icon: Landmark, perm: 'export.view' },
     ],
   },
   {

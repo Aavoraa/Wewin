@@ -80,6 +80,13 @@ export const packingRepo = {
       prisma.packingList.count({ where }),
     ]);
   },
+  /** Posted packing lists of a buyer's orders not yet on a posted export invoice. */
+  invoiceablePls(buyerId: string, db: Db = prisma) {
+    return db.packingList.findMany({ where: { status: 'POSTED', exportInvoiceId: null, order: { buyerId } }, orderBy: { docDate: 'asc' }, include: plInclude });
+  },
+  plsByIds(ids: string[], db: Db = prisma) {
+    return db.packingList.findMany({ where: { id: { in: ids } }, include: plInclude });
+  },
   getPl(id: string, db: Db = prisma) {
     return db.packingList.findUnique({ where: { id }, include: plInclude });
   },

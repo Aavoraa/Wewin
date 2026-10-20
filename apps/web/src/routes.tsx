@@ -45,6 +45,8 @@ import { PaymentPage, PaymentsPage } from '@/features/accounts/PaymentPages';
 import { AgeingPage, PendingDcsPage, VendorLedgerPage } from '@/features/accounts/ReportPages';
 import { AlertsPage } from '@/features/accounts/AlertsPage';
 import { ScansPage } from '@/features/scans/ScansPage';
+import { ExportInvoicePage, ExportInvoicesPage } from '@/features/export/InvoicePages';
+import { BuyerReceiptPage, BuyerReceiptsPage, ExportReceivablesPage, ShipmentPage, ShipmentsPage } from '@/features/export/ShipmentReceiptPages';
 import { ScanReviewPage } from '@/features/scans/ScanReviewPage';
 import { AliasesPage } from '@/features/scans/AliasesPage';
 
@@ -92,6 +94,13 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'reports/pending-dcs', perm: 'jobwork.view', element: <PendingDcsPage /> },
   { path: 'alerts', perm: 'alerts.view', element: <AlertsPage /> },
   { path: 'scans', perm: 'scans.view', element: <ScansPage /> },
+  { path: 'export-invoices', perm: 'export.view', element: <ExportInvoicesPage /> },
+  { path: 'export-invoices/:id', perm: 'export.view', element: <ExportInvoicePage /> },
+  { path: 'shipments', perm: 'export.view', element: <ShipmentsPage /> },
+  { path: 'shipments/:id', perm: 'export.view', element: <ShipmentPage /> },
+  { path: 'buyer-receipts', perm: 'export.view', element: <BuyerReceiptsPage /> },
+  { path: 'buyer-receipts/:id', perm: 'export.view', element: <BuyerReceiptPage /> },
+  { path: 'reports/export-receivables', perm: 'export.view', element: <ExportReceivablesPage /> },
   { path: 'scans/learned', perm: 'scans.view', element: <AliasesPage /> },
   { path: 'scans/:id', perm: 'scans.view', element: <ScanReviewPage /> },
   { path: 'masters/vendors', perm: 'masters.view', element: <VendorsPage /> },

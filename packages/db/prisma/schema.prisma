@@ -521,23 +521,26 @@ model VendorProcess {
 }
 
 model Buyer {
-  id            String   @id @default(uuid()) @db.Uuid
-  code          String   @unique
-  name          String
-  country       String?
-  addressLine1  String?  @map("address_line1")
-  addressLine2  String?  @map("address_line2")
-  city          String?
-  contactPerson String?  @map("contact_person")
-  phone         String?
-  email         String?
-  currency      String   @default("USD")
-  paymentTerms  String?  @map("payment_terms")
-  isActive      Boolean  @default(true) @map("is_active")
-  version       Int      @default(1)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  orders        Order[]
+  id             String          @id @default(uuid()) @db.Uuid
+  code           String          @unique
+  name           String
+  country        String?
+  addressLine1   String?         @map("address_line1")
+  addressLine2   String?         @map("address_line2")
+  city           String?
+  contactPerson  String?         @map("contact_person")
+  phone          String?
+  email          String?
+  currency       String          @default("USD")
+  paymentTerms   String?         @map("payment_terms")
+  isActive       Boolean         @default(true) @map("is_active")
+  version        Int             @default(1)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  orders         Order[]
+  exportInvoices ExportInvoice[] @relation("exportBuyer")
+  shipments      Shipment[]      @relation("shipmentBuyer")
+  receipts       BuyerReceipt[]  @relation("receiptBuyer")
 
   @@index([name])
   @@map("buyers")
@@ -560,48 +563,49 @@ enum ProgramStatus {
 
 /// Buyer order (PO) for one style; quantities per colour × size in order_lines.
 model Order {
-  id            String           @id @default(uuid()) @db.Uuid
-  orderNo       String           @unique @map("order_no")
-  buyerId       String           @map("buyer_id") @db.Uuid
-  buyerPoNo     String           @map("buyer_po_no")
-  poDate        DateTime         @map("po_date") @db.Date
-  shipDate      DateTime?        @map("ship_date") @db.Date
-  styleNo       String           @map("style_no")
-  styleName     String?          @map("style_name")
+  id            String              @id @default(uuid()) @db.Uuid
+  orderNo       String              @unique @map("order_no")
+  buyerId       String              @map("buyer_id") @db.Uuid
+  buyerPoNo     String              @map("buyer_po_no")
+  poDate        DateTime            @map("po_date") @db.Date
+  shipDate      DateTime?           @map("ship_date") @db.Date
+  styleNo       String              @map("style_no")
+  styleName     String?             @map("style_name")
   description   String?
-  garmentItemId String           @map("garment_item_id") @db.Uuid
-  currency      String           @default("USD")
-  colours       String[]         @default([])
-  sizes         String[]         @default([])
-  status        OrderStatus      @default(DRAFT)
+  garmentItemId String              @map("garment_item_id") @db.Uuid
+  currency      String              @default("USD")
+  colours       String[]            @default([])
+  sizes         String[]            @default([])
+  status        OrderStatus         @default(DRAFT)
   remarks       String?
   /// Set when the order was created from a scanned buyer PO (one order per scan).
-  sourceScanId  String?          @unique @map("source_scan_id") @db.Uuid
-  version       Int              @default(1)
-  confirmedAt   DateTime?        @map("confirmed_at") @db.Timestamptz(3)
-  confirmedById String?          @map("confirmed_by_id") @db.Uuid
-  closedAt      DateTime?        @map("closed_at") @db.Timestamptz(3)
-  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  buyer         Buyer            @relation(fields: [buyerId], references: [id], onDelete: Restrict)
-  garmentItem   Item             @relation("garmentItem", fields: [garmentItemId], references: [id], onDelete: Restrict)
+  sourceScanId  String?             @unique @map("source_scan_id") @db.Uuid
+  version       Int                 @default(1)
+  confirmedAt   DateTime?           @map("confirmed_at") @db.Timestamptz(3)
+  confirmedById String?             @map("confirmed_by_id") @db.Uuid
+  closedAt      DateTime?           @map("closed_at") @db.Timestamptz(3)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyer         Buyer               @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  garmentItem   Item                @relation("garmentItem", fields: [garmentItemId], references: [id], onDelete: Restrict)
   lines         OrderLine[]
   components    OrderComponent[]
   costing       OrderCosting?
   programs      FabricProgram[]
   trimsBom      TrimsBomLine[]
   yarnReceipts  YarnReceipt[]
-  outwardDcs    OutwardDc[]      @relation("outwardOrder")
-  cutLays       CutLay[]         @relation("cutOrder")
-  panelDcs      PanelDc[]        @relation("panelOrder")
-  recutSlips    RecutSlip[]      @relation("recutOrder")
-  sewingIssues  SewingIssue[]    @relation("sewIssueOrder")
-  sewingEntries SewingEntry[]    @relation("sewEntryOrder")
-  cartons       Carton[]         @relation("cartonOrder")
-  packingLists  PackingList[]    @relation("packingOrder")
-  trimsDocs     TrimsDoc[]       @relation("trimsOrder")
-  rateContracts RateContract[]   @relation("rateOrder")
-  bills         VendorBill[]     @relation("billOrder")
+  outwardDcs    OutwardDc[]         @relation("outwardOrder")
+  cutLays       CutLay[]            @relation("cutOrder")
+  panelDcs      PanelDc[]           @relation("panelOrder")
+  recutSlips    RecutSlip[]         @relation("recutOrder")
+  sewingIssues  SewingIssue[]       @relation("sewIssueOrder")
+  sewingEntries SewingEntry[]       @relation("sewEntryOrder")
+  cartons       Carton[]            @relation("cartonOrder")
+  packingLists  PackingList[]       @relation("packingOrder")
+  trimsDocs     TrimsDoc[]          @relation("trimsOrder")
+  rateContracts RateContract[]      @relation("rateOrder")
+  bills         VendorBill[]        @relation("billOrder")
+  exportLines   ExportInvoiceLine[] @relation("exportLineOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -740,7 +744,7 @@ model YarnReceipt {
   supplierInvoiceNo   String?           @map("supplier_invoice_no")
   supplierInvoiceDate DateTime?         @map("supplier_invoice_date") @db.Date
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
-  sourceScanId String? @unique @map("source_scan_id") @db.Uuid
+  sourceScanId        String?           @unique @map("source_scan_id") @db.Uuid
   vehicleNo           String?           @map("vehicle_no")
   remarks             String?
   status              DocStatus         @default(DRAFT)
@@ -1252,23 +1256,24 @@ model CartonLine {
 
 /// Packing list: posted cartons of one order grouped for shipment (non-stock).
 model PackingList {
-  id              String    @id @default(uuid()) @db.Uuid
-  docNo           String?   @unique @map("doc_no")
-  docDate         DateTime  @map("doc_date") @db.Date
-  orderId         String    @map("order_id") @db.Uuid
+  id              String                     @id @default(uuid()) @db.Uuid
+  docNo           String?                    @unique @map("doc_no")
+  docDate         DateTime                   @map("doc_date") @db.Date
+  orderId         String                     @map("order_id") @db.Uuid
   remarks         String?
-  status          DocStatus @default(DRAFT)
-  version         Int       @default(1)
-  postedAt        DateTime? @map("posted_at") @db.Timestamptz(3)
-  postedById      String?   @map("posted_by_id") @db.Uuid
-  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(3)
-  cancelReason    String?   @map("cancel_reason")
+  status          DocStatus                  @default(DRAFT)
+  version         Int                        @default(1)
+  postedAt        DateTime?                  @map("posted_at") @db.Timestamptz(3)
+  postedById      String?                    @map("posted_by_id") @db.Uuid
+  cancelledAt     DateTime?                  @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason    String?                    @map("cancel_reason")
   /// Set when an export invoice is raised from this packing list.
-  exportInvoiceId String?   @map("export_invoice_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  order           Order     @relation("packingOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  exportInvoiceId String?                    @map("export_invoice_id") @db.Uuid
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order           Order                      @relation("packingOrder", fields: [orderId], references: [id], onDelete: Restrict)
   cartons         Carton[]
+  exportLinks     ExportInvoicePackingList[] @relation("exportPl")
 
   @@map("packing_lists")
 }
@@ -1288,7 +1293,7 @@ model TrimsDoc {
   orderId           String?        @map("order_id") @db.Uuid
   supplierInvoiceNo String?        @map("supplier_invoice_no")
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
-  sourceScanId String? @unique @map("source_scan_id") @db.Uuid
+  sourceScanId      String?        @unique @map("source_scan_id") @db.Uuid
   remarks           String?
   status            DocStatus      @default(DRAFT)
   version           Int            @default(1)
@@ -1365,7 +1370,7 @@ model VendorBill {
   vendorInvoiceNo   String              @map("vendor_invoice_no")
   vendorInvoiceDate DateTime            @map("vendor_invoice_date") @db.Date
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
-  sourceScanId String? @unique @map("source_scan_id") @db.Uuid
+  sourceScanId      String?             @unique @map("source_scan_id") @db.Uuid
   dueDate           DateTime            @map("due_date") @db.Date
   taxableAmount     Decimal             @map("taxable_amount") @db.Decimal(14, 2)
   cgstAmount        Decimal             @default(0) @map("cgst_amount") @db.Decimal(14, 2)
@@ -1572,41 +1577,41 @@ enum AliasStatus {
 /// An uploaded invoice / supporting document and its extraction, review and outcome.
 /// Scanning never changes stock or accounts: it only creates a DRAFT of an existing document.
 model InvoiceScan {
-  id              String     @id @default(uuid()) @db.Uuid
+  id              String             @id @default(uuid()) @db.Uuid
   /// Server-generated storage key (never the user's file name).
-  fileKey         String     @unique @map("file_key")
-  originalName    String     @map("original_name")
-  mimeType        String     @map("mime_type")
-  sizeBytes       Int        @map("size_bytes")
+  fileKey         String             @unique @map("file_key")
+  originalName    String             @map("original_name")
+  mimeType        String             @map("mime_type")
+  sizeBytes       Int                @map("size_bytes")
   sha256          String
-  pageCount       Int?       @map("page_count")
-  status          ScanStatus @default(QUEUED)
+  pageCount       Int?               @map("page_count")
+  status          ScanStatus         @default(QUEUED)
   /// YARN_RECEIPT | TRIMS_RECEIPT | VENDOR_BILL (chosen or confirmed by the reviewer).
   target          String?
   classification  String?
   extractor       String?
-  textSource      String?    @map("text_source")
+  textSource      String?            @map("text_source")
   extraction      Json?
   layout          Json?
   review          Json?
   validation      Json?
-  vendorId        String?    @map("vendor_id") @db.Uuid
-  vendorInvoiceNo String?    @map("vendor_invoice_no")
-  invoiceDate     DateTime?  @map("invoice_date") @db.Date
-  totalAmount     Decimal?   @map("total_amount") @db.Decimal(14, 2)
-  appliedDocType  String?    @map("applied_doc_type")
-  appliedDocId    String?    @map("applied_doc_id") @db.Uuid
+  vendorId        String?            @map("vendor_id") @db.Uuid
+  vendorInvoiceNo String?            @map("vendor_invoice_no")
+  invoiceDate     DateTime?          @map("invoice_date") @db.Date
+  totalAmount     Decimal?           @map("total_amount") @db.Decimal(14, 2)
+  appliedDocType  String?            @map("applied_doc_type")
+  appliedDocId    String?            @map("applied_doc_id") @db.Uuid
   error           String?
-  attempts        Int        @default(0)
-  uploadedById    String     @map("uploaded_by_id") @db.Uuid
-  reviewedById    String?    @map("reviewed_by_id") @db.Uuid
-  version         Int        @default(1)
-  processedAt     DateTime?  @map("processed_at") @db.Timestamptz(3)
-  appliedAt       DateTime?  @map("applied_at") @db.Timestamptz(3)
-  discardedAt     DateTime?  @map("discarded_at") @db.Timestamptz(3)
-  purgedAt        DateTime?  @map("purged_at") @db.Timestamptz(3)
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  attempts        Int                @default(0)
+  uploadedById    String             @map("uploaded_by_id") @db.Uuid
+  reviewedById    String?            @map("reviewed_by_id") @db.Uuid
+  version         Int                @default(1)
+  processedAt     DateTime?          @map("processed_at") @db.Timestamptz(3)
+  appliedAt       DateTime?          @map("applied_at") @db.Timestamptz(3)
+  discardedAt     DateTime?          @map("discarded_at") @db.Timestamptz(3)
+  purgedAt        DateTime?          @map("purged_at") @db.Timestamptz(3)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   events          InvoiceScanEvent[]
 
   @@index([status, createdAt])
@@ -1652,4 +1657,164 @@ model VendorItemAlias {
   @@unique([vendorId, normDescription, itemId])
   @@index([vendorId, status])
   @@map("vendor_item_aliases")
+}
+
+// ═════════════════════════ Export (B-Step 11) ═════════════════════════
+
+/// Export invoice raised from posted packing lists. Posting moves the cartons FG_STORE → SHIPPED.
+model ExportInvoice {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  docNo                String?                    @unique @map("doc_no")
+  docDate              DateTime                   @map("doc_date") @db.Date
+  buyerId              String                     @map("buyer_id") @db.Uuid
+  currency             String
+  /// INR per one unit of currency (Q-017).
+  exchangeRate         Decimal                    @map("exchange_rate") @db.Decimal(12, 4)
+  incoterm             String
+  portOfLoading        String                     @map("port_of_loading")
+  portOfDischarge      String                     @map("port_of_discharge")
+  finalDestination     String?                    @map("final_destination")
+  countryOfDestination String                     @map("country_of_destination")
+  paymentTerms         String?                    @map("payment_terms")
+  underLut             Boolean                    @map("under_lut")
+  lutNumber            String?                    @map("lut_number")
+  igstRatePct          Decimal?                   @map("igst_rate_pct") @db.Decimal(7, 4)
+  totalPcs             Int                        @default(0) @map("total_pcs")
+  fobValue             Decimal                    @default(0) @map("fob_value") @db.Decimal(14, 2)
+  inrValue             Decimal                    @default(0) @map("inr_value") @db.Decimal(14, 2)
+  igstAmountInr        Decimal                    @default(0) @map("igst_amount_inr") @db.Decimal(14, 2)
+  /// Set when a shipment is posted for this invoice.
+  shipmentId           String?                    @map("shipment_id") @db.Uuid
+  remarks              String?
+  status               DocStatus                  @default(DRAFT)
+  version              Int                        @default(1)
+  postedAt             DateTime?                  @map("posted_at") @db.Timestamptz(3)
+  postedById           String?                    @map("posted_by_id") @db.Uuid
+  cancelledAt          DateTime?                  @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById        String?                    @map("cancelled_by_id") @db.Uuid
+  cancelReason         String?                    @map("cancel_reason")
+  createdAt            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById          String?                    @map("created_by_id") @db.Uuid
+  updatedAt            DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyer                Buyer                      @relation("exportBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  shipment             Shipment?                  @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  lines                ExportInvoiceLine[]
+  packingLists         ExportInvoicePackingList[]
+  allocations          BuyerReceiptAllocation[]
+
+  @@index([buyerId, status])
+  @@index([status, docDate])
+  @@map("export_invoices")
+}
+
+/// One line per order × colour × size, priced from the order line (Q-053).
+model ExportInvoiceLine {
+  id        String        @id @default(uuid()) @db.Uuid
+  invoiceId String        @map("invoice_id") @db.Uuid
+  lineNo    Int           @map("line_no")
+  orderId   String        @map("order_id") @db.Uuid
+  colour    String
+  size      String
+  pcs       Int
+  unitPrice Decimal       @map("unit_price") @db.Decimal(12, 4)
+  amount    Decimal       @db.Decimal(14, 2)
+  invoice   ExportInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  order     Order         @relation("exportLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, orderId, colour, size])
+  @@map("export_invoice_lines")
+}
+
+model ExportInvoicePackingList {
+  id            String        @id @default(uuid()) @db.Uuid
+  invoiceId     String        @map("invoice_id") @db.Uuid
+  packingListId String        @map("packing_list_id") @db.Uuid
+  invoice       ExportInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  packingList   PackingList   @relation("exportPl", fields: [packingListId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, packingListId])
+  @@index([packingListId])
+  @@map("export_invoice_packing_lists")
+}
+
+/// Shipment of one or more posted export invoices of a buyer (shipping bill, BL / AWB, container).
+model Shipment {
+  id               String          @id @default(uuid()) @db.Uuid
+  docNo            String?         @unique @map("doc_no")
+  docDate          DateTime        @map("doc_date") @db.Date
+  buyerId          String          @map("buyer_id") @db.Uuid
+  mode             String
+  shippingBillNo   String?         @map("shipping_bill_no")
+  shippingBillDate DateTime?       @map("shipping_bill_date") @db.Date
+  portCode         String?         @map("port_code")
+  blAwbNo          String?         @map("bl_awb_no")
+  blAwbDate        DateTime?       @map("bl_awb_date") @db.Date
+  carrier          String?
+  vesselFlight     String?         @map("vessel_flight")
+  containerNo      String?         @map("container_no")
+  sealNo           String?         @map("seal_no")
+  forwarder        String?
+  etd              DateTime?       @db.Date
+  eta              DateTime?       @db.Date
+  /// Invoices selected while the shipment is a draft (linked on posting).
+  draftInvoiceIds  String[]        @default([]) @map("draft_invoice_ids") @db.Uuid
+  remarks          String?
+  status           DocStatus       @default(DRAFT)
+  version          Int             @default(1)
+  postedAt         DateTime?       @map("posted_at") @db.Timestamptz(3)
+  postedById       String?         @map("posted_by_id") @db.Uuid
+  cancelledAt      DateTime?       @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById    String?         @map("cancelled_by_id") @db.Uuid
+  cancelReason     String?         @map("cancel_reason")
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById      String?         @map("created_by_id") @db.Uuid
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyer            Buyer           @relation("shipmentBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  invoices         ExportInvoice[]
+
+  @@index([buyerId, status])
+  @@map("shipments")
+}
+
+/// Money received from a buyer (inward remittance), allocated to export invoices (realisation).
+model BuyerReceipt {
+  id            String                   @id @default(uuid()) @db.Uuid
+  docNo         String?                  @unique @map("doc_no")
+  docDate       DateTime                 @map("doc_date") @db.Date
+  buyerId       String                   @map("buyer_id") @db.Uuid
+  currency      String
+  amountFc      Decimal                  @map("amount_fc") @db.Decimal(14, 2)
+  bankChargesFc Decimal                  @default(0) @map("bank_charges_fc") @db.Decimal(14, 2)
+  exchangeRate  Decimal                  @map("exchange_rate") @db.Decimal(12, 4)
+  amountInr     Decimal                  @default(0) @map("amount_inr") @db.Decimal(14, 2)
+  bankReference String?                  @map("bank_reference")
+  firaNo        String?                  @map("fira_no")
+  remarks       String?
+  status        DocStatus                @default(DRAFT)
+  version       Int                      @default(1)
+  postedAt      DateTime?                @map("posted_at") @db.Timestamptz(3)
+  postedById    String?                  @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?                @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?                  @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?                  @map("cancel_reason")
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?                  @map("created_by_id") @db.Uuid
+  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyer         Buyer                    @relation("receiptBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  allocations   BuyerReceiptAllocation[]
+
+  @@index([buyerId, status])
+  @@map("buyer_receipts")
+}
+
+model BuyerReceiptAllocation {
+  id        String        @id @default(uuid()) @db.Uuid
+  receiptId String        @map("receipt_id") @db.Uuid
+  invoiceId String        @map("invoice_id") @db.Uuid
+  amountFc  Decimal       @map("amount_fc") @db.Decimal(14, 2)
+  receipt   BuyerReceipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  invoice   ExportInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([receiptId, invoiceId])
+  @@map("buyer_receipt_allocations")
 }

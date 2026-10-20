@@ -17,6 +17,8 @@ export interface CompanyHeader {
   gstin: string;
   phone?: string | null;
   email?: string | null;
+  pan?: string | null;
+  iec?: string | null;
   isPlaceholder?: boolean;
 }
 

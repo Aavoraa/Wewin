@@ -243,6 +243,12 @@ export const packingService = {
     });
     return this.getPl(id);
   },
+  // ═════════ For export (Step 11) ═════════
+  async invoiceablePls(buyerId: string) {
+    return (await repo.invoiceablePls(buyerId)).map(shapePl);
+  },
+  /** Packing lists with cartons and lines, for pricing and posting an export invoice. */
+  plsForInvoice: (ids: string[], db: Tx | typeof prisma = prisma) => repo.plsByIds(ids, db),
   /** For export (Step 11): mark / unmark a posted packing list as invoiced. */
   async setInvoiced(tx: Tx, id: string, exportInvoiceId: string | null) {
     await repo.lockPl(tx, id);

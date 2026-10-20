@@ -88,7 +88,7 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 - [x] **Gate — Bills only vs D.C.s** (software: a bill can only be built from posted, unbilled D.C.s, enforced in API + DB and exercised in Playwright; client demo pending)
 
 ## Phase 4 — Export and go-live
-- [ ] Step 11 Export invoice from cartons, packing list, LUT/IGST, shipments, buyer receipts/realisation
+- [x] Step 11 Export invoice from cartons, packing list, LUT/IGST, shipments, buyer receipts/realisation
 - [ ] Step 12 Dashboard, reports + Excel + async export, alerts/notifications UI, attachments, backups/restore doc, deploy docs, opening-data import, Playwright E2E
 - [ ] **Gate — Go-live sign-off** (requires Wewin UAT)
 
@@ -96,6 +96,13 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
+
+### 2026-10-20 — Step 11 Export verified
+- Migration `export`: `export_invoices` (+ lines, packing-list links), `shipments`, `buyer_receipts` (+ allocations); CHECKs (number by status, LUT or IGST rate, positive amounts); `packing_lists.export_invoice_id` FK.
+- Export invoice: lines from posted packing lists (order × colour × size, priced from the order — missing price blocks), currency from the orders, INR value at the entered rate, IGST only when not under LUT; posting marks packing lists invoiced and moves every carton FG_STORE → SHIPPED in one transaction; cancel reverses and frees the packing lists, refused while shipped or realised. Prints: export invoice (IEC, ports, incoterm, LUT / IGST endorsement) and invoice-wide carton-wise packing list.
+- Shipments (shipping bill, B/L / AWB, container, seal, vessel, forwarder, ETD / ETA; posting needs SB + B/L/AWB with dates; one shipment per invoice). Buyer receipts with oldest-first allocation, bank charges, on-account remainder, derived realisation and exchange difference; export receivables report.
+- Tests: 6 shared unit + 9 API integration (pricing, stock movement, double-invoice and lock guards, missing price, LUT / IGST, shipment rules, realisation, cancellation order, ledger invariants); Playwright full workflow now ends with export invoice → shipment → realisation (23 green).
+- Decisions: Q-051 (shipment posting), Q-052 (realisation), Q-053 (pricing).
 
 ### 2026-10-19 — Upload (scan) buyer PO → order (Q-050)
 - Migration `order_scans`: `orders.source_scan_id` (unique + FK), scan target CHECK adds `ORDER`.

@@ -262,6 +262,7 @@ test.describe.serial('full order workflow', () => {
     await saveDraft(page);
     await primary(page);
     await expectStatus(page, 'POSTED');
+    s.plNo = await docNo(page, 'PKL');
   });
 
   test('order WIP shows the progress against the PO', async () => {
@@ -322,5 +323,57 @@ test.describe.serial('full order workflow', () => {
     await page.goto('/print/debit-note/'+s.dnId);
     await expect(page.getByText('DEBIT NOTE', { exact: true })).toBeVisible();
     await expect(page.getByText('Total debit').locator('xpath=..')).toContainText('741.00');
+  });
+
+  test('export invoice from the packing list ships the cartons (FG_STORE → SHIPPED)', async () => {
+    await page.goto('/export-invoices/new');
+    await pick(page, 'Buyer *', 'Nordic');
+    await page.getByLabel(`Invoice ${s.plNo}`).check();
+    await (await field(page, /Exchange rate/)).fill('90.1200');
+    await (await field(page, /Port of loading/)).fill('Tuticorin');
+    await (await field(page, /Port of discharge/)).fill('Gothenburg');
+    await (await field(page, /Country of destination/)).fill('Sweden');
+    await (await field(page, /LUT \/ ARN/)).fill('AD3304260012345');
+    // 9 pcs NAVY / S at 3.25 = 29.25
+    await expect(page.getByText(/(USD|EUR) 29\.25/).first()).toBeVisible();
+    await saveDraft(page);
+    await primary(page);
+    await expectStatus(page, 'POSTED');
+    s.exiNo = await docNo(page, 'EXI');
+    s.exiId = idFromUrl(page);
+    await expect(page.getByText('Not shipped yet')).toBeVisible();
+    await page.goto(`/print/export-invoice/${s.exiId}`);
+    await expect(page.getByText('EXPORT INVOICE', { exact: true })).toBeVisible();
+    await expect(page.getByText(/UNDER LETTER OF UNDERTAKING WITHOUT PAYMENT OF INTEGRATED TAX/)).toBeVisible();
+  });
+
+  test('shipment needs the shipping bill and B/L, then carries the invoice', async () => {
+    await page.goto('/shipments/new');
+    await pick(page, 'Buyer *', 'Nordic');
+    await page.getByLabel(`Ship ${s.exiNo}`).check();
+    await (await field(page, /Shipping bill no/)).fill(uid('SB'));
+    await (await field(page, /Shipping bill date/)).fill('2026-10-20');
+    await (await field(page, /B\/L no/)).fill(uid('BL'));
+    await (await field(page, /B\/L date/)).fill('2026-10-22');
+    await (await field(page, /Container no/)).fill('MSKU7654321');
+    await saveDraft(page);
+    await primary(page);
+    await expectStatus(page, 'POSTED');
+    await docNo(page, 'SHP');
+  });
+
+  test('buyer receipt realises the invoice', async () => {
+    await page.goto('/buyer-receipts/new');
+    await pick(page, 'Buyer *', 'Nordic');
+    await (await field(page, /Amount credited/)).fill('29.25');
+    await (await field(page, /Rate credited/)).fill('90.5000');
+    await page.getByLabel(`Allocate to ${s.exiNo}`).fill('29.25');
+    await saveDraft(page);
+    await primary(page);
+    await expectStatus(page, 'POSTED');
+    await docNo(page, 'BRC');
+    await page.goto(`/export-invoices/${s.exiId}`);
+    await expect(page.getByText('To realise').locator('xpath=..')).toContainText('0.00');
+    await expect(page.locator('main').getByText('PAID', { exact: true })).toBeVisible();
   });
 });

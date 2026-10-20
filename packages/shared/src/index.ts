@@ -18,3 +18,4 @@ export * from './scan';
 export * from './scan-normalize';
 export * from './scan-match';
 export * from './scan-mapping';
+export * from './export';
