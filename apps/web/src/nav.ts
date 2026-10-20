@@ -36,6 +36,7 @@ import {
   Hourglass,
   BadgeIndianRupee,
   ScanText,
+  BarChart3,
   Ship,
   FileOutput,
   HandCoins,
@@ -65,6 +66,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Dashboard', to: '/', icon: LayoutDashboard, perm: 'dashboard.view' },
       { label: 'Alerts', to: '/alerts', icon: BellRing, perm: 'alerts.view' },
+      { label: 'Reports', to: '/reports', icon: BarChart3, perm: 'reports.view' },
     ],
   },
   {

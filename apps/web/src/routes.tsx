@@ -45,6 +45,7 @@ import { PaymentPage, PaymentsPage } from '@/features/accounts/PaymentPages';
 import { AgeingPage, PendingDcsPage, VendorLedgerPage } from '@/features/accounts/ReportPages';
 import { AlertsPage } from '@/features/accounts/AlertsPage';
 import { ScansPage } from '@/features/scans/ScansPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
 import { ExportInvoicePage, ExportInvoicesPage } from '@/features/export/InvoicePages';
 import { BuyerReceiptPage, BuyerReceiptsPage, ExportReceivablesPage, ShipmentPage, ShipmentsPage } from '@/features/export/ShipmentReceiptPages';
 import { ScanReviewPage } from '@/features/scans/ScanReviewPage';
@@ -94,6 +95,7 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'reports/pending-dcs', perm: 'jobwork.view', element: <PendingDcsPage /> },
   { path: 'alerts', perm: 'alerts.view', element: <AlertsPage /> },
   { path: 'scans', perm: 'scans.view', element: <ScansPage /> },
+  { path: 'reports', perm: 'reports.view', element: <ReportsPage /> },
   { path: 'export-invoices', perm: 'export.view', element: <ExportInvoicesPage /> },
   { path: 'export-invoices/:id', perm: 'export.view', element: <ExportInvoicePage /> },
   { path: 'shipments', perm: 'export.view', element: <ShipmentsPage /> },

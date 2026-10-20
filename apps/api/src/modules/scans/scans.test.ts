@@ -59,7 +59,9 @@ beforeAll(async () => {
   yarn40 = await prisma.item.create({ data: { code: uid('Y40'), name: `40s Bamboo Modal ${TAG} Yarn`, type: 'YARN', unit: 'KG', hsnCode: '5205' } });
 });
 
-const inv = (over: Partial<FixtureInvoice> = {}) => yarnInvoice({ vendorGstin: mill.gstin, invoiceNo: uid('KTS/26-27/'), ...over }, TAG);
+/** Digits only: OCR can misread letters such as B/8 and O/0 in a random hex id. */
+const ocrSafeNo = (prefix: string) => `${prefix}${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 900 + 100)}`;
+const inv = (over: Partial<FixtureInvoice> = {}) => yarnInvoice({ vendorGstin: mill.gstin, invoiceNo: ocrSafeNo('KTS/26-27/'), ...over }, TAG);
 
 describe('upload validation and access', () => {
   const post = (c: Client, buf: Buffer, name: string, type: string) => request(app).post('/api/v1/invoice-scans').set('authorization', `Bearer ${c.token}`).attach('file', buf, { filename: name, contentType: type });

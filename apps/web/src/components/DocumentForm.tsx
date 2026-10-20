@@ -1,5 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useParams } from 'react-router';
+import { type AttachmentOwner } from '@wewin/shared';
+import { AttachmentsPanel } from './AttachmentsPanel';
 import { Ban, CheckCircle2, Lock, Printer, Save, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { errorMessage } from '@/lib/api';
@@ -48,13 +50,35 @@ export interface DocumentFormProps {
   cancelStatuses?: string[];
   closeStatuses?: string[];
   cancelDescription?: ReactNode;
+  /** Attachments panel: defaults from the register this form belongs to (backHref) and the :id route param. */
+  attachTo?: { type: AttachmentOwner; id: string } | null;
 }
+
+const ATTACH_BY_ROUTE: Record<string, AttachmentOwner> = {
+  '/orders': 'ORDER',
+  '/yarn-receipts': 'YARN_RECEIPT',
+  '/outward-dcs': 'OUTWARD_DC',
+  '/inward-dcs': 'INWARD_DC',
+  '/panel-out': 'PANEL_DC',
+  '/panel-in': 'PANEL_DC',
+  '/packing-lists': 'PACKING_LIST',
+  '/trims-docs': 'TRIMS_DOC',
+  '/vendor-bills': 'VENDOR_BILL',
+  '/debit-notes': 'DEBIT_NOTE',
+  '/payments': 'PAYMENT',
+  '/export-invoices': 'EXPORT_INVOICE',
+  '/shipments': 'SHIPMENT',
+  '/buyer-receipts': 'BUYER_RECEIPT',
+};
 
 /**
  * Document pattern (A§9): header + line grid + action bar (Save draft / Post / Cancel / Print).
  * State changes are explicit actions; the API enforces every transition.
  */
 export function DocumentForm(p: DocumentFormProps) {
+  const { id: routeId } = useParams();
+  const attachType = p.backHref ? ATTACH_BY_ROUTE[p.backHref] : undefined;
+  const attach = p.attachTo === null ? null : (p.attachTo ?? (attachType && routeId && routeId !== 'new' ? { type: attachType, id: routeId } : null));
   const headerRef = useRef<HTMLDivElement>(null);
   const [confirm, setConfirm] = useState<null | 'post' | 'cancel' | 'close' | 'delete'>(null);
   const isDraft = p.status === 'DRAFT';
@@ -130,6 +154,7 @@ export function DocumentForm(p: DocumentFormProps) {
           </Card>
           {p.lines}
           {p.footer}
+          {attach ? <AttachmentsPanel type={attach.type} id={attach.id} /> : null}
         </div>
         {p.aside ? <div className="flex flex-col gap-3">{p.aside}</div> : null}
       </div>

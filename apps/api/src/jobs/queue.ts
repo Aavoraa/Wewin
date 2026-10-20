@@ -12,6 +12,7 @@ export const QUEUES = {
   NOTIFY_DISPATCH: 'notify-dispatch',
   SCAN_EXTRACT: 'invoice-extract',
   SCAN_RETENTION: 'scan-retention',
+  REPORT_EXPORT_CLEANUP: 'report-export-cleanup',
 } as const;
 
 type Handler = (data: Record<string, unknown>) => Promise<void>;
@@ -33,6 +34,7 @@ const SCHEDULES: { name: string; cron: string }[] = [
   { name: QUEUES.DC_OVERDUE, cron: '0 8 * * *' },
   { name: QUEUES.PAYMENT_DUE, cron: '15 8 * * *' },
   { name: QUEUES.SCAN_RETENTION, cron: '0 2 * * *' },
+  { name: QUEUES.REPORT_EXPORT_CLEANUP, cron: '15 2 * * *' },
 ];
 
 export async function startJobs(): Promise<void> {
