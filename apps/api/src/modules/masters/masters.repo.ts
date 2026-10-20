@@ -140,6 +140,19 @@ export const mastersRepo = {
   locationByCode(code: string, tx: Tx | typeof prisma = prisma) {
     return tx.location.findUnique({ where: { code } });
   },
+  /** Code → row lookups for imports (opening data). */
+  buyersByCodes(codes: string[], db: Tx | typeof prisma = prisma) {
+    return db.buyer.findMany({ where: { code: { in: codes } }, select: { id: true, code: true, name: true, isActive: true, currency: true } });
+  },
+  vendorsByCodes(codes: string[], db: Tx | typeof prisma = prisma) {
+    return db.vendor.findMany({ where: { code: { in: codes } }, select: { id: true, code: true, name: true, isActive: true, creditDays: true } });
+  },
+  itemsByCodes(codes: string[], db: Tx | typeof prisma = prisma) {
+    return db.item.findMany({ where: { code: { in: codes } }, select: { id: true, code: true, name: true, isActive: true, type: true, unit: true } });
+  },
+  processesByCodes(codes: string[], db: Tx | typeof prisma = prisma) {
+    return db.process.findMany({ where: { code: { in: codes } }, select: { id: true, code: true, name: true, isActive: true } });
+  },
   locationsByCodes(codes: string[], tx: Tx | typeof prisma = prisma) {
     return tx.location.findMany({ where: { code: { in: codes } } });
   },

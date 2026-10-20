@@ -1371,6 +1371,8 @@ model VendorBill {
   vendorInvoiceDate DateTime            @map("vendor_invoice_date") @db.Date
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
   sourceScanId      String?             @unique @map("source_scan_id") @db.Uuid
+  /// Opening balance from the go-live import (posted directly, no D.C. lines; Q-027).
+  isOpening         Boolean             @default(false) @map("is_opening")
   dueDate           DateTime            @map("due_date") @db.Date
   taxableAmount     Decimal             @map("taxable_amount") @db.Decimal(14, 2)
   cgstAmount        Decimal             @default(0) @map("cgst_amount") @db.Decimal(14, 2)
@@ -1817,4 +1819,36 @@ model BuyerReceiptAllocation {
 
   @@unique([receiptId, invoiceId])
   @@map("buyer_receipt_allocations")
+}
+
+// ───────────────────────────── Opening data (go-live) ─────────────────────────────
+
+/// One uploaded opening-data workbook (Q-027). DRAFT holds the validated rows; POST creates the
+/// opening stock movements / opening bills / draft orders / draft outward D.C.s in one transaction.
+model OpeningImport {
+  id            String    @id @default(uuid()) @db.Uuid
+  docNo         String?   @unique @map("doc_no")
+  kind          String
+  asOfDate      DateTime  @map("as_of_date") @db.Date
+  fileName      String    @map("file_name")
+  status        DocStatus @default(DRAFT)
+  /// Validated rows with resolved ids.
+  rows          Json
+  /// Row problems; a draft with problems cannot be posted.
+  problems      Json      @default("[]")
+  rowCount      Int       @map("row_count")
+  /// Documents created on posting: [{ type, id, docNo }].
+  created       Json      @default("[]")
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?   @map("created_by_id") @db.Uuid
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  postedAt      DateTime? @map("posted_at") @db.Timestamptz(3)
+  postedById    String?   @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?   @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?   @map("cancel_reason")
+
+  @@index([kind, status])
+  @@map("opening_imports")
 }

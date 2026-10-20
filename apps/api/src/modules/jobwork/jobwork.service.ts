@@ -331,7 +331,12 @@ export const jobworkService = {
   },
 
   async createOutward(input: OutInput, user: CurrentUser, opts: { sourceScanId?: string } = {}) {
-    const v = await validateOutward(input, prisma);
+    return this.createOutwardDraft(input, user, opts).then((id) => this.getOutward(id));
+  },
+
+  /** Create a draft and return its id; opts.tx joins the caller's transaction (opening-data import). */
+  async createOutwardDraft(input: OutInput, user: CurrentUser, opts: { sourceScanId?: string; tx?: Tx } = {}) {
+    const v = await validateOutward(input, opts.tx ?? prisma);
     return withTx(async (tx) => {
       const o = await repo.createOutward(
         tx,
@@ -353,7 +358,12 @@ export const jobworkService = {
       );
       await notifyApprovers(tx, o.id, o.version, v.vendor.name, v.pp.processCode);
       return o.id;
-    }, RC).then((id) => this.getOutward(id));
+    }, { ...RC, tx: opts.tx });
+  },
+
+  /** Status of outward D.C.s by id (imports check nothing was posted before cancelling). */
+  async outwardStatuses(ids: string[], db: Tx | typeof prisma = prisma) {
+    return new Map((await repo.outwardStatuses(ids, db)).map((o) => [o.id, o.status]));
   },
 
   async updateOutward(id: string, input: OutInput & { version: number }) {
@@ -405,13 +415,13 @@ export const jobworkService = {
     return this.getOutward(id);
   },
 
-  async deleteOutward(id: string) {
+  async deleteOutward(id: string, opts: { tx?: Tx } = {}) {
     await withTx(async (tx) => {
       const cur = await repo.getOutward(id, tx);
       if (!cur) throw notFoundOut();
       assertDraft(cur, 'Outward D.C.');
       await repo.deleteOutward(tx, id);
-    }, RC);
+    }, { ...RC, tx: opts.tx });
   },
 
   /** Post: number + store/vendor → job worker movements + loss-limit snapshot + audit (A§6). */

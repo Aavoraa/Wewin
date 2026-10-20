@@ -287,8 +287,39 @@ export const billsService = {
     return this.get(id);
   },
 
+  /**
+   * Opening balance (go-live import, Q-027): a posted bill with no D.C. lines, numbered in the bill
+   * series, inside the import's transaction. Ageing, ledger and payments treat it like any bill.
+   */
+  async createOpening(tx: Tx, o: { vendorId: string; refNo: string; billDate: string; dueDate: string; amount: string; asOfDate: string; remarks: string | null; importDocNo: string }, user: CurrentUser) {
+    const { docNo } = await numbering.next('VENDOR_BILL', o.asOfDate, tx);
+    const b = await repo.createBill(
+      tx,
+      {
+        docNo,
+        docDate: toDbDate(o.asOfDate),
+        vendorId: o.vendorId,
+        vendorInvoiceNo: o.refNo,
+        vendorInvoiceDate: toDbDate(o.billDate),
+        dueDate: toDbDate(o.dueDate),
+        taxableAmount: o.amount,
+        expectedTaxable: o.amount,
+        withinTolerance: true,
+        isOpening: true,
+        remarks: [`Opening balance (${o.importDocNo})`, o.remarks].filter(Boolean).join(' — '),
+        status: 'POSTED',
+        postedAt: new Date(),
+        postedById: user.id,
+        createdById: user.id,
+      },
+      [],
+    );
+    await audit.log(tx, { docType: DOC, recordId: b.id, action: 'POST', docNo, reason: `Opening balance from ${o.importDocNo}` });
+    return { id: b.id, docNo };
+  },
+
   /** Cancel: refused while payments are allocated; frees the D.C.s and cancels the auto debit notes. */
-  async cancel(id: string, reason: string, user: CurrentUser) {
+  async cancel(id: string, reason: string, user: CurrentUser, opts: { tx?: Tx } = {}) {
     await withTx(async (tx) => {
       await repo.lockBills(tx, [id]);
       const b = await repo.getBill(id, tx);
@@ -305,9 +336,12 @@ export const billsService = {
       await repo.deactivateNoteLines(tx, notes.map((n) => n.id));
       await repo.setBillState(tx, id, { status: 'CANCELLED', cancelledAt: new Date(), cancelledById: user.id, cancelReason: reason });
       await audit.log(tx, { docType: DOC, recordId: id, action: 'CANCEL', reason, docNo: b.docNo });
-    });
-    return this.get(id);
+    }, { tx: opts.tx });
+    return opts.tx ? null : this.get(id);
   },
+
+  /** Opening bills already posted for these vendor + reference pairs. */
+  openingBills: (pairs: { vendorId: string; refNo: string }[], db: Tx | typeof prisma = prisma) => repo.openingBills(pairs, db),
 
   /** Posted bills of a vendor with outstanding > 0 (for payment allocation). */
   async openBills(vendorId: string, db: Tx | typeof prisma = prisma) {

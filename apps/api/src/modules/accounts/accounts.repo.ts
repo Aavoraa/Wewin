@@ -130,6 +130,14 @@ export const accountsRepo = {
   deleteBill(tx: Tx, id: string) {
     return tx.vendorBill.delete({ where: { id } });
   },
+  /** Posted opening bills for these vendor + reference pairs (opening import: no double import). */
+  openingBills(pairs: { vendorId: string; refNo: string }[], db: Db = prisma) {
+    if (!pairs.length) return Promise.resolve([]);
+    return db.vendorBill.findMany({
+      where: { isOpening: true, status: 'POSTED', OR: pairs.map((p) => ({ vendorId: p.vendorId, vendorInvoiceNo: p.refNo })) },
+      select: { vendorId: true, vendorInvoiceNo: true, docNo: true },
+    });
+  },
   /** Posted bills of a vendor (for open-bill lists, ledger and ageing). */
   postedBills(where: Prisma.VendorBillWhereInput, db: Db = prisma) {
     return db.vendorBill.findMany({ where: { ...where, status: 'POSTED' }, include: billInclude, orderBy: [{ dueDate: 'asc' }, { vendorInvoiceDate: 'asc' }] });

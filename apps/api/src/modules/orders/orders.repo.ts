@@ -29,6 +29,9 @@ interface ComponentData {
 }
 
 export const ordersRepo = {
+  byOrderNos(orderNos: string[], db: Db = prisma) {
+    return db.order.findMany({ where: { orderNo: { in: orderNos } }, select: { id: true, orderNo: true, status: true } });
+  },
   list(where: Prisma.OrderWhereInput, order: Prisma.OrderOrderByWithRelationInput, p: Paging) {
     return prisma.$transaction([
       prisma.order.findMany({

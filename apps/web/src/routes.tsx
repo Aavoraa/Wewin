@@ -11,6 +11,7 @@ import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
 const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const SeriesPage = lazy(() => import('@/features/settings/SeriesPage').then((m) => ({ default: m.SeriesPage })));
+const OpeningImportPage = lazy(() => import('@/features/settings/OpeningImportPage').then((m) => ({ default: m.OpeningImportPage })));
 const AuditPage = lazy(() => import('@/features/settings/AuditPage').then((m) => ({ default: m.AuditPage })));
 const StockBalancesPage = lazy(() => import('@/features/stock/StockBalancesPage').then((m) => ({ default: m.StockBalancesPage })));
 const StockMovementsPage = lazy(() => import('@/features/stock/StockMovementsPage').then((m) => ({ default: m.StockMovementsPage })));
@@ -137,6 +138,7 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'masters/locations', perm: 'masters.view', element: <LocationsPage /> },
   { path: 'masters/users', perm: 'users.view', element: <UsersPage /> },
   { path: 'masters/roles', perm: 'users.view', element: <RolesPage /> },
+  { path: 'settings/opening', perm: 'opening.import', element: <OpeningImportPage /> },
 ];
 
 function RequireAuth({ children }: { children: ReactNode }) {

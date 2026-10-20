@@ -251,6 +251,19 @@ export const mastersService = {
     return map;
   },
 
+  /** Code → master maps for imports (unknown codes are simply absent). */
+  async byCodes(codes: { buyers?: string[]; vendors?: string[]; items?: string[]; processes?: string[] }, db: Tx | typeof prisma = prisma) {
+    const u = (a?: string[]) => [...new Set(a ?? [])];
+    const [buyers, vendors, items, processes] = await Promise.all([
+      repo.buyersByCodes(u(codes.buyers), db),
+      repo.vendorsByCodes(u(codes.vendors), db),
+      repo.itemsByCodes(u(codes.items), db),
+      repo.processesByCodes(u(codes.processes), db),
+    ]);
+    const m = <T extends { code: string }>(rows: T[]) => new Map(rows.map((r) => [r.code, r]));
+    return { buyers: m(buyers), vendors: m(vendors), items: m(items), processes: m(processes) };
+  },
+
   async locationById(id: string, tx: Tx | typeof prisma = prisma) {
     const l = await repo.getLocation(id, tx);
     if (!l) throw notFound('Location');

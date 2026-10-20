@@ -41,6 +41,7 @@ import {
   FileOutput,
   HandCoins,
   Landmark,
+  FileUp,
   type LucideIcon,
 } from 'lucide-react';
 import { type PermissionKey } from '@wewin/shared';
@@ -147,6 +148,7 @@ export const NAV: NavGroup[] = [
       { label: 'Company & settings', to: '/settings', icon: Cog, perm: 'settings.view' },
       { label: 'Document series', to: '/settings/series', icon: ClipboardList, perm: 'settings.view' },
       { label: 'Audit log', to: '/audit', icon: FileClock, perm: 'audit.view' },
+      { label: 'Opening data', to: '/settings/opening', icon: FileUp, perm: 'opening.import' },
     ],
   },
 ];

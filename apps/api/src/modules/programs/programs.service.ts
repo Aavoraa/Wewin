@@ -182,6 +182,11 @@ export const programsService = {
    * For job work: the program process an outward D.C. is sent under. The program must be APPROVED,
    * so the allowed loss % used in calculations cannot change afterwards.
    */
+  /** Program processes an outward D.C. for this order + process could go under (approved programs only). */
+  approvedProcessesFor(orderId: string, processId: string, db: Tx | typeof prisma = prisma) {
+    return repo.approvedProcesses(orderId, processId, db);
+  },
+
   async processForDc(programProcessId: string, db: Tx | typeof prisma = prisma) {
     const row = await repo.processRow(programProcessId, db);
     if (!row) throw notFound('Program process');

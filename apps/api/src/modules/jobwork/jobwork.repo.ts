@@ -89,6 +89,9 @@ export const jobworkRepo = {
       prisma.outwardDc.count({ where }),
     ]);
   },
+  outwardStatuses(ids: string[], db: Db = prisma) {
+    return db.outwardDc.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } });
+  },
   getOutward(id: string, db: Db = prisma) {
     return db.outwardDc.findUnique({ where: { id }, include: outwardInclude });
   },

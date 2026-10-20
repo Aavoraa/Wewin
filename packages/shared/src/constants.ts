@@ -34,6 +34,7 @@ export const VIRTUAL_LOCATIONS = {
   PROCESS_LOSS: 'Process loss',
   REJECTED: 'Rejected',
   SHIPPED: 'Shipped',
+  OPENING: 'Opening balance (go-live import)',
 } as const;
 
 export type OwnLocationCode = keyof typeof OWN_LOCATIONS;
@@ -61,6 +62,7 @@ export const DOCUMENT_SERIES = {
   EXPORT_INVOICE: { prefix: 'EXI', name: 'Export invoice' },
   SHIPMENT: { prefix: 'SHP', name: 'Shipment' },
   BUYER_RECEIPT: { prefix: 'BRC', name: 'Buyer receipt' },
+  OPENING: { prefix: 'OPN', name: 'Opening-data import' },
 } as const;
 export type SeriesCode = keyof typeof DOCUMENT_SERIES;
 

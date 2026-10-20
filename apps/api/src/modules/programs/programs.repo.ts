@@ -86,6 +86,10 @@ export const programsRepo = {
   delete(tx: Tx, id: string) {
     return tx.fabricProgram.delete({ where: { id } });
   },
+  /** Program processes of an order's approved programs for one process. */
+  approvedProcesses(orderId: string, processId: string, db: Db = prisma) {
+    return db.fabricProgramProcess.findMany({ where: { processId, program: { orderId, status: 'APPROVED' } }, select: { id: true, inputItemId: true, outputItemId: true, program: { select: { programNo: true } } } });
+  },
   processRow(id: string, db: Db = prisma) {
     return db.fabricProgramProcess.findUnique({
       where: { id },

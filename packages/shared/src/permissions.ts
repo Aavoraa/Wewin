@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   'alerts.manage': 'Acknowledge alerts and run alert checks',
   'attachments.upload': 'Upload and download attachments',
   'jobs.view': 'View background job status',
+  'opening.import': 'Import opening data at go-live (orders, stock, vendor balances)',
   // Masters
   'masters.view': 'View masters (vendors, buyers, items, processes, locations)',
   'masters.edit': 'Create and edit masters',

@@ -146,8 +146,14 @@ export const ordersService = {
     return o;
   },
 
-  async create(input: OrderData, user?: CurrentUser) {
-    await validateRefs(input, prisma);
+  /** Order no → { id, status } (imports). */
+  async byOrderNos(orderNos: string[], db: Tx | typeof prisma = prisma) {
+    return new Map((await repo.byOrderNos([...new Set(orderNos)], db)).map((o) => [o.orderNo, o]));
+  },
+
+  /** opts.tx: create inside the caller's transaction (opening-data import). */
+  async create(input: OrderData, user?: CurrentUser, opts: { tx?: Tx } = {}) {
+    await validateRefs(input, opts.tx ?? prisma);
     return withTx(async (tx) => {
       const o = await repo.create(
         tx,
@@ -160,7 +166,7 @@ export const ordersService = {
         await fromScanHook(tx, o.id, input.sourceScanId, user);
       }
       return shape((await repo.get(o.id, tx))!);
-    }, RC);
+    }, { ...RC, tx: opts.tx });
   },
 
   // ───────── For scanned buyer POs ─────────
@@ -242,14 +248,14 @@ export const ordersService = {
     });
   },
 
-  async deleteDraft(id: string) {
+  async deleteDraft(id: string, opts: { tx?: Tx } = {}) {
     return withTx(async (tx) => {
       const o = await repo.getForUpdate(tx, id);
       if (!o) throw notFound('Order');
       if (o.status !== 'DRAFT') throw invalidState('Only draft orders can be deleted');
       if (o.programs.length) throw new AppError('DOC_HAS_DEPENDENTS', 'Delete the order’s fabric programs first', 409);
       await repo.delete(tx, id);
-    }, RC);
+    }, { ...RC, tx: opts.tx });
   },
 
   // ── Costing ──
