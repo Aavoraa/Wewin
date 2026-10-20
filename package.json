@@ -19,7 +19,8 @@
     "db:generate": "pnpm --filter @wewin/db exec prisma generate",
     "db:seed": "pnpm --filter @wewin/db seed",
     "db:studio": "pnpm --filter @wewin/db exec prisma studio",
-    "db:reset": "pnpm --filter @wewin/db exec prisma migrate reset --force"
+    "db:reset": "pnpm --filter @wewin/db exec prisma migrate reset --force",
+    "sample-data": "pnpm --filter @wewin/api sample-data"
   },
   "devDependencies": {
     "turbo": "^2.5.6",

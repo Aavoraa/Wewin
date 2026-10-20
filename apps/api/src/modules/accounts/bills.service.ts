@@ -193,7 +193,7 @@ export const billsService = {
       ...(q.vendorId ? { vendorId: q.vendorId } : {}),
       ...(q.orderId ? { orderId: q.orderId } : {}),
       ...(q.approval ? { approvalStatus: q.approval } : {}),
-      ...(q.from || q.to ? { vendorInvoiceDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
+      ...(q.from || q.to ? { docDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
       ...(q.q ? { OR: [{ docNo: { contains: q.q, mode: 'insensitive' } }, { vendorInvoiceNo: { contains: q.q, mode: 'insensitive' } }, { vendor: { name: { contains: q.q, mode: 'insensitive' } } }] } : {}),
     };
     const [rows, total] = await repo.listBills(where, orderBy<Prisma.VendorBillOrderByWithRelationInput>(q.sort, { docDate: (d) => ({ docDate: d }), dueDate: (d) => ({ dueDate: d }), docNo: (d) => ({ docNo: d }) }, { createdAt: 'desc' }), p);

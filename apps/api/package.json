@@ -11,7 +11,8 @@
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "sample-data": "tsx --env-file=../../.env scripts/sample-data.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.130.0",
