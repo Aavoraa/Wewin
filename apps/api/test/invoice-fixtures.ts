@@ -211,3 +211,158 @@ export const yarnInvoice = (over: Partial<FixtureInvoice> = {}, tag = 'QX'): Fix
   ],
   ...over,
 });
+
+// ───────── Delivery challans (job work) ─────────
+export interface FixtureDcLine {
+  desc: string;
+  lot: string;
+  colour?: string;
+  rollNo?: string;
+  rolls?: string;
+  kg: string;
+  rate?: string;
+}
+export interface FixtureDc {
+  /** Issuer printed at the top (Wewin for an outward D.C., the job worker for its return D.C.). */
+  issuerName: string;
+  issuerGstin: string;
+  consigneeName: string;
+  consigneeGstin: string;
+  dcNo: string;
+  dcDate: string;
+  /** "Your D.C. No" — the D.C.s this one refers to (an inward return against our outward). */
+  yourDcNo?: string;
+  lines: FixtureDcLine[];
+}
+
+/** Searchable PDF of a job-work delivery challan (Rule 55 layout). */
+export async function dcPdf(dc: FixtureDc): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const page = pdf.addPage([W, H]);
+  const d: Draw = (text, x, y, o = {}) => {
+    const size = o.size ?? 10;
+    const f = o.bold ? bold : font;
+    const width = f.widthOfTextAtSize(text, size);
+    page.drawText(text, { x: o.align === 'right' ? x - width : x, y: H - y - size, size, font: f });
+  };
+  let y = 40;
+  d(dc.issuerName, 40, y, { size: 16, bold: true });
+  d('DELIVERY CHALLAN', 430, y, { size: 12, bold: true });
+  y += 18;
+  d(`GSTIN: ${dc.issuerGstin}`, 40, y, { size: 10 });
+  d(`DC No: ${dc.dcNo}`, 400, y, { size: 10 });
+  y += 14;
+  d('Goods sent for job work - Rule 55', 40, y, { size: 9 });
+  d(`Date: ${dc.dcDate}`, 400, y, { size: 10 });
+  y += 22;
+  d(`To: ${dc.consigneeName}`, 40, y, { size: 10 });
+  if (dc.yourDcNo) d(`Your DC No: ${dc.yourDcNo}`, 400, y, { size: 10 });
+  y += 14;
+  d(`Consignee GSTIN: ${dc.consigneeGstin}`, 40, y, { size: 10 });
+  y += 26;
+  const hasRate = dc.lines.some((l) => l.rate);
+  const cols = { sno: 40, desc: 70, lot: 200, colour: 305, roll: 365, rolls: 470, kg: 525, rate: 575 };
+  d('S.No', cols.sno, y, { bold: true });
+  d('Description', cols.desc, y, { bold: true });
+  d('Lot', cols.lot, y, { bold: true });
+  d('Colour', cols.colour, y, { bold: true });
+  d('Roll No', cols.roll, y, { bold: true });
+  d('Rolls', cols.rolls, y, { bold: true, align: 'right' });
+  d('Kgs', cols.kg, y, { bold: true, align: 'right' });
+  if (hasRate) d('Rate', cols.rate, y, { bold: true, align: 'right' });
+  y += 18;
+  dc.lines.forEach((l, i) => {
+    d(String(i + 1), cols.sno, y);
+    d(l.desc, cols.desc, y);
+    d(l.lot, cols.lot, y);
+    if (l.colour) d(l.colour, cols.colour, y);
+    if (l.rollNo) d(l.rollNo, cols.roll, y);
+    if (l.rolls) d(l.rolls, cols.rolls, y, { align: 'right' });
+    d(l.kg, cols.kg, y, { align: 'right' });
+    if (l.rate) d(l.rate, cols.rate, y, { align: 'right' });
+    y += 15;
+  });
+  y += 10;
+  const total = dc.lines.reduce((a, l) => a.plus(D(l.kg.replace(/,/g, ''))), D(0));
+  d('Total', cols.desc, y, { bold: true });
+  d(total.toFixed(3), cols.kg, y, { bold: true, align: 'right' });
+  y += 30;
+  d('Receiver signature', 40, y, { size: 9 });
+  d('Authorised signatory', 450, y, { size: 9 });
+  return Buffer.from(await pdf.save());
+}
+
+// ───────── Buyer purchase orders (colour × size grid) ─────────
+export interface FixturePo {
+  buyerName: string;
+  poNo: string;
+  poDate: string;
+  shipDate: string;
+  styleNo: string;
+  styleName: string;
+  sizes: string[];
+  /** One row per colour: a quantity per size ('' = empty cell) and the unit price. */
+  rows: { colour: string; qty: string[]; price: string }[];
+}
+
+/** Searchable PDF of a garment buyer's purchase order with a colour × size quantity grid. */
+export async function buyerPoPdf(po: FixturePo): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const page = pdf.addPage([W, H]);
+  const d = (text: string, x: number, y: number, o: { size?: number; bold?: boolean; align?: 'left' | 'right' | 'center' } = {}) => {
+    const size = o.size ?? 10;
+    const f = o.bold ? bold : font;
+    const width = f.widthOfTextAtSize(text, size);
+    const left = o.align === 'right' ? x - width : o.align === 'center' ? x - width / 2 : x;
+    page.drawText(text, { x: left, y: H - y - size, size, font: f });
+  };
+  let y = 40;
+  d(po.buyerName, 40, y, { size: 16, bold: true });
+  d('PURCHASE ORDER', 430, y, { size: 12, bold: true });
+  y += 22;
+  d(`PO No: ${po.poNo}`, 40, y);
+  d(`PO Date: ${po.poDate}`, 330, y);
+  y += 14;
+  d(`Style No: ${po.styleNo}`, 40, y);
+  d(`Ship Date: ${po.shipDate}`, 330, y);
+  y += 14;
+  d(`Style Name: ${po.styleName}`, 40, y);
+  d('Currency: USD', 330, y);
+  y += 14;
+  d('Supplier: Wewin Knit Fashions, Tiruppur, India', 40, y);
+  y += 30;
+  const x0 = 210;
+  const step = 50;
+  const xs = po.sizes.map((_, i) => x0 + i * step);
+  const xTotal = x0 + po.sizes.length * step + 10;
+  const xPrice = xTotal + 60;
+  d('Colour', 40, y, { bold: true });
+  po.sizes.forEach((s, i) => d(s, xs[i]!, y, { bold: true, align: 'center' }));
+  d('Total', xTotal, y, { bold: true, align: 'center' });
+  d('Price', xPrice, y, { bold: true, align: 'center' });
+  y += 18;
+  let grand = D(0);
+  for (const r of po.rows) {
+    d(r.colour, 40, y);
+    let tot = D(0);
+    r.qty.forEach((q, i) => {
+      if (!q) return;
+      d(q, xs[i]!, y, { align: 'center' });
+      tot = tot.plus(D(q.replace(/,/g, '')));
+    });
+    grand = grand.plus(tot);
+    d(groupIndian(tot.toFixed(0)), xTotal, y, { align: 'center' });
+    d(r.price, xPrice, y, { align: 'center' });
+    y += 16;
+  }
+  y += 6;
+  d('Total', 40, y, { bold: true });
+  d(groupIndian(grand.toFixed(0)), xTotal, y, { bold: true, align: 'center' });
+  y += 30;
+  d('Delivery: FOB Chennai. Please confirm within 3 days.', 40, y, { size: 9 });
+  return Buffer.from(await pdf.save());
+}

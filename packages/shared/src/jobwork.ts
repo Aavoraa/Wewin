@@ -48,6 +48,8 @@ export const zOutwardListQuery = zListQuery.extend({
   /** Only posted, not closed: material still at the vendor. */
   open: z.enum(['true', 'false']).optional(),
   overdue: z.enum(['true', 'false']).optional(),
+  /** PENDING = drafts awaiting management approval (Q-048); APPROVED = approved, any status. */
+  approval: z.enum(['PENDING', 'APPROVED']).optional(),
 });
 
 // ───────── Inward D.C. ─────────

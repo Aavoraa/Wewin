@@ -64,6 +64,9 @@ export const TARGET_LABEL: Record<ScanTarget, string> = {
   YARN_RECEIPT: 'Yarn receipt',
   TRIMS_RECEIPT: 'Trims receipt',
   VENDOR_BILL: 'Job-work bill',
+  OUTWARD_DC: 'Outward D.C.',
+  INWARD_DC: 'Inward D.C.',
+  ORDER: 'Buyer order',
 };
 
 export const STATUS_LABEL: Record<ScanStatus, string> = {

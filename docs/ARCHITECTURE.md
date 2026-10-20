@@ -287,7 +287,7 @@ REST over JSON under `/api/v1`, with the same conventions for every document typ
 | Orders | `/orders`, `/orders/:id/lines`, `/orders/:id/costing` | Confirm, close |
 | Programs | `/programs`, `/programs/:id/processes`, `/programs/:id/trims-bom` | Approve |
 | Yarn | `/yarn-receipts` | Post, cancel |
-| Job work | `/outward-dcs`, `/inward-dcs`, `/outward-dcs/:id/loss` | Post, cancel, close; link inward ↔ outward |
+| Job work | `/outward-dcs`, `/inward-dcs`, `/outward-dcs/:id/loss` | Approve outward (management, Q-048), post, cancel, close; link inward ↔ outward |
 | Cutting | `/cut-lays`, `/bundles`, `/bundles/:id/ticket` | Post; print tickets |
 | Panels | `/panel-dcs` (type OUT / IN) | Post, cancel, close |
 | Sewing | `/sewing-entries`, `/sewing-issues` | Post |

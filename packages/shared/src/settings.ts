@@ -11,6 +11,11 @@ export const SETTINGS_SCHEMA = {
     default: '80.0000',
     description: 'Loss badge turns amber when loss % reaches this % of the allowed loss (Q-005).',
   },
+  'jobwork.outwardApprovalRequired': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Outward D.C.s must be approved by management (jobwork.outward.approve) before posting (Q-048).',
+  },
   'match.toleranceAbs': {
     schema: zMoney(),
     default: '1.00',

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addDays, todayIst } from '@wewin/shared';
 import { prisma } from '../../core/db';
-import { type Client, asUser, uid } from '../../../test/helpers';
+import { type Client, approveOutward, asUser, uid } from '../../../test/helpers';
 import { type Masters, createOrder, createProgram, masters } from '../../../test/fixtures';
 import { statementsService } from './statements.service';
 import { alertsService } from '../alerts/alerts.service';
@@ -25,6 +25,7 @@ async function knitRound(sentKg: string, receivedKg: string, over: Record<string
   await postedYarn(lot, sentKg);
   const o = await owner.post('/api/v1/outward-dcs', { docDate: '2026-10-02', vendorId: m.vendors.knitter.id, programProcessId: pp(1), lines: [{ itemId: m.items.yarn.id, lot, qtyKg: sentKg }], ...over });
   ok(o, 201);
+  await approveOutward(owner, o.body.data.id);
   ok(await owner.post(`/api/v1/outward-dcs/${o.body.data.id}/post`));
   const i = await owner.post('/api/v1/inward-dcs', {
     docDate: '2026-10-08',

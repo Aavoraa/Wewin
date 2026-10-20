@@ -17,9 +17,25 @@ Upload → file checks → text layer (PDF text / OCR) → extraction → classi
 | Yarn purchase | Yarn receipt (`YarnReceipt`) | `POST /api/v1/yarn-receipts` | Vendor master, YARN items, approved vendor wording, existing receipt with the same invoice no. |
 | Trims purchase | Trims receipt (`TrimsDoc` type RECEIPT) | `POST /api/v1/trims-docs` | Vendor master, TRIM items, existing receipt |
 | Job work (knitting, dyeing, printing…) | Vendor bill (`VendorBill`) | `POST /api/v1/vendor-bills` | Posted, unbilled inward / panel D.C.s (by the D.C. numbers printed on the invoice) and the rate contract in force — the existing 3-way match and tolerance |
+| Our paper outward D.C. | Outward D.C. (`OutwardDc`) — draft, still needs management approval (Q-048) | `POST /api/v1/outward-dcs` | Job worker (consignee GSTIN), YARN / FABRIC items, the program process chosen by the reviewer, and the store's stock of each item + lot + colour |
+| Job worker's return D.C. | Inward D.C. (`InwardDc`) | `POST /api/v1/inward-dcs` | Job worker, FABRIC items, our posted outward D.C.s pending at that vendor (by "Your D.C. No"), and D.C.s already entered with the same vendor D.C. no. |
 
-Entry points: **Stores › Scan invoices**, and a **Scan invoice** button on the Yarn receipts, Trims and
-Vendor bills registers.
+| Buyer's purchase order | Order (`Order`) — **finished on the order form** | `POST /api/v1/orders` with `sourceScanId` | Buyer master (by name), orders already entered with the same buyer PO no. |
+
+Entry points: **Stores › Scan invoices**, a **Scan invoice** button on the Yarn receipts, Trims and
+Vendor bills registers, an **Upload D.C.** button on the Outward and Inward D.C. registers (Q-049),
+and **Upload buyer PO** on the Orders register (Q-050).
+
+**Buyer POs** (`ORDER`, class `BUYER_PO`): a document titled "Purchase Order", or one with a
+"Colour | size | size …" grid. The grid is read cell by cell (sizes such as S–XXL, 2Y, 3-4Y, 6M, 28–44;
+Total / Price columns are not quantities; the price on a colour row is that colour's unit price); a
+row table with Colour, Size and Qty columns works too. Header: PO No → `buyerPoNo`, PO date → `poDate`,
+ship / delivery / ex-factory date → `shipDate`, Style No / Style Name, currency (else the buyer's).
+Checks: buyer matched (name only — always confirmed), whole pieces, colour and size present, each
+colour × size once, ship date not before the PO date, the same buyer PO no. not already an order.
+Order no., style item and garment components are not on a buyer PO, so **Create order** opens the
+normal order form filled from the scan (`GET /invoice-scans/:id/order-draft`); saving it creates the
+order with `sourceScanId`, which marks the scan used in the same transaction (one order per scan).
 
 Wewin has **no vendor purchase-order module** (“PO” in Wewin is the buyer's export order) and no
 purchase-bill ledger for yarn/trims. Those were not invented: see Q-043 and Q-045.
@@ -82,8 +98,31 @@ normalisation, validation, mandatory, confirmation rule, derivation. Summary:
 | Taxable, CGST/SGST/IGST | kept on scan | kept on scan | `taxableAmount`, `cgstAmount`, `sgstAmount`, `igstAmount` | taxable ✓ for bills | if low confidence |
 | D.C. numbers | — | — | `lines[].sourceType/sourceId` (posted, unbilled D.C.s) | ✓ | always |
 
+**Delivery challans** (`OUTWARD_DC`, `INWARD_DC`): a document printed "Delivery Challan" is classified
+`DELIVERY_CHALLAN`; issued by Wewin → outward, by anyone else → inward (the upload button's type wins).
+Its own "D.C. No" / "Date" are the identity (`header:invoiceNo`, `header:invoiceDate`); "Your / Party /
+Against D.C. No" are references (`header:dcRefs`). Table columns Lot, Colour, Roll No, Rolls, GSM and
+Dia are read into `lot`, `colour`, `rollNo`, `bags`, `gsm`, `dia`. No tax or totals are reconciled.
+
+| Source | Outward D.C. | Inward D.C. | Mandatory | Confirm |
+|---|---|---|---|---|
+| Party | `vendorId` (consignee GSTIN when Wewin issued it) | `vendorId` | ✓ | if not a GSTIN match |
+| D.C. no. | kept in `remarks` (Wewin numbers on posting) | `vendorDcNo` | inward ✓ | if low confidence |
+| D.C. date | — | `vendorDcDate` | — | if low confidence |
+| Program process | `programProcessId` — chosen by the reviewer (one option → filled in) | — | ✓ | always |
+| Line item | `lines[].itemId` (YARN or FABRIC) | `lines[].itemId` (FABRIC) | ✓ | unless AUTO |
+| Kg | `lines[].qtyKg` | `lines[].kg` | ✓ | if low confidence |
+| Lot / colour | `lines[].lot` ✓ for yarn, `lines[].colour` — must equal the stock exactly | `lines[].lot`, `lines[].colour` | — | — |
+| Rolls / roll no. / GSM / dia | `lines[].rolls`, value ₹/kg → `valuePerKg` | `lines[].rollNo`, `gsm`, `dia` | — | — |
+| "Your D.C. No" | — | `links[]` → posted outward D.C.s pending at the vendor; kg entered or split by pending | ✓ | always |
+
+Outward lines are checked against the store's balance of that item + lot + colour (what posting will
+check) — a shortfall blocks unless acknowledged. Inward links must add up to the rolls' kg and stay
+within what is pending at the vendor; the same vendor D.C. no. entered twice is a duplicate.
+
 The payload is built by `buildPayload` and validated with the **same Zod schemas the forms use**
-(`zYarnReceiptInput`, `zTrimsDocInput`, `zBillInput`) before the existing service creates the draft.
+(`zYarnReceiptInput`, `zTrimsDocInput`, `zBillInput`, `zOutwardDcInput`, `zInwardDcInput`) before the
+existing service creates the draft.
 Units and currencies are never converted silently: an unknown or different unit blocks the line until
 the reviewer enters the quantity in the item's unit and acknowledges it.
 
@@ -162,7 +201,9 @@ Discarded.
    `scan.dateOrder` (DMY), `scan.retentionDays` (90).
 5. Try it with the synthetic samples:
    `pnpm --filter @wewin/api exec tsx --env-file=../../.env scripts/make-sample-invoices.ts`
-   → upload the files from `apps/api/storage/samples` in Stores › Scan invoices.
+   → upload the files from `apps/api/storage/samples` in Stores › Scan invoices (D.C. samples: with
+   **Upload D.C.** on the Outward / Inward D.C. registers). Migrations `20261019090000_dc_scans` and
+   `20261019091000_dc_scan_target` add D.C. targets.
 
 ## 10. Known limits
 

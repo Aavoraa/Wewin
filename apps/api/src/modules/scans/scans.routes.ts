@@ -34,6 +34,8 @@ scansRouter.get('/invoice-scans/:id', view, handle(id, ({ params }) => s.get(par
 scansRouter.get('/invoice-scans/:id/layout', view, handle(id, ({ params }) => s.layout(params.id)));
 scansRouter.get('/invoice-scans/:id/events', view, handle(id, ({ params }) => s.events(params.id)));
 scansRouter.get('/invoice-scans/:id/sources', work, handle(id, async ({ params }) => s.sourceCandidates(params.id)));
+scansRouter.get('/invoice-scans/:id/program-processes', work, handle(id, async ({ params }) => s.programProcessOptions(params.id)));
+scansRouter.get('/invoice-scans/:id/order-draft', requirePermission('scans.apply', 'orders.create'), handle(id, async ({ params, user }) => s.orderDraft(params.id, user)));
 scansRouter.get('/invoice-scans/:id/file', view, handle(id, async ({ params, user, res }) => {
   const f = await s.file(params.id, user);
   res.setHeader('Content-Type', f.mime);

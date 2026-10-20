@@ -39,6 +39,8 @@ const orderShape = z.object({
   lines: z.array(zOrderLine).min(1, 'Enter quantities in the colour × size matrix'),
   components: z.array(zOrderComponent).min(1, 'Add the garment components (panels)'),
   remarks: zOptional(z.string().trim().max(500)),
+  /** Create only: the scanned buyer PO this order was filled from (marks the scan as used). */
+  sourceScanId: zOptional(zRef()),
 });
 
 /** Matrix rules: unique colour/size, every line inside the declared colours × sizes, unique component codes. */

@@ -9,15 +9,21 @@ import { LoadingState } from '@/components/states';
 
 interface Setting {
   key: string;
-  value: string | number;
+  value: string | number | boolean;
   description: string;
+}
+
+function parsed(s: Setting, v: string): string | number | boolean {
+  if (typeof s.value === 'number') return Number(v);
+  if (typeof s.value === 'boolean') return v === 'true';
+  return v;
 }
 
 function SettingRow({ s, editable }: { s: Setting; editable: boolean }) {
   const qc = useQueryClient();
   const [v, setV] = useState(String(s.value));
   const save = useMutation({
-    mutationFn: () => api.put(`/settings/business/${s.key}`, { value: typeof s.value === 'number' ? Number(v) : v }),
+    mutationFn: () => api.put(`/settings/business/${s.key}`, { value: parsed(s, v) }),
     onSuccess: () => {
       toast.success(`${s.key} saved`);
       void qc.invalidateQueries({ queryKey: ['settings', 'business'] });
@@ -33,6 +39,11 @@ function SettingRow({ s, editable }: { s: Setting; editable: boolean }) {
           {['ABS', 'PCT', 'EITHER', 'BOTH'].map((m) => (
             <option key={m}>{m}</option>
           ))}
+        </Select>
+      ) : typeof s.value === 'boolean' ? (
+        <Select value={v} onChange={(e) => setV(e.target.value)} disabled={!editable}>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
         </Select>
       ) : (
         <Input value={v} onChange={(e) => setV(e.target.value)} disabled={!editable} inputMode="decimal" className="num" />

@@ -38,6 +38,7 @@ export const PERMISSIONS = {
   'jobwork.view': 'View outward / inward D.C.s',
   'jobwork.create': 'Create and edit draft D.C.s',
   'jobwork.post': 'Post D.C.s',
+  'jobwork.outward.approve': 'Approve (sign) outward D.C.s before they are posted',
   'jobwork.cancel': 'Cancel posted D.C.s',
   'jobwork.close': 'Close outward D.C.s (post residual loss)',
   // Production

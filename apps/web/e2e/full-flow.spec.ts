@@ -109,6 +109,10 @@ test.describe.serial('full order workflow', () => {
     await pick(page, /Job worker/, vendor);
     await fill();
     await saveDraft(page);
+    // Management approval before posting (Q-048).
+    await expect(page.getByText('Awaiting management approval')).toBeVisible();
+    await withReason(page, /^Approve$/, 'Approve', 'Checked and approved');
+    await expect(page.getByText(/Approved by /).first()).toBeVisible();
     await primary(page);
     await expectStatus(page, 'POSTED');
     return { id: idFromUrl(page), no: await docNo(page, 'YDC') };

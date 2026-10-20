@@ -94,6 +94,9 @@ export const mastersRepo = {
   getBuyer(id: string, tx: Tx | typeof prisma = prisma) {
     return tx.buyer.findUnique({ where: { id } });
   },
+  buyersForMatching() {
+    return prisma.buyer.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true, currency: true } });
+  },
   setBuyerActive(tx: Tx, id: string, isActive: boolean) {
     return tx.buyer.update({ where: { id }, data: { isActive, version: { increment: 1 } } });
   },

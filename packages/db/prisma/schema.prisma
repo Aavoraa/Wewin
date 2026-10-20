@@ -80,6 +80,7 @@ model User {
   roles              UserRole[]
   sessions           Session[]
   notifications      Notification[]
+  outwardApprovals   OutwardDc[]    @relation("outwardApprovedBy")
 
   @@map("users")
 }
@@ -574,6 +575,8 @@ model Order {
   sizes         String[]         @default([])
   status        OrderStatus      @default(DRAFT)
   remarks       String?
+  /// Set when the order was created from a scanned buyer PO (one order per scan).
+  sourceScanId  String?          @unique @map("source_scan_id") @db.Uuid
   version       Int              @default(1)
   confirmedAt   DateTime?        @map("confirmed_at") @db.Timestamptz(3)
   confirmedById String?          @map("confirmed_by_id") @db.Uuid
@@ -796,6 +799,13 @@ model OutwardDc {
   version            Int                  @default(1)
   /// Snapshot at posting so later program edits can never change this D.C.'s loss limit.
   allowedLossPct     Decimal?             @map("allowed_loss_pct") @db.Decimal(7, 4)
+  /// Management approval of the draft (Q-048). Any edit of the draft clears it; posting requires it
+  /// while setting `jobwork.outwardApprovalRequired` is on. Printed in the D.C.'s signature block.
+  approvedAt         DateTime?            @map("approved_at") @db.Timestamptz(3)
+  approvedById       String?              @map("approved_by_id") @db.Uuid
+  approvalNote       String?              @map("approval_note")
+  /// Set when the draft was created from a scanned paper D.C. (idempotent apply).
+  sourceScanId       String?              @unique @map("source_scan_id") @db.Uuid
   postedAt           DateTime?            @map("posted_at") @db.Timestamptz(3)
   postedById         String?              @map("posted_by_id") @db.Uuid
   cancelledAt        DateTime?            @map("cancelled_at") @db.Timestamptz(3)
@@ -818,6 +828,7 @@ model OutwardDc {
   process            Process              @relation("outwardProcess", fields: [processId], references: [id], onDelete: Restrict)
   order              Order                @relation("outwardOrder", fields: [orderId], references: [id], onDelete: Restrict)
   fromLocation       Location             @relation("outwardFrom", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  approvedBy         User?                @relation("outwardApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   lines              OutwardDcLine[]
   links              DcLink[]
 
@@ -855,6 +866,8 @@ model InwardDc {
   vendorId      String         @map("vendor_id") @db.Uuid
   vendorDcNo    String?        @map("vendor_dc_no")
   vendorDcDate  DateTime?      @map("vendor_dc_date") @db.Date
+  /// Set when the draft was created from the job worker's scanned D.C. (idempotent apply).
+  sourceScanId  String?        @unique @map("source_scan_id") @db.Uuid
   /// FABRIC_STORE, or the vendor's own location when output stays there for a direct transfer (Q-034).
   toLocationId  String         @map("to_location_id") @db.Uuid
   vehicleNo     String?        @map("vehicle_no")

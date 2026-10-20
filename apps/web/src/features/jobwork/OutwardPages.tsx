@@ -3,14 +3,15 @@ import { Link, useParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { D, todayIst, zOutwardDcInput } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
 import { useDocument } from '@/lib/documents';
-import { formatDate, formatInr, formatKg } from '@/lib/format';
+import { formatDate, formatDateTimeIst, formatInr, formatKg } from '@/lib/format';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type DTColumn } from '@/components/DataTable';
 import { DocumentForm, Field } from '@/components/DocumentForm';
 import { EntityPicker } from '@/components/EntityPicker';
@@ -25,6 +26,7 @@ import { Input, Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { pickers } from '../orders/api';
 import { StatusFilter } from '../yarn/YarnPages';
+import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { type OutwardDc } from './types';
 
 const columns: DTColumn<OutwardDc>[] = [
@@ -47,7 +49,18 @@ const columns: DTColumn<OutwardDc>[] = [
     sort: 'expectedReturnDate',
     cell: (r) => (r.expectedReturnDate ? <span className={r.overdue ? 'font-semibold text-destructive' : ''}>{formatDate(r.expectedReturnDate)}{r.overdue ? ' · overdue' : ''}</span> : '—'),
   },
-  { key: 'status', header: 'Status', type: 'status', sort: 'status' },
+  {
+    key: 'status',
+    header: 'Status',
+    sort: 'status',
+    cell: (r) => (
+      <span className="inline-flex items-center gap-1">
+        <StatusBadge status={r.status} />
+        {r.approvalStatus === 'PENDING' ? <Badge variant="warning">Awaiting approval</Badge> : null}
+        {r.status === 'DRAFT' && r.approvalStatus === 'APPROVED' ? <Badge variant="success">Approved</Badge> : null}
+      </span>
+    ),
+  },
 ];
 
 export function OutwardDcsPage() {
@@ -62,11 +75,14 @@ export function OutwardDcsPage() {
         description="Yarn and fabric sent to job workers (Rule 55). Loss % is measured per D.C. across its inward returns."
         actions={
           can('jobwork.create') ? (
-            <Button asChild>
-              <Link to="/outward-dcs/new">
-                <Plus /> New outward D.C.
-              </Link>
-            </Button>
+            <>
+              <ScanInvoiceButton target="OUTWARD_DC" />
+              <Button asChild>
+                <Link to="/outward-dcs/new">
+                  <Plus /> New outward D.C.
+                </Link>
+              </Button>
+            </>
           ) : null
         }
       />
@@ -77,7 +93,14 @@ export function OutwardDcsPage() {
         exportTitle="Outward DCs"
         searchPlaceholder="D.C. no., vendor, order or lot…"
         rowHref={(r) => `/outward-dcs/${r.id}`}
-        filters={{ status: status || undefined, open: view === 'open' ? 'true' : undefined, overdue: view === 'overdue' ? 'true' : undefined, from: fy.start, to: fy.end }}
+        filters={{
+          status: status || undefined,
+          open: view === 'open' ? 'true' : undefined,
+          overdue: view === 'overdue' ? 'true' : undefined,
+          approval: view === 'approval' ? 'PENDING' : undefined,
+          from: fy.start,
+          to: fy.end,
+        }}
         filterBar={
           <>
             <StatusFilter value={status} onChange={setStatus} statuses={['DRAFT', 'POSTED', 'CLOSED', 'CANCELLED']} />
@@ -85,6 +108,7 @@ export function OutwardDcsPage() {
               <option value="">All D.C.s</option>
               <option value="open">Open (at vendor)</option>
               <option value="overdue">Overdue</option>
+              <option value="approval">Awaiting approval</option>
             </Select>
           </>
         }
@@ -120,6 +144,7 @@ export function OutwardDcPage() {
   const o = d.doc;
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [direct, setDirect] = useState(false);
+  const [approving, setApproving] = useState(false);
   const form = useForm<FormValues>({
     resolver: zodResolver(zOutwardDcInput as never),
     defaultValues: { docDate: todayIst(), orderId: '', programProcessId: '', vendorId: '', fromVendorId: '', expectedReturnDate: '', purpose: 'For job work', vehicleNo: '', remarks: '', lines: [blankLine()] },
@@ -212,7 +237,12 @@ export function OutwardDcPage() {
     }
   }
 
+  const dirty = form.formState.isDirty;
+  const awaitingApproval = o?.approvalStatus === 'PENDING';
+  const canApprove = !!o && status === 'DRAFT' && awaitingApproval && can('jobwork.outward.approve');
+
   return (
+    <>
     <DocumentForm
       title="Outward D.C."
       docNo={o?.docNo}
@@ -220,13 +250,21 @@ export function OutwardDcPage() {
       postedAt={o?.postedAt}
       backHref="/outward-dcs"
       canEdit={can('jobwork.create')}
-      canPost={!d.isNew && can('jobwork.post')}
+      canPost={!d.isNew && can('jobwork.post') && !awaitingApproval}
       canCancel={can('jobwork.cancel')}
       canClose={can('jobwork.close')}
       closeDescription="Closing posts whatever is still at the job worker to PROCESS_LOSS and freezes the final loss %. Excess loss is notified and later debited."
+      postDescription="Posting numbers the D.C. and moves the material to the job worker. It needs management approval first; editing an approved draft clears the approval."
+      extraActions={
+        canApprove ? (
+          <Button variant="outline" onClick={() => setApproving(true)} disabled={dirty} title={dirty ? 'Save your changes first' : undefined}>
+            <ShieldCheck /> Approve
+          </Button>
+        ) : null
+      }
       onSave={save}
       onPost={async () => {
-        if (form.formState.isDirty) await save();
+        if (dirty) await save();
         await d.action('post');
       }}
       onCancel={(reason) => d.action('cancel', { reason })}
@@ -414,11 +452,54 @@ export function OutwardDcPage() {
               {pp || o ? <div className="text-xs text-muted-foreground">Allowed loss {Number(pp?.allowedLossPct ?? o?.allowedLossPct)}%</div> : null}
             </CardContent>
           </Card>
+          {o ? <ApprovalPanel o={o} canApprove={canApprove} /> : null}
           {o && o.status !== 'DRAFT' && o.status !== 'CANCELLED' ? <LossPanel o={o} /> : null}
           {o?.cancelReason ? <div className="rounded bg-red-50 p-2 text-xs text-destructive">Cancelled: {o.cancelReason}</div> : null}
         </>
       }
     />
+      <ConfirmDialog
+        open={approving}
+        onOpenChange={setApproving}
+        title="Approve this outward D.C.?"
+        description={o ? `${o.vendor.name} · ${o.process.name} · ${formatKg(o.totals.sentKg)} kg. Your name is printed as the authorised signatory and the approval is recorded with your note in the audit log; posting is then allowed.` : undefined}
+        confirmLabel="Approve"
+        requireReason
+        reasonLabel="Approval note"
+        onConfirm={async (note) => {
+          try {
+            await d.action('approve', { note });
+            toast.success('Approved');
+          } catch (err) {
+            toast.error(errorMessage(err));
+            throw err;
+          }
+        }}
+      />
+    </>
+  );
+}
+
+function ApprovalPanel({ o, canApprove }: { o: OutwardDc; canApprove: boolean }) {
+  if (o.approvalStatus === 'APPROVED') {
+    return (
+      <Card>
+        <CardContent className="grid gap-1 text-xs">
+          <div className="flex items-center gap-1 font-medium text-emerald-800">
+            <ShieldCheck className="size-4" /> Approved by {o.approvedBy?.fullName ?? '—'}
+          </div>
+          <div className="text-muted-foreground">{formatDateTimeIst(o.approvedAt)}</div>
+          {o.approvalNote ? <div>{o.approvalNote}</div> : null}
+        </CardContent>
+      </Card>
+    );
+  }
+  if (o.approvalStatus !== 'PENDING') return null;
+  return (
+    <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+      <div className="font-medium">Awaiting management approval</div>
+      {canApprove ? 'Review the D.C. and click Approve. It can be posted once approved.' : 'It can be posted once management approves it.'}
+    </div>
   );
 }
 

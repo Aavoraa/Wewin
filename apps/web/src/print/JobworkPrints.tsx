@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { D } from '@wewin/shared';
 import { api } from '@/lib/api';
-import { formatDate, formatInr, formatKg, formatPct } from '@/lib/format';
+import { formatDate, formatDateTimeIst, formatInr, formatKg, formatPct } from '@/lib/format';
 import { useQr } from '@/lib/qr';
 import { LoadingState } from '@/components/states';
 import { type InwardDc, type OutwardDc } from '@/features/jobwork/types';
@@ -34,6 +34,7 @@ export function OutwardDcPrint({ id }: { id: string }) {
                 <div className="mt-1 font-mono text-sm">{o.docNo ?? 'DRAFT'}</div>
                 <div>Date: {formatDate(o.docDate)}</div>
                 {o.status === 'CANCELLED' ? <div className="font-bold text-red-700">CANCELLED</div> : null}
+                {o.approvalStatus === 'PENDING' ? <div className="font-bold text-amber-700">NOT APPROVED</div> : null}
               </div>
             </div>
             <div className="my-2 grid grid-cols-2 gap-3 border-b border-black pb-2">
@@ -102,7 +103,10 @@ export function OutwardDcPrint({ id }: { id: string }) {
               delivery challan only.
             </p>
             {o.remarks ? <div className="mt-1">Remarks: {o.remarks}</div> : null}
-            <Signatures labels={["Prepared by", "Receiver's signature & seal", `For ${company.data?.tradeName ?? company.data?.legalName ?? ''}`]} />
+            <Signatures
+              labels={['Prepared by', "Receiver's signature & seal", `For ${company.data?.tradeName ?? company.data?.legalName ?? ''} — Authorised signatory`]}
+              signed={[null, null, o.approvedBy ? `Approved: ${o.approvedBy.fullName}\n${formatDateTimeIst(o.approvedAt)}` : null]}
+            />
           </div>
         </Fragment>
       ))}

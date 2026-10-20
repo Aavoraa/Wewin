@@ -81,7 +81,7 @@ export function ScansPage() {
     <div>
       <PageHeader
         title="Scan invoices"
-        description="Upload a supplier or job-worker invoice. Wewin reads it, matches the vendor and items, checks the figures, and fills a draft yarn receipt, trims receipt or job-work bill for you to review."
+        description="Upload a supplier or job-worker invoice, or a delivery challan. Wewin reads it, matches the vendor and items, checks the figures, and fills a draft yarn receipt, trims receipt, job-work bill, outward D.C. or inward D.C. for you to review."
         actions={
           can('scans.aliases.approve') || can('scans.view') ? (
             <Link to="/scans/learned" className="text-sm text-muted-foreground hover:text-foreground">

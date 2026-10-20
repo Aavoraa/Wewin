@@ -13,6 +13,16 @@ import { type OrderDetail, ordersRepo as repo } from './orders.repo';
 
 type OrderData = z.output<typeof zOrderInput>;
 const RC = { isolation: 'ReadCommitted' } as const;
+
+/**
+ * Registered by the scans module: marks the scanned buyer PO as used, in the same transaction as the
+ * order (refuses a scan that is not ready or was already used).
+ */
+type FromScanHook = (tx: Tx, orderId: string, scanId: string, user: CurrentUser) => Promise<void>;
+let fromScanHook: FromScanHook | null = null;
+export function onOrderCreatedFromScan(h: FromScanHook) {
+  fromScanHook = h;
+}
 const toDate = (s: string | null | undefined) => (s ? new Date(`${s}T00:00:00Z`) : null);
 
 function shape(o: OrderDetail) {
@@ -117,17 +127,31 @@ export const ordersService = {
     return o;
   },
 
-  async create(input: OrderData) {
+  async create(input: OrderData, user?: CurrentUser) {
     await validateRefs(input, prisma);
     return withTx(async (tx) => {
       const o = await repo.create(
         tx,
-        headerData(input),
+        { ...headerData(input), sourceScanId: input.sourceScanId ?? null },
         input.lines.map((l) => ({ ...l, unitPrice: l.unitPrice })),
         input.components,
       );
+      if (input.sourceScanId) {
+        if (!fromScanHook || !user) throw new AppError('VALIDATION_ERROR', 'Scanned documents are not available', 400);
+        await fromScanHook(tx, o.id, input.sourceScanId, user);
+      }
       return shape((await repo.get(o.id, tx))!);
     }, RC);
+  },
+
+  // ───────── For scanned buyer POs ─────────
+  async bySourceScan(scanId: string) {
+    const o = await repo.bySourceScan(scanId);
+    return o ? { id: o.id, docNo: o.orderNo, status: o.status } : null;
+  },
+  /** Orders already entered for this buyer PO (cancelled ones excluded). */
+  async byBuyerPo(buyerId: string, buyerPoNo: string) {
+    return (await repo.byBuyerPo(buyerId, buyerPoNo)).map((o) => ({ id: o.id, docNo: o.orderNo, status: o.status, sourceScanId: o.sourceScanId, lines: [] as { itemId: string; qty: string; rate: string | null }[] }));
   },
 
   /**

@@ -80,12 +80,13 @@ export function PrintLayout({
 }
 
 /** Signature block used on bills, debit notes and vouchers (A§11). */
-export function Signatures({ labels }: { labels: string[] }) {
+export function Signatures({ labels, signed = [] }: { labels: string[]; /** Text printed above each line (e.g. who approved), by position. */ signed?: (string | null | undefined)[] }) {
   return (
     <div className="mt-10 grid gap-6" style={{ gridTemplateColumns: `repeat(${labels.length}, 1fr)` }}>
-      {labels.map((l) => (
-        <div key={l} className="border-t border-black pt-1 text-center text-[10px]">
-          {l}
+      {labels.map((l, i) => (
+        <div key={l} className="flex flex-col justify-end text-center text-[10px]">
+          {signed[i] ? <div className="mb-0.5 whitespace-pre-line text-[10px] font-semibold">{signed[i]}</div> : null}
+          <div className="border-t border-black pt-1">{l}</div>
         </div>
       ))}
     </div>

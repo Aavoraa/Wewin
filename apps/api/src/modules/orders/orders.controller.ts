@@ -14,7 +14,7 @@ export const ordersController = {
     return new ListResult(r.rows, { page: r.p.page, pageSize: r.p.pageSize, total: r.total });
   },
   get: ({ params }: In<{ params: typeof zIdParam }>) => svc.get(params.id),
-  create: ({ body }: In<{ body: typeof zOrderInput }>) => svc.create(body),
+  create: ({ body, user }: In<{ body: typeof zOrderInput }>) => svc.create(body, user),
   update: ({ params, body }: In<{ params: typeof zIdParam; body: typeof zOrderUpdate }>) => svc.update(params.id, body),
   lines: async ({ params }: In<{ params: typeof zIdParam }>) => {
     const o = await svc.get(params.id);

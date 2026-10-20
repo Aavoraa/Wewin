@@ -97,6 +97,24 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-10-19 — Upload (scan) buyer PO → order (Q-050)
+- Migration `order_scans`: `orders.source_scan_id` (unique + FK), scan target CHECK adds `ORDER`.
+- Scanning: target `ORDER`, class `BUYER_PO`; colour × size grid reader (and Colour / Size / Qty rows); PO no. / PO date / ship date / style; buyers matched by name; checks for whole pieces, missing colour / size, duplicate cells, duplicate buyer PO. `GET /invoice-scans/:id/order-draft`; `POST /orders` accepts `sourceScanId` and marks the scan used in the same transaction (hook registered by scans).
+- Screens: **Upload buyer PO** on Orders; review shows buyer, PO fields and a colour / size / pcs / price grid; **Create order** opens the order form pre-filled; the order shows "Filled from a scanned buyer PO".
+- Tests: 2 shared unit + 1 Supertest (grid read, buyer confirm, draft, create order → scan APPLIED, one order per scan, duplicate PO).
+
+### 2026-10-19 — Upload (scan) outward / inward D.C.s (Q-049)
+- Migrations `dc_scans` (`source_scan_id` on outward / inward D.C.s, unique + FK) and `dc_scan_target` (scan target CHECK widened).
+- Scanning: new targets `OUTWARD_DC`, `INWARD_DC`, class `DELIVERY_CHALLAN`; D.C. columns (lot, colour, roll no., rolls, GSM, dia) in local and AI extraction; own D.C. no. vs referenced D.C.s; consignee GSTIN for our outward D.C.s; stock check per item + lot + colour; inward links to pending outward D.C.s with kg split; duplicate vendor D.C. no.; `GET /invoice-scans/:id/program-processes`.
+- Screens: **Upload D.C.** on both registers; review shows D.C. fields, line columns, program-process picker (outward) and outward-D.C. links with kg (inward); no tax section for D.C.s. Better NEGATIVE_STOCK message (item · lot · colour · short by).
+- Tests: 4 shared unit + 2 Supertest (paper outward D.C. → draft needing approval; return D.C. → linked inward draft, over-pending refused, duplicate). Scan tests now deactivate look-alike yarns left by earlier runs in the shared test DB (they made item matching flaky).
+
+### 2026-10-19 — Outward D.C. management approval (Q-048)
+- Migration `outward_dc_approval`: `approved_at`, `approved_by_id`, `approval_note` on `outward_dcs` (applied to dev with `migrate deploy`; test DB via global setup).
+- API: `POST /outward-dcs/:id/approve` (`jobwork.outward.approve`, note required, audited as APPROVE); posting refused with `APPROVAL_REQUIRED` while setting `jobwork.outwardApprovalRequired` is on; editing an approved draft clears the approval; approvers notified per draft version; list filter `approval=PENDING`.
+- Tests: 3 new Supertest cases (approve → post, 403 without permission, double approve, edit clears approval, setting off); existing outward postings in tests now approve first.
+- Screens: Approve button + approval panel on the outward D.C., "Awaiting approval" badge and list view, approver printed above "Authorised signatory", yes/no settings in Business rules. Sidebar can be collapsed to icons.
+
 ### 2026-10-16 — Invoice scanning & auto-fill (brief: "Intelligent Invoice Scanning")
 - Built inside the existing modules (no new transaction types): scans fill draft Yarn receipts, Trims receipts and job-work Vendor bills through their own services; posting / approval unchanged. See `docs/INVOICE-SCANNING.md`.
 - Migration `invoice_scans`: `invoice_scans`, append-only `invoice_scan_events`, `vendor_item_aliases`, `source_scan_id` (unique) on the three targets; row audit no longer copies invoice content.

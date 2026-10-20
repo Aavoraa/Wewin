@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  type zApprove,
   type zIdParam,
   type zInwardDcInput,
   type zInwardDcUpdate,
@@ -30,6 +31,7 @@ export const jobworkController = {
     res.status(204).end();
     return HANDLED;
   },
+  approveOutward: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zApprove }>) => svc.approveOutward(params.id, body.note, user),
   postOutward: ({ params, user }: In<{ params: typeof zIdParam }>) => svc.postOutward(params.id, user),
   cancelOutward: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zReason }>) => svc.cancelOutward(params.id, body.reason, user),
   closeOutward: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zReason }>) => svc.closeOutward(params.id, body.reason, user),

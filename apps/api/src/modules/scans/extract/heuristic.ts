@@ -195,9 +195,17 @@ const STOP_TABLE = /\b(?:sub\s*-?\s*total|total|taxable\s*value|cgst|sgst|igst|r
 const IN_WORDS = /\b(?:in\s*words|rupees|only)\b/i;
 
 // ───────── Line-item table ─────────
-type Col = 'sno' | 'desc' | 'code' | 'hsn' | 'qty' | 'unit' | 'rate' | 'disc' | 'taxable' | 'taxRate' | 'taxAmt' | 'amount';
+type Col = 'sno' | 'desc' | 'code' | 'hsn' | 'qty' | 'unit' | 'rate' | 'disc' | 'taxable' | 'taxRate' | 'taxAmt' | 'amount' | 'roll' | 'rolls' | 'lot' | 'colour' | 'gsm' | 'dia' | 'size';
 const COL_RE: [Col, RegExp][] = [
   ['sno', /^(?:s\.?\s*no\.?|sl\.?\s*no\.?|sr\.?\s*no\.?|#|no\.?)$/i],
+  // Delivery-challan columns (rolls of fabric, lots, colours).
+  ['rolls', /^(?:no\.?\s*of\s*(?:rolls|bags|cones)|rolls|bags|cones)$/i],
+  ['roll', /^roll(?:\s*(?:no\.?|#|number))?$/i],
+  ['lot', /^(?:lot|dye\s*lot|batch)(?:\s*no\.?)?$/i],
+  ['colour', /^(?:colou?r|shade)$/i],
+  ['size', /^size$/i],
+  ['gsm', /^gsm$/i],
+  ['dia', /^dia\.?$/i],
   ['hsn', /\b(?:hsn|sac)\b/i],
   ['code', /\b(?:item\s*code|code|part\s*no|sku|art\.?\s*no)\b/i],
   ['desc', /\b(?:description|particulars|item|goods|product|material|details)\b/i],
@@ -225,7 +233,8 @@ function headerColumns(line: Line): ColPos[] | null {
     if (hit && !cols.some((x) => x.col === hit[0])) cols.push({ col: hit[0], x0: c.x0, x1: c.x1, xc: (c.x0 + c.x1) / 2 });
   }
   const has = (c: Col) => cols.some((x) => x.col === c);
-  const ok = cols.length >= 3 && (has('desc') || has('qty')) && (has('amount') || has('rate') || has('taxable'));
+  // A D.C. table may have no rate / amount, but then names its rolls, lots or colours.
+  const ok = cols.length >= 3 && (has('desc') || has('qty')) && (has('amount') || has('rate') || has('taxable') || has('roll') || has('rolls') || has('lot') || has('colour'));
   return ok ? cols.sort((a, b) => a.xc - b.xc) : null;
 }
 
@@ -348,7 +357,85 @@ function rowToLine(row: Row, n: number, pages: PageLayout[]): ScanLine {
   if (attrs.count) f.count = field(attrs.count, row.descWords, pages, { source: 'DERIVED' });
   if (attrs.lot) f.lot = field(attrs.lot, row.descWords.filter((w) => w.t.includes(attrs.lot!) || /lot/i.test(w.t)), pages);
   if (attrs.bags !== null) f.bags = field(String(attrs.bags), row.descWords, pages);
+  // Columns printed on delivery challans win over values guessed from the description.
+  const text = (c: Col) => row.cells[c]?.map((w) => w.t).join(' ').trim() || null;
+  if (text('lot')) f.lot = field(text('lot')!, row.cells.lot!, pages);
+  if (text('colour')) f.colour = field(text('colour')!, row.cells.colour!, pages);
+  if (text('roll')) f.rollNo = field(text('roll')!, row.cells.roll!, pages);
+  if (text('dia')) f.dia = field(text('dia')!, row.cells.dia!, pages);
+  if (text('size')) f.size = field(text('size')!, row.cells.size!, pages);
+  const whole = (c: Col) => {
+    const w = row.cells[c]?.find((x) => /^\d+$/.test(x.t.replace(/,/g, '')));
+    return w ? field(w.t.replace(/,/g, ''), [w], pages) : null;
+  };
+  f.bags = whole('rolls') ?? f.bags;
+  f.gsm = whole('gsm') ?? f.gsm;
   return { lineNo: n, page: row.page, fields: f };
+}
+
+// ───────── Buyer PO: colour × size quantity grid ─────────
+/** Garment sizes as printed in a grid header: letter sizes, ages (2Y, 3-4Y, 6M) and numeric sizes. */
+const SIZE_RE = /^(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL|\d{1,2}-\d{1,2}(?:Y|YRS?|M)?|\d{1,2}(?:Y|YRS?|M)|\d{2,3})$/i;
+
+/**
+ * A grid whose header row is "Colour | <size> | <size> … [| Total] [| Price]": one line per colour,
+ * quantities under their size. Returns one scan line per colour × size cell with a quantity.
+ */
+function parseSizeGrid(lines: Line[], pages: PageLayout[]): { lines: ScanLine[]; detected: number; region: Set<Line> } | null {
+  for (let i = 0; i < lines.length; i++) {
+    const hdr = lines[i]!;
+    const cc = hdr.cells.find((c) => /^(?:colou?r|shade)\b/i.test(c.text.trim()));
+    if (!cc) continue;
+    const after = hdr.words.filter((w) => w.x0 >= cc.x1);
+    const sizes = after.filter((w) => SIZE_RE.test(w.t.trim())).map((w) => ({ size: w.t.trim().toUpperCase(), xc: (w.x0 + w.x1) / 2 }));
+    if (sizes.length < 2) continue;
+    const priceW = after.find((w) => /^(?:price|fob|rate|unit\s*price|\$|usd)$/i.test(w.t.trim()));
+    const others = after.filter((w) => /^(?:total|qty|pcs|amount|value|price|fob|rate)$/i.test(w.t.trim())).map((w) => (w.x0 + w.x1) / 2);
+    const gaps = sizes.slice(1).map((s, k) => s.xc - sizes[k]!.xc);
+    const tol = (median(gaps) || 40) / 2;
+    const region = new Set<Line>([hdr]);
+    const out: ScanLine[] = [];
+    let detected = 0;
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j]!;
+      if (l.page !== hdr.page) break;
+      if (STOP_TABLE.test(l.text) || /^\s*(?:grand\s*)?total\b/i.test(l.text)) break;
+      const nums = l.words.filter((w) => w.x0 >= cc.x1 - 2 && normalizeNumber(w.t).value !== null);
+      if (!nums.length) {
+        if (out.length) break;
+        continue;
+      }
+      const colourWords = l.words.filter((w) => w.x1 <= sizes[0]!.xc - tol);
+      while (colourWords.length > 1 && /^\d{1,3}[.)]?$/.test(colourWords[0]!.t)) colourWords.shift(); // serial no.
+      const colour = colourWords.map((w) => w.t).join(' ').trim();
+      if (!colour) continue;
+      region.add(l);
+      detected++;
+      const price = priceW ? nums.find((w) => Math.abs((w.x0 + w.x1) / 2 - (priceW.x0 + priceW.x1) / 2) < tol * 1.5) : undefined;
+      for (const w of nums) {
+        if (w === price) continue;
+        const xc = (w.x0 + w.x1) / 2;
+        const col = sizes.reduce((a, s) => (Math.abs(s.xc - xc) < Math.abs(a.xc - xc) ? s : a));
+        // A number closer to a Total / Price column than to its size is not a size quantity.
+        if (Math.abs(col.xc - xc) > tol * 1.2 || others.some((o) => Math.abs(o - xc) < Math.abs(col.xc - xc))) continue;
+        const qty = normalizeNumber(w.t);
+        if (!qty.value) continue;
+        const f = Object.fromEntries(LINE_FIELDS.map((k) => [k, emptyField()])) as Record<LineField, ScanField>;
+        f.description = field(colour, colourWords, pages);
+        f.colour = field(colour, colourWords, pages);
+        f.size = { ...field(col.size, [], pages, { source: 'DERIVED' }), confidence: 0.99 };
+        f.qty = field(qty.value, [w], pages, { corrected: qty.corrected });
+        f.unit = { ...field('PCS', [], pages, { source: 'DERIVED' }), confidence: 0.99 };
+        if (price) {
+          const p = normalizeNumber(price.t);
+          if (p.value) f.rate = field(p.value, [price], pages, { corrected: p.corrected });
+        }
+        out.push({ lineNo: out.length + 1, page: l.page, fields: f });
+      }
+    }
+    if (out.length) return { lines: out, detected, region };
+  }
+  return null;
 }
 
 // ───────── Classification ─────────
@@ -385,15 +472,19 @@ export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrd
   const warnings: string[] = [];
   const header = Object.fromEntries(HEADER_FIELDS.map((k) => [k, emptyField()])) as ScanHeader;
   const table = parseTable(lines);
-  const outside = lines.filter((l) => !table.region.has(l));
+  const grid = parseSizeGrid(lines, pages);
+  const outside = lines.filter((l) => !table.region.has(l) && !grid?.region.has(l));
 
-  // Document type printed on the first page.
-  const typeLine = outside.find((l) => l.page === 1 && /\b(tax\s*invoice|bill\s*of\s*supply|proforma\s*invoice|commercial\s*invoice|debit\s*note|credit\s*note|delivery\s*challan|invoice)\b/i.test(l.text));
+  // Document type printed on the first page ("Purchase Order No" is a reference, not the title).
+  const DOC_TYPE = /\b(tax\s*invoice|bill\s*of\s*supply|proforma\s*invoice|commercial\s*invoice|debit\s*note|credit\s*note|delivery\s*challan|purchase\s*order(?!\s*(?:no|number|ref|date|#))|invoice)\b/i;
+  const typeLine = outside.find((l) => l.page === 1 && DOC_TYPE.test(l.text));
   if (typeLine) {
-    const m = /\b(tax\s*invoice|bill\s*of\s*supply|proforma\s*invoice|commercial\s*invoice|debit\s*note|credit\s*note|delivery\s*challan|invoice)\b/i.exec(typeLine.text)!;
+    const m = DOC_TYPE.exec(typeLine.text)!;
     header.invoiceType = field(m[1]!.toUpperCase().replace(/\s+/g, ' '), wordsIn(typeLine, m.index, m.index + m[0].length), pages);
-    if (/proforma|delivery\s*challan|credit\s*note/i.test(m[1]!)) warnings.push(`This looks like a ${m[1]!.toLowerCase()}, not a purchase invoice`);
+    if (/proforma|credit\s*note/i.test(m[1]!)) warnings.push(`This looks like a ${m[1]!.toLowerCase()}, not a purchase invoice`);
   }
+  const isChallan = header.invoiceType.value === 'DELIVERY CHALLAN';
+  const isBuyerPo = header.invoiceType.value === 'PURCHASE ORDER' || !!grid;
 
   // GSTINs: the one that is Wewin's (or labelled buyer / consignee) is the buyer; the other is the vendor.
   const gstins: { value: string; words: W[]; corrected: boolean; buyer: boolean }[] = [];
@@ -442,7 +533,7 @@ export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrd
   // Invoice identity.
   const inv = labelled(outside, /\b(?:invoice|inv|bill|tax\s*invoice)\s*(?:no|number|num|#)\b\.?/, ID);
   if (inv && /\d/.test(inv.raw)) header.invoiceNo = field(inv.raw, inv.words, pages);
-  const dateLabel = labelled(outside, /\b(?:invoice|inv|bill)\s*date\b|\bdated\b|\bdate\b/, DATE, /\b(?:due|po|p\.o|order|d\.?c|challan|delivery|ack|e-?way|supply|lr)\b/i);
+  const dateLabel = labelled(outside, /\b(?:invoice|inv|bill)\s*date\b|\bdated\b|\bdate\b/, DATE, /\b(?:due|po|p\.o|order|d\.?c|challan|delivery|ack|e-?way|supply|lr|ship(?:ment)?|ex-?factory|etd)\b/i);
   if (dateLabel) {
     const d = normalizeDate(dateLabel.raw, opts.dateOrder);
     header.invoiceDate = d.value ? field(d.value, dateLabel.words, pages, { raw: dateLabel.raw }) : { ...emptyField(), raw: dateLabel.raw };
@@ -455,7 +546,7 @@ export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrd
   const po = labelled(outside, /\b(?:p\.?\s*o\.?|purchase\s*order|buyer'?s?\s*order|order)\s*(?:no|number|ref)\b\.?/, ID);
   if (po && /\d/.test(po.raw)) header.poNumber = field(po.raw, po.words, pages);
   const dcRe = /\b(?:your\s*)?(?:d\.?\s*c\.?|delivery\s*(?:challan|note)|challan|dc)\s*(?:no|number|ref)s?\b\.?/gi;
-  const dcs: { raw: string; words: W[] }[] = [];
+  const dcs: { raw: string; words: W[]; ref: boolean }[] = [];
   for (const l of lines) {
     let m: RegExpExecArray | null;
     const re = new RegExp(dcRe.source, 'gi');
@@ -464,13 +555,42 @@ export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrd
       const ids = /^((?:[A-Z0-9][A-Z0-9/-]{0,30})(?:\s*(?:,|&|and)\s*[A-Z0-9][A-Z0-9/-]{0,30})*)/i.exec(rest)?.[1];
       if (ids && /\d/.test(ids)) {
         const start = l.text.indexOf(ids, m.index);
-        dcs.push({ raw: ids, words: wordsIn(l, start, start + ids.length) });
+        // "Your / Party / Our D.C. No", "Against D.C." refer to another D.C.; a bare "D.C. No" is this document's own.
+        const ref = /\b(?:your|party|our|against|ref)\b/i.test(`${l.text.slice(Math.max(0, m.index - 12), m.index)} ${m[0]}`);
+        dcs.push({ raw: ids, words: wordsIn(l, start, start + ids.length), ref });
       }
     }
   }
-  if (dcs.length) {
-    const all = [...new Set(dcs.flatMap((d) => d.raw.split(/\s*(?:,|&|and)\s*/i)).filter((x) => /\d/.test(x)))];
-    header.dcRefs = field(all.join(', '), dcs[0]!.words, pages);
+  // A delivery challan's own number is its identity; the D.C.s it refers to are the references.
+  const ownDc = isChallan ? dcs.find((d) => !d.ref) : undefined;
+  const refDcs = isChallan ? dcs.filter((d) => d.ref) : dcs;
+  if (ownDc && !header.invoiceNo.value) header.invoiceNo = field(ownDc.raw.split(/\s*(?:,|&|and)\s*/i)[0]!, ownDc.words, pages);
+  if (isChallan && !header.invoiceDate.value) {
+    // "D.C. No: 41   Date: 12-10-2026" sits on one line, which the invoice-date rule skips.
+    const dcDate = labelled(outside, /\b(?:(?:d\.?\s*c\.?|challan)\s*)?date\b|\bdated\b/, DATE, /\b(?:due|po|p\.o|order|your|party|e-?way|lr)\b/i);
+    const d = dcDate ? normalizeDate(dcDate.raw, opts.dateOrder) : null;
+    if (dcDate && d?.value) header.invoiceDate = field(d.value, dcDate.words, pages, { raw: dcDate.raw });
+  }
+  if (refDcs.length) {
+    const all = [...new Set(refDcs.flatMap((d) => d.raw.split(/\s*(?:,|&|and)\s*/i)).filter((x) => /\d/.test(x)))];
+    header.dcRefs = field(all.join(', '), refDcs[0]!.words, pages);
+  }
+  // Buyer PO: PO date (the invoice-date rule skips "PO Date"), ship date and style.
+  if (isBuyerPo) {
+    const toDate = (f: Found | null) => (f ? normalizeDate(f.raw, opts.dateOrder) : null);
+    if (!header.invoiceDate.value) {
+      const pd = labelled(outside, /\b(?:p\.?\s*o\.?|order)\s*date\b/, DATE);
+      const d = toDate(pd);
+      if (pd && d?.value) header.invoiceDate = field(d.value, pd.words, pages, { raw: pd.raw });
+    }
+    const sd = labelled(outside, /\b(?:ship(?:ment)?|delivery|ex-?factory|x-?fty|etd)\s*date\b|\bship\s*by\b/, DATE);
+    const s = toDate(sd);
+    if (sd && s?.value) header.shipDate = field(s.value, sd.words, pages, { raw: sd.raw });
+    const st = labelled(outside, /\bstyle\s*(?:no|#|number|code|ref)\b\.?/, ID);
+    if (st && /\d/.test(st.raw)) header.styleNo = field(st.raw, st.words, pages);
+    // Free text up to the next "Label:" on the same line (e.g. "Style Name: Kids tee   Currency: USD").
+    const sn = labelled(outside, /\b(?:style\s*name|style\s*desc(?:ription)?|article\s*name)\b/, String.raw`[^|:]{2,60}?(?=\s+[A-Za-z][A-Za-z.]{1,20}\s*:|$)`);
+    if (sn) header.styleName = field(sn.raw.trim(), sn.words, pages);
   }
   const terms = labelled(outside, /\b(?:payment\s*terms|terms\s*of\s*payment|credit\s*(?:period|days))\b/, String.raw`[^|]{2,60}`);
   if (terms) header.paymentTerms = field(terms.raw, terms.words, pages);
@@ -506,18 +626,24 @@ export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrd
     warnings.push('Invoice total could not be told apart from the taxable total — check it');
   }
 
-  const scanLines = table.rows.map((r, i) => rowToLine(r, i + 1, pages));
-  if (!table.rows.length) warnings.push('No line-item table was recognised — add the lines by hand or reprocess with AI extraction');
-  if (table.detected > scanLines.length) warnings.push(`${table.detected} table rows were seen but ${scanLines.length} could be read — compare with the document`);
+  // A colour × size grid (buyer PO) takes the place of an ordinary line table.
+  const scanLines = grid ? grid.lines : table.rows.map((r, i) => rowToLine(r, i + 1, pages));
+  const detectedRows = grid ? grid.detected : table.detected;
+  if (!scanLines.length) warnings.push(isBuyerPo ? 'No colour × size quantities were recognised — add them by hand or reprocess with AI extraction' : 'No line-item table was recognised — add the lines by hand or reprocess with AI extraction');
+  if (!grid && table.detected > scanLines.length) warnings.push(`${table.detected} table rows were seen but ${scanLines.length} could be read — compare with the document`);
 
   return {
     extractor: 'wewin-layout@1',
     textSource: opts.textSource,
     pages: pages.map((p) => ({ width: p.width, height: p.height, ocr: p.ocr, meanConfidence: p.words.length ? Math.round((p.words.reduce((a, w) => a + (w.c ?? 0), 0) / p.words.length) * 1000) / 1000 : null })),
-    classification: classify(allText),
+    classification: isChallan
+      ? { class: 'DELIVERY_CHALLAN', confidence: 0.9, reasons: ['"Delivery challan" printed as the document type'] }
+      : isBuyerPo
+        ? { class: 'BUYER_PO', confidence: 0.9, reasons: [grid ? 'Colour × size quantity grid' : '"Purchase order" printed as the document type'] }
+        : classify(allText),
     header,
     lines: scanLines,
-    detectedRows: Math.max(table.detected, scanLines.length),
+    detectedRows: Math.max(detectedRows, grid ? 0 : scanLines.length),
     warnings,
   };
 }

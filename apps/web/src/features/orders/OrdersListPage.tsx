@@ -7,6 +7,7 @@ import { DataTable, type DTColumn } from '@/components/DataTable';
 import { PageHeader } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
+import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 
 interface OrderRow {
   id: string;
@@ -43,11 +44,14 @@ export function OrdersListPage() {
         description={`Buyer orders with colour × size quantities — PO date in FY ${fy.fyCode}.`}
         actions={
           can('orders.create') ? (
-            <Button asChild>
-              <Link to="/orders/new">
-                <Plus /> New order
-              </Link>
-            </Button>
+            <>
+              <ScanInvoiceButton target="ORDER" />
+              <Button asChild>
+                <Link to="/orders/new">
+                  <Plus /> New order
+                </Link>
+              </Button>
+            </>
           ) : null
         }
       />

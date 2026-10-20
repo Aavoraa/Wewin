@@ -9,6 +9,7 @@ const outwardInclude = {
   process: { select: { id: true, code: true, name: true, defaultReturnDays: true } },
   order: { select: { id: true, orderNo: true, styleNo: true, status: true } },
   fromLocation: { select: { id: true, code: true, name: true, kind: true, vendorId: true } },
+  approvedBy: { select: { id: true, fullName: true } },
   programProcess: {
     select: { id: true, sequence: true, allowedLossPct: true, materialCostPerKg: true, inputItemId: true, outputItemId: true, program: { select: { id: true, programNo: true } } },
   },
@@ -279,6 +280,38 @@ export const jobworkRepo = {
   },
   vendorHasProcess(vendorId: string, processId: string, db: Db = prisma) {
     return db.vendorProcess.count({ where: { vendorId, processId } });
+  },
+
+  // ───────── Scanned D.C.s ─────────
+  outwardBySourceScan(sourceScanId: string) {
+    return prisma.outwardDc.findUnique({ where: { sourceScanId }, select: { id: true, docNo: true, status: true } });
+  },
+  inwardBySourceScan(sourceScanId: string) {
+    return prisma.inwardDc.findUnique({ where: { sourceScanId }, select: { id: true, docNo: true, status: true } });
+  },
+  /** The vendor's own D.C. number already entered (cancelled ones excluded). */
+  inwardsByVendorDc(vendorId: string, vendorDcNo: string) {
+    return prisma.inwardDc.findMany({
+      where: { vendorId, vendorDcNo: { equals: vendorDcNo, mode: 'insensitive' }, status: { not: 'CANCELLED' } },
+      select: { id: true, docNo: true, status: true, sourceScanId: true },
+    });
+  },
+  /** Approved program processes of open orders that this vendor is set up for. */
+  programProcessesForVendor(vendorId: string) {
+    return prisma.fabricProgramProcess.findMany({
+      where: { program: { status: 'APPROVED', order: { status: { in: ['DRAFT', 'CONFIRMED'] } } }, process: { vendors: { some: { vendorId } } } },
+      select: {
+        id: true,
+        sequence: true,
+        plannedVendorId: true,
+        allowedLossPct: true,
+        inputItemId: true,
+        process: { select: { name: true } },
+        inputItem: { select: { name: true } },
+        program: { select: { programNo: true, order: { select: { orderNo: true, styleNo: true } } } },
+      },
+      orderBy: [{ program: { programNo: 'asc' } }, { sequence: 'asc' }],
+    });
   },
 
   // ───────── GST job-work reporting (ITC-04) ─────────

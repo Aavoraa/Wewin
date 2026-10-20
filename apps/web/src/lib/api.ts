@@ -146,6 +146,17 @@ export function errorMessage(e: unknown): string {
       if (first) return `${first[0]}: ${first[1][0]}`;
       if (d.formErrors?.[0]) return d.formErrors[0];
     }
+    if (e.code === 'NEGATIVE_STOCK' && Array.isArray(e.details) && e.details.length) {
+      // Stock is kept per item + lot + colour (+ size): say exactly which combination is short.
+      const rows = e.details as { item?: string; label?: string; location?: string; lot?: string; colour?: string; size?: string; balanceAfter?: string; requested?: string; available?: string }[];
+      const lines = rows.slice(0, 3).map((r) => {
+        if (r.label) return `${r.label}: need ${r.requested}, available ${r.available}`;
+        const key = [r.item, `lot ${r.lot ?? '(blank)'}`, `colour ${r.colour ?? '(blank)'}`, r.size ? `size ${r.size}` : null].filter(Boolean).join(' · ');
+        const short = r.balanceAfter ? r.balanceAfter.replace(/^-/, '') : '?';
+        return `${key} at ${r.location}: short by ${short}`;
+      });
+      return `Not enough stock — ${lines.join('; ')}${rows.length > 3 ? ` (+${rows.length - 3} more)` : ''}. Lot and colour must match the stock exactly.`;
+    }
     return e.message;
   }
   return e instanceof Error ? e.message : 'Unexpected error';

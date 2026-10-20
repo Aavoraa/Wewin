@@ -75,6 +75,13 @@ export async function asUser(perms: PermissionKey[] | 'OWNER'): Promise<Client> 
   };
 }
 
+/** Management approval of a draft outward D.C. — required before posting (Q-048). */
+export async function approveOutward(c: Client, id: string) {
+  const r = await c.post(`/api/v1/outward-dcs/${id}/approve`, { note: 'Approved for dispatch' });
+  expect(r.status, JSON.stringify(r.body)).toBe(200);
+  return r.body.data;
+}
+
 /** Run code as if inside a request by the given user (so withTx tags audit rows). */
 export function asContext<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   return runWithContext({ requestId: crypto.randomUUID(), userId }, fn);

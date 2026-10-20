@@ -49,6 +49,15 @@ export const ordersRepo = {
   get(id: string, db: Db = prisma) {
     return db.order.findUnique({ where: { id }, include: detailInclude });
   },
+  bySourceScan(sourceScanId: string) {
+    return prisma.order.findUnique({ where: { sourceScanId }, select: { id: true, orderNo: true, status: true } });
+  },
+  byBuyerPo(buyerId: string, buyerPoNo: string) {
+    return prisma.order.findMany({
+      where: { buyerId, buyerPoNo: { equals: buyerPoNo, mode: 'insensitive' }, status: { not: 'CANCELLED' } },
+      select: { id: true, orderNo: true, status: true, sourceScanId: true },
+    });
+  },
 
   getForUpdate: async (tx: Tx, id: string) => {
     await tx.$queryRaw`SELECT 1 FROM orders WHERE id = ${id}::uuid FOR UPDATE`;

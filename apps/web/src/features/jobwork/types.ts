@@ -32,6 +32,11 @@ export interface OutwardDc {
   closeReason: string | null;
   cancelReason: string | null;
   allowedLossPct: string;
+  /** Management approval before posting (Q-048). */
+  approvalStatus: 'NOT_REQUIRED' | 'PENDING' | 'APPROVED';
+  approvedAt: string | null;
+  approvalNote: string | null;
+  approvedBy: { id: string; fullName: string } | null;
   vendor: { id: string; code: string; name: string; gstin: string | null; addressLine1: string | null; addressLine2: string | null; city: string | null; state: string | null; stateCode: string | null; pincode: string | null };
   process: { id: string; code: string; name: string; defaultReturnDays: number };
   order: { id: string; orderNo: string; styleNo: string; status: string };

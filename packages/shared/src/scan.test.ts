@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HEADER_FIELDS, LINE_FIELDS, type Review, type ReviewLine, type ScanField, emptyField } from './scan';
 import { gstinCheckChar, isValidGstin, normalizeDate, normalizeGstin, normalizeNumber, normalizeUnit, parseAttributes } from './scan-normalize';
 import { matchItem, matchVendor } from './scan-match';
-import { type ValidationContext, buildPayload, reconcile, validateReview } from './scan-mapping';
+import { type ValidationContext, buildPayload, linkAllocation, reconcile, validateReview } from './scan-mapping';
 
 const base = '33ABCDE1234F1Z';
 const GSTIN = base + gstinCheckChar(base);
@@ -195,5 +195,106 @@ describe('buildPayload', () => {
   it('builds a job-work bill from the confirmed D.C.s', () => {
     const rv = review({ target: 'VENDOR_BILL', sources: [{ sourceType: 'INWARD_DC', sourceId: 'd1', docNo: 'X', reason: '' }] });
     expect(buildPayload(rv, { docDate: '2026-10-16' })).toMatchObject({ vendorInvoiceNo: 'KSM/1187', taxableAmount: '5650.00', igstAmount: '0', lines: [{ sourceType: 'INWARD_DC', sourceId: 'd1', invoicedAmount: null }] });
+  });
+});
+
+describe('delivery challans', () => {
+  const out = (n: number, kg: string, pending: string | null, fixed: string | null = null) => ({ sourceType: 'OUTWARD_DC' as const, sourceId: `O${n}`, docNo: `YDC/${n}`, reason: 'test', kg: fixed, pendingKg: pending });
+  const inward = (over: Partial<Review> = {}) =>
+    review(
+      {
+        target: 'INWARD_DC',
+        lines: [line(1, { description: 'Greige SJ', qty: '48.5', rollNo: 'R-1', colour: 'GREY', lot: 'L1', gsm: '180', dia: '30' }, 'F1'), line(2, { description: 'Greige SJ', qty: '49', rollNo: 'R-2' }, 'F1')],
+        sources: [out(1, '0', '100.000')],
+        confirmed: ['sources'],
+        ...over,
+      },
+      { invoiceNo: 'KK/77', invoiceDate: '2026-10-14', taxableAmount: null, cgstAmount: null, sgstAmount: null, cgstRate: null, sgstRate: null, totalAmount: null },
+    );
+  const fabric = { F1: { unit: 'KG', type: 'FABRIC', isActive: true } };
+
+  it('splits the rolls over the linked outward D.C.s by what is pending, keeping kg the reviewer entered', () => {
+    const r = inward({ sources: [out(1, '0', '60.000'), out(2, '0', '80.000')] });
+    expect(linkAllocation(r).map((x) => x.receivedKg)).toEqual(['60.000', '37.500']);
+    const fixed = inward({ sources: [out(1, '0', '60.000', '20'), out(2, '0', '80.000')] });
+    expect(linkAllocation(fixed).map((x) => x.receivedKg)).toEqual(['20.000', '77.500']);
+  });
+
+  it('inward: no tax checks; links must be confirmed, cover the rolls and stay within what is pending', () => {
+    const ok = validateReview(inward(), ctx({ itemUnits: fabric, outwardPending: { O1: '100.000' } }));
+    expect(ok.ready).toBe(true);
+    expect(ok.issues.map((i) => i.code)).not.toContain('TOTAL_MISSING');
+    const over = validateReview(inward({ sources: [out(1, '0', '100.000', '120')] }), ctx({ itemUnits: fabric, outwardPending: { O1: '100.000' } }));
+    expect(over.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['OVER_PENDING', 'LINKS_VS_ROLLS']));
+    const closed = validateReview(inward(), ctx({ itemUnits: fabric, outwardPending: {} }));
+    expect(closed.issues.map((i) => i.code)).toContain('SOURCE_NOT_OPEN');
+    const unconfirmed = validateReview(inward({ confirmed: [] }), ctx({ itemUnits: fabric, outwardPending: { O1: '100.000' } }));
+    expect(unconfirmed.issues.map((i) => i.code)).toContain('SOURCES_UNCONFIRMED');
+  });
+
+  it('inward payload: vendor D.C. no./date, rolls with roll no., colour, GSM, dia, and the kg links', () => {
+    expect(buildPayload(inward(), { docDate: '2026-10-19' })).toMatchObject({
+      vendorDcNo: 'KK/77',
+      vendorDcDate: '2026-10-14',
+      lines: [
+        { itemId: 'F1', rollNo: 'R-1', kg: '48.5', lot: 'L1', colour: 'GREY', gsm: 180, dia: '30' },
+        { itemId: 'F1', rollNo: 'R-2', kg: '49', lot: '', colour: '', gsm: null, dia: null },
+      ],
+      links: [{ outwardDcId: 'O1', receivedKg: '97.500' }],
+    });
+  });
+
+  it('outward: needs a program process and the yarn lot; flags stock the store does not hold', () => {
+    const yarn = { Y1: { unit: 'KG', type: 'YARN', isActive: true } };
+    const r = review(
+      { target: 'OUTWARD_DC', lines: [line(1, { description: '30s yarn', qty: '60', lot: null, colour: 'black', bags: '4', rate: '280' })] },
+      { invoiceNo: 'P-12', taxableAmount: null, cgstAmount: null, sgstAmount: null, cgstRate: null, sgstRate: null, totalAmount: null },
+    );
+    const v = validateReview(r, ctx({ itemUnits: yarn, stock: { 1: { availableKg: '0.000', location: 'YARN_STORE' } } }));
+    expect(v.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['PROGRAM_PROCESS_REQUIRED', 'LOT_MISSING', 'STOCK_SHORT']));
+    const fixed = { ...r, programProcessId: 'PP1', lines: [line(1, { description: '30s yarn', qty: '60', lot: 'L4471', bags: '4', rate: '280' })] };
+    expect(validateReview(fixed, ctx({ itemUnits: yarn, stock: { 1: { availableKg: '1200.000', location: 'YARN_STORE' } } })).ready).toBe(true);
+    expect(buildPayload(fixed, { docDate: '2026-10-19' })).toMatchObject({
+      programProcessId: 'PP1',
+      remarks: expect.stringContaining('P-12'),
+      lines: [{ itemId: 'Y1', lot: 'L4471', colour: '', qtyKg: '60', rolls: 4, valuePerKg: '280' }],
+    });
+  });
+});
+
+describe('buyer PO', () => {
+  const cell = (n: number, colour: string | null, size: string | null, qty: string | null, rate: string | null = '3.25') => line(n, { description: colour, colour, size, qty, rate }, null, 'AUTO');
+  const po = (lines: ReviewLine[], header: Record<string, string | null> = {}) =>
+    review(
+      { target: 'ORDER', vendor: { id: 'B1', state: 'CONFIRMED', score: 1, candidates: [] }, lines },
+      { vendorGstin: null, invoiceNo: null, poNumber: 'NKA-PO-1', invoiceDate: '2026-09-15', shipDate: '2026-12-20', styleNo: 'KT-101', taxableAmount: null, cgstAmount: null, sgstAmount: null, cgstRate: null, sgstRate: null, totalAmount: null, currency: null, ...header },
+    );
+
+  it('needs whole pieces, colour and size, and each cell once — no tax checks', () => {
+    const ok = validateReview(po([cell(1, 'NAVY', '2Y', '300'), cell(2, 'NAVY', '4Y', '450')]), ctx());
+    expect(ok.ready).toBe(true);
+    expect(ok.issues.map((i) => i.code)).not.toContain('TOTAL_MISSING');
+    const bad = validateReview(po([cell(1, 'NAVY', '2Y', '12.5'), cell(2, null, '4Y', '10'), cell(3, 'navy', '2y', '5'), cell(4, 'RED', null, '5')], { styleNo: null, shipDate: '2026-09-01' }), ctx());
+    expect(bad.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['QTY', 'COLOUR_MISSING', 'DUPLICATE_CELL', 'SIZE_MISSING', 'MISSING', 'SHIP_BEFORE_PO']));
+    const noBuyer = validateReview({ ...po([cell(1, 'NAVY', '2Y', '1')]), vendor: { id: null, state: 'NONE', score: null, candidates: [] } }, ctx());
+    expect(noBuyer.issues.find((i) => i.code === 'VENDOR_UNRESOLVED')?.message).toMatch(/Buyer not matched/);
+  });
+
+  it('payload: colours and sizes in printed order, whole-piece lines with unit price', () => {
+    const p = buildPayload(po([cell(1, 'NAVY', '2Y', '300'), cell(2, 'RED', '2Y', '200', '3.4'), cell(3, 'NAVY', '4Y', '450')]), { docDate: '2026-10-19' });
+    expect(p).toMatchObject({
+      buyerId: 'B1',
+      buyerPoNo: 'NKA-PO-1',
+      poDate: '2026-09-15',
+      shipDate: '2026-12-20',
+      styleNo: 'KT-101',
+      colours: ['NAVY', 'RED'],
+      sizes: ['2Y', '4Y'],
+      lines: [
+        { colour: 'NAVY', size: '2Y', qty: 300, unitPrice: '3.25' },
+        { colour: 'RED', size: '2Y', qty: 200, unitPrice: '3.4' },
+        { colour: 'NAVY', size: '4Y', qty: 450, unitPrice: '3.25' },
+      ],
+    });
   });
 });

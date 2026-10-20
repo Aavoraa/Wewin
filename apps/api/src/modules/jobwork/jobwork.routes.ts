@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  zApprove,
   zIdParam,
   zInwardDcInput,
   zInwardDcUpdate,
@@ -28,6 +29,7 @@ jobworkRouter.get('/outward-dcs/:id/movements', requirePermission('jobwork.view'
 jobworkRouter.post('/outward-dcs', create, handle({ body: zOutwardDcInput }, c.createOutward, { status: 201 }));
 jobworkRouter.patch('/outward-dcs/:id', create, handle({ params: zIdParam, body: zOutwardDcUpdate }, c.updateOutward));
 jobworkRouter.delete('/outward-dcs/:id', create, handle(id, c.deleteOutward));
+jobworkRouter.post('/outward-dcs/:id/approve', requirePermission('jobwork.outward.approve'), handle({ params: zIdParam, body: zApprove }, c.approveOutward));
 jobworkRouter.post('/outward-dcs/:id/post', requirePermission('jobwork.post'), handle(id, c.postOutward));
 jobworkRouter.post('/outward-dcs/:id/cancel', requirePermission('jobwork.cancel'), handle({ params: zIdParam, body: zReason }, c.cancelOutward));
 jobworkRouter.post('/outward-dcs/:id/close', requirePermission('jobwork.close'), handle({ params: zIdParam, body: zReason }, c.closeOutward));

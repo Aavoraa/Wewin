@@ -23,6 +23,7 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { pickers } from '../orders/api';
 import { StatusFilter } from '../yarn/YarnPages';
+import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { type InwardDc, type PendingOutward } from './types';
 
 const columns: DTColumn<InwardDc>[] = [
@@ -48,11 +49,14 @@ export function InwardDcsPage() {
         description="Processed fabric returned by job workers, roll by roll, linked to the outward D.C.s it came from."
         actions={
           can('jobwork.create') ? (
-            <Button asChild>
-              <Link to="/inward-dcs/new">
-                <Plus /> New inward D.C.
-              </Link>
-            </Button>
+            <>
+              <ScanInvoiceButton target="INWARD_DC" />
+              <Button asChild>
+                <Link to="/inward-dcs/new">
+                  <Plus /> New inward D.C.
+                </Link>
+              </Button>
+            </>
           ) : null
         }
       />

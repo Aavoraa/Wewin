@@ -12,6 +12,20 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@wewin/web", "dev"],
       "port": 5173
+    },
+    {
+      "name": "api-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@wewin/api", "dev"],
+      "env": { "PORT": "4010" },
+      "port": 4010
+    },
+    {
+      "name": "web-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@wewin/web", "dev"],
+      "env": { "WEB_PORT": "5180", "API_PROXY_TARGET": "http://localhost:4010" },
+      "port": 5180
     }
   ]
 }

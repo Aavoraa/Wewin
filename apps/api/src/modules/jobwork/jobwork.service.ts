@@ -17,6 +17,7 @@ import { numbering } from '../../core/numbering/numbering.service';
 import { ledger, type MovementInput } from '../../core/ledger/ledger.service';
 import { notify } from '../../core/notify/notify.service';
 import { assertDraft, assertPosted, dateOnly, toDbDate, toDbDateOrNull } from '../../core/documents';
+import { assertPermission } from '../../core/auth/auth.middleware';
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { settingsService } from '../../core/settings/settings.service';
 import { mastersService } from '../masters/masters.service';
@@ -46,7 +47,13 @@ registerProgramDependencyCounter((programId, tx) => repo.outwardCountForProgram(
 
 const sumKg = (xs: { toString(): string }[]) => xs.reduce<ReturnType<typeof D>>((a, x) => a.plus(D(x.toString())), D(0));
 
-function shapeOutward(o: OutwardDetail, receivedKg: string, consumed: Map<string, string>, nearPct: string) {
+/** Management approval state (Q-048). A draft needs it only while the setting is on. */
+function outwardApproval(o: Pick<OutwardDetail, 'status' | 'approvedAt'>, required: boolean) {
+  if (o.approvedAt) return 'APPROVED' as const;
+  return o.status === 'DRAFT' && required ? ('PENDING' as const) : ('NOT_REQUIRED' as const);
+}
+
+function shapeOutward(o: OutwardDetail, receivedKg: string, consumed: Map<string, string>, nearPct: string, approvalRequired: boolean) {
   const sent = sumKg(o.lines.map((l) => l.qtyKg)).toFixed(3);
   const allowed = (o.allowedLossPct ?? o.programProcess.allowedLossPct).toString();
   const running = processLoss({ sentKg: sent, receivedKg, allowedPct: allowed });
@@ -68,6 +75,7 @@ function shapeOutward(o: OutwardDetail, receivedKg: string, consumed: Map<string
     docDate: dateOnly(o.docDate)!,
     expectedReturnDate: dateOnly(o.expectedReturnDate),
     allowedLossPct: allowed,
+    approvalStatus: outwardApproval(o, approvalRequired),
     lines: o.lines.map((l) => {
       const c = consumed.get(l.id) ?? '0.000';
       return {
@@ -243,6 +251,19 @@ function shapeBillable(i: Awaited<ReturnType<typeof repo.billableInwards>>[numbe
   };
 }
 
+/** Tell approvers a draft outward D.C. is waiting (once per draft version), only while approval is required. */
+async function notifyApprovers(tx: Tx, id: string, version: number, vendorName: string, processCode: string) {
+  if (!(await settingsService.get('jobwork.outwardApprovalRequired', tx))) return;
+  await notify.event(tx, {
+    eventKey: `OUTWARD_APPROVAL:${id}:${version}`,
+    kind: 'APPROVAL_REQUIRED',
+    title: 'Outward D.C. awaiting approval',
+    body: `${vendorName} · ${processCode}: a draft D.C. needs management approval before it can be posted`,
+    link: `/outward-dcs/${id}`,
+    permission: 'jobwork.outward.approve',
+  });
+}
+
 const notFoundOut = () => notFound('Outward D.C.');
 const notFoundIn = () => notFound('Inward D.C.');
 
@@ -260,6 +281,7 @@ export const jobworkService = {
       ...(q.vendorId ? { vendorId: q.vendorId } : {}),
       ...(q.orderId ? { orderId: q.orderId } : {}),
       ...(q.processId ? { processId: q.processId } : {}),
+      ...(q.approval === 'PENDING' ? { status: 'DRAFT', approvedAt: null } : q.approval === 'APPROVED' ? { approvedAt: { not: null } } : {}),
       ...(q.from || q.to ? { docDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
       ...(q.q
         ? {
@@ -282,21 +304,23 @@ export const jobworkService = {
       p,
     );
     const ids = rows.map((r) => r.id);
-    const [received, consumed, near] = await Promise.all([repo.receivedByOutward(ids), repo.consumedByLine(ids), settingsService.get('loss.nearThresholdPct')]);
-    return { rows: rows.map((o) => shapeOutward(o, received.get(o.id) ?? '0', consumed, near)), total, p };
+    const [received, consumed, settings] = await Promise.all([repo.receivedByOutward(ids), repo.consumedByLine(ids), settingsService.getAll()]);
+    const near = settings['loss.nearThresholdPct'];
+    const approvalRequired = settings['jobwork.outwardApprovalRequired'];
+    return { rows: rows.map((o) => shapeOutward(o, received.get(o.id) ?? '0', consumed, near, approvalRequired)), total, p };
   },
 
   async getOutward(id: string) {
     const o = await repo.getOutward(id);
     if (!o) throw notFoundOut();
-    const [received, consumed, near, inwards] = await Promise.all([
+    const [received, consumed, settings, inwards] = await Promise.all([
       repo.receivedByOutward([id]),
       repo.consumedByLine([id]),
-      settingsService.get('loss.nearThresholdPct'),
+      settingsService.getAll(),
       repo.linkedInwards(id),
     ]);
     return {
-      ...shapeOutward(o, received.get(id) ?? '0', consumed, near),
+      ...shapeOutward(o, received.get(id) ?? '0', consumed, settings['loss.nearThresholdPct'], settings['jobwork.outwardApprovalRequired']),
       inwards: inwards.map((k) => ({ ...k.inward, docDate: dateOnly(k.inward.docDate), receivedKg: k.receivedKg.toFixed(3) })),
     };
   },
@@ -306,7 +330,7 @@ export const jobworkService = {
     return { ...o.loss, pendingKg: o.pendingKg, status: o.status, docNo: o.docNo };
   },
 
-  async createOutward(input: OutInput, user: CurrentUser) {
+  async createOutward(input: OutInput, user: CurrentUser, opts: { sourceScanId?: string } = {}) {
     const v = await validateOutward(input, prisma);
     return withTx(async (tx) => {
       const o = await repo.createOutward(
@@ -323,9 +347,11 @@ export const jobworkService = {
           vehicleNo: input.vehicleNo,
           remarks: input.remarks,
           createdById: user.id,
+          sourceScanId: opts.sourceScanId ?? null,
         },
         v.lines,
       );
+      await notifyApprovers(tx, o.id, o.version, v.vendor.name, v.pp.processCode);
       return o.id;
     }, RC).then((id) => this.getOutward(id));
   },
@@ -351,11 +377,31 @@ export const jobworkService = {
           purpose: input.purpose,
           vehicleNo: input.vehicleNo,
           remarks: input.remarks,
+          // Any edit voids the management approval (Q-048): what was signed is no longer what will go out.
+          approvedAt: null,
+          approvedById: null,
+          approvalNote: null,
         },
         v.lines,
       );
       if (!ok) throw versionConflict();
+      if (cur.approvedAt) await notifyApprovers(tx, id, input.version + 1, v.vendor.name, v.pp.processCode);
     }, RC);
+    return this.getOutward(id);
+  },
+
+  /** Management approval (signature) of a draft outward D.C. (Q-048). Recorded with the note in the audit log. */
+  async approveOutward(id: string, note: string, user: CurrentUser) {
+    assertPermission(user, 'jobwork.outward.approve');
+    await withTx(async (tx) => {
+      await repo.lockOutward(tx, [id]);
+      const o = await repo.getOutward(id, tx);
+      if (!o) throw notFoundOut();
+      assertDraft(o, 'Outward D.C.');
+      if (o.approvedAt) throw new AppError('INVALID_STATE', 'This D.C. is already approved', 409);
+      await repo.updateOutwardState(tx, id, { approvedAt: new Date(), approvedById: user.id, approvalNote: note });
+      await audit.log(tx, { docType: DOC_OUT, recordId: id, action: 'APPROVE', reason: note });
+    });
     return this.getOutward(id);
   },
 
@@ -375,6 +421,9 @@ export const jobworkService = {
       const o = await repo.getOutward(id, tx);
       if (!o) throw notFoundOut();
       assertDraft(o, 'Outward D.C.');
+      if (!o.approvedAt && (await settingsService.get('jobwork.outwardApprovalRequired', tx))) {
+        throw new AppError('APPROVAL_REQUIRED', 'Management approval is required before this D.C. can be posted', 409);
+      }
       const v = await validateOutward(outwardInputFrom(o), tx);
       const docDate = dateOnly(o.docDate)!;
       const expected = dateOnly(o.expectedReturnDate) ?? addDays(docDate, o.process.defaultReturnDays);
@@ -570,7 +619,7 @@ export const jobworkService = {
     return shapeInward(i);
   },
 
-  async createInward(input: InInput, user: CurrentUser) {
+  async createInward(input: InInput, user: CurrentUser, opts: { sourceScanId?: string } = {}) {
     const v = await validateInward(input, prisma);
     const id = await withTx(async (tx) => {
       const i = await repo.createInward(
@@ -584,6 +633,7 @@ export const jobworkService = {
           vehicleNo: input.vehicleNo,
           remarks: input.remarks,
           createdById: user.id,
+          sourceScanId: opts.sourceScanId ?? null,
         },
         input.lines,
         input.links,
@@ -806,6 +856,43 @@ export const jobworkService = {
   },
   /** ITC-04 source rows: goods sent, received back, and losses written off on closing (Q-016). */
   gstData: (from: Date, to: Date) => Promise.all([repo.gstSent(from, to), repo.gstReceived(from, to), repo.gstClosed(from, to)]),
+
+  // ═════════ For scanned D.C.s ═════════
+  outwardBySourceScan: (scanId: string) => repo.outwardBySourceScan(scanId),
+  inwardBySourceScan: (scanId: string) => repo.inwardBySourceScan(scanId),
+  async inwardsByVendorDc(vendorId: string, vendorDcNo: string) {
+    return (await repo.inwardsByVendorDc(vendorId, vendorDcNo)).map((r) => ({ ...r, lines: [] as { itemId: string; qty: string; rate: string | null }[] }));
+  },
+  /** Program processes an outward D.C. to this vendor can be sent under (planned vendor first). */
+  async programProcessOptions(vendorId: string) {
+    const rows = await repo.programProcessesForVendor(vendorId);
+    return rows
+      .map((r) => ({
+        id: r.id,
+        label: `${r.program.order.orderNo} · ${r.program.programNo} · ${r.sequence}. ${r.process.name} (input ${r.inputItem.name}) — allowed loss ${D(r.allowedLossPct.toString()).toString()}%`,
+        planned: r.plannedVendorId === vendorId,
+        inputItemId: r.inputItemId,
+      }))
+      .sort((a, b) => Number(b.planned) - Number(a.planned));
+  },
+  /**
+   * Kg the source store holds for each item + lot + colour — what posting an outward D.C. will
+   * check. Yarn leaves YARN_STORE, fabric FABRIC_STORE.
+   */
+  async storeStock(keys: { itemId: string; type: string; lot: string; colour: string }[]) {
+    if (!keys.length) return [];
+    return withTx(async (tx) => {
+      const locs = await mastersService.systemLocations(['YARN_STORE', 'FABRIC_STORE'], tx);
+      const withLoc = keys.map((k) => ({ ...k, location: k.type === 'FABRIC' ? 'FABRIC_STORE' : 'YARN_STORE' }) as const);
+      const bal = await ledger.balances(
+        tx,
+        withLoc.map((k) => ({ itemId: k.itemId, locationId: locs[k.location], lot: k.lot, colour: k.colour, size: '' })),
+      );
+      const key = (itemId: string, locationId: string, lot: string, colour: string) => `${itemId}|${locationId}|${lot}|${colour}`;
+      const byKey = new Map(bal.map((b) => [key(b.itemId, b.locationId, b.lot, b.colour), b.qty]));
+      return withLoc.map((k) => ({ location: k.location, availableKg: D(byKey.get(key(k.itemId, locs[k.location], k.lot, k.colour)) ?? '0').toFixed(3) }));
+    }, RC);
+  },
 
   async rollByNo(rollNo: string) {
     const r = await repo.findRoll(rollNo);

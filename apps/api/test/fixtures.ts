@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import { prisma } from '../src/core/db';
-import { type Client, uid } from './helpers';
+import { type Client, approveOutward, uid } from './helpers';
 
 /** Master data for document tests (created directly; masters have their own API tests). */
 export async function masters() {
@@ -130,6 +130,7 @@ export async function dyedRolls(
   ok(await c.post(`/api/v1/yarn-receipts/${yarn.body.data.id}/post`));
   const ko = await c.post('/api/v1/outward-dcs', { docDate: '2026-10-02', vendorId: m.vendors.knitter.id, programProcessId: pp(1), lines: [{ itemId: m.items.yarn.id, lot, qtyKg: total.times(1.15).toFixed(3) }] });
   ok(ko, 201);
+  await approveOutward(c, ko.body.data.id);
   ok(await c.post(`/api/v1/outward-dcs/${ko.body.data.id}/post`));
   const greigeKg = total.times(1.1).toFixed(3);
   const ki = await c.post('/api/v1/inward-dcs', { docDate: '2026-10-05', vendorId: m.vendors.knitter.id, lines: [{ itemId: m.items.greige.id, kg: greigeKg, lot }], links: [{ outwardDcId: ko.body.data.id, receivedKg: greigeKg }] });
@@ -139,6 +140,7 @@ export async function dyedRolls(
   const greigeRoll = kiPosted.body.data.lines[0].roll.id;
   const dout = await c.post('/api/v1/outward-dcs', { docDate: '2026-10-06', vendorId: m.vendors.dyer.id, programProcessId: pp(2), lines: [{ itemId: m.items.greige.id, rollId: greigeRoll, qtyKg: greigeKg }] });
   ok(dout, 201);
+  await approveOutward(c, dout.body.data.id);
   ok(await c.post(`/api/v1/outward-dcs/${dout.body.data.id}/post`));
   const dyeLot = uid('DL');
   const din = await c.post('/api/v1/inward-dcs', {

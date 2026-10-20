@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma, withTx } from '../../core/db';
 import { ledger } from '../../core/ledger/ledger.service';
-import { type Client, asUser, assertLedgerInvariants, locationId, uid } from '../../../test/helpers';
+import { type Client, approveOutward, asUser, assertLedgerInvariants, locationId, uid } from '../../../test/helpers';
 import { type Masters, createOrder, createProgram, masters } from '../../../test/fixtures';
 
 let owner: Client;
@@ -24,9 +24,11 @@ async function postedYarn(lot: string, cottonKg: string, lycraKg = '0') {
   expect((await owner.post(`/api/v1/yarn-receipts/${r.body.data.id}/post`)).status).toBe(200);
 }
 
+/** Creates and approves an outward D.C. (posting needs management approval, Q-048); posts it unless `post` is false. */
 async function outward(body: Record<string, unknown>, post = true) {
   const r = await owner.post('/api/v1/outward-dcs', { docDate: '2026-10-02', ...body });
   expect(r.status, JSON.stringify(r.body)).toBe(201);
+  await approveOutward(owner, r.body.data.id);
   if (!post) return r.body.data;
   const p = await owner.post(`/api/v1/outward-dcs/${r.body.data.id}/post`);
   expect(p.status, JSON.stringify(p.body)).toBe(200);
@@ -252,6 +254,80 @@ describe('fabric job work — dyeing with a direct transfer to the compactor', (
     const loss = (await owner.get(`/api/v1/outward-dcs/${comp.id}/loss`)).body.data;
     expect(loss).toMatchObject({ lossPct: '1.0317', excessKg: '0.200', band: 'OVER' }); // 6.5 kg vs 1 % (6.3 kg)
     await assertLedgerInvariants();
+  });
+});
+
+describe('management approval of outward D.C.s (Q-048)', () => {
+  const draftBody = (lot: string, qtyKg = '40') => ({ docDate: '2026-10-02', vendorId: m.vendors.knitter.id, programProcessId: pp(1), lines: [{ itemId: m.items.yarn.id, lot, qtyKg }] });
+
+  it('a draft cannot be posted until approved; approval is audited, notifies approvers and is shown on the D.C.', async () => {
+    const lot = uid('AP');
+    await postedYarn(lot, '50');
+    const created = await owner.post('/api/v1/outward-dcs', draftBody(lot));
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = created.body.data.id as string;
+    expect(created.body.data).toMatchObject({ approvalStatus: 'PENDING', approvedAt: null, approvedBy: null });
+    const asked = await prisma.notification.findMany({ where: { eventKey: `OUTWARD_APPROVAL:${id}:1` } });
+    expect(asked.some((n) => n.userId === owner.userId && n.kind === 'APPROVAL_REQUIRED')).toBe(true);
+
+    const early = await owner.post(`/api/v1/outward-dcs/${id}/post`);
+    expect(early.status).toBe(409);
+    expect(early.body.error.code).toBe('APPROVAL_REQUIRED');
+    expect((await prisma.outwardDc.findUniqueOrThrow({ where: { id } })).status).toBe('DRAFT');
+    expect(await bal(m.items.yarn.id, m.vendors.knitter.locationId, lot)).toBe('0.000');
+
+    const waiting = await owner.get('/api/v1/outward-dcs?approval=PENDING&pageSize=200');
+    expect(waiting.body.data.some((o: { id: string }) => o.id === id)).toBe(true);
+
+    const clerk = await asUser(['jobwork.view', 'jobwork.create', 'jobwork.post']);
+    expect((await clerk.post(`/api/v1/outward-dcs/${id}/approve`, { note: 'self approve' })).status).toBe(403);
+    expect((await owner.post(`/api/v1/outward-dcs/${id}/approve`, { note: '' })).status).toBe(400);
+
+    const approved = await owner.post(`/api/v1/outward-dcs/${id}/approve`, { note: 'Checked qty and vendor' });
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect(approved.body.data).toMatchObject({ approvalStatus: 'APPROVED', approvalNote: 'Checked qty and vendor', approvedBy: { id: owner.userId } });
+    expect((await owner.post(`/api/v1/outward-dcs/${id}/approve`, { note: 'again please' })).status).toBe(409);
+    const log = await prisma.auditLog.findFirst({ where: { recordId: id, action: 'APPROVE' } });
+    expect(log?.reason).toBe('Checked qty and vendor');
+
+    // A user with post (but not approve) permission can now post it.
+    const posted = await clerk.post(`/api/v1/outward-dcs/${id}/post`);
+    expect(posted.status, JSON.stringify(posted.body)).toBe(200);
+    expect(posted.body.data).toMatchObject({ status: 'POSTED', approvalStatus: 'APPROVED' });
+    expect(await bal(m.items.yarn.id, m.vendors.knitter.locationId, lot)).toBe('40.000');
+    const print = await owner.get(`/api/v1/outward-dcs/${id}/print`);
+    expect(print.body.data.approvedBy.id).toBe(owner.userId);
+    expect((await owner.post(`/api/v1/outward-dcs/${id}/approve`, { note: 'after posting' })).status).toBe(409);
+  });
+
+  it('editing an approved draft clears the approval and asks again', async () => {
+    const lot = uid('AE');
+    await postedYarn(lot, '50');
+    const created = await owner.post('/api/v1/outward-dcs', draftBody(lot));
+    const id = created.body.data.id as string;
+    const approved = await approveOutward(owner, id);
+    const edited = await owner.patch(`/api/v1/outward-dcs/${id}`, { ...draftBody(lot, '45'), version: approved.version });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    expect(edited.body.data).toMatchObject({ approvalStatus: 'PENDING', approvedAt: null, approvalNote: null });
+    expect(await prisma.notification.count({ where: { eventKey: `OUTWARD_APPROVAL:${id}:${edited.body.data.version}` } })).toBeGreaterThan(0);
+    expect((await owner.post(`/api/v1/outward-dcs/${id}/post`)).body.error.code).toBe('APPROVAL_REQUIRED');
+    await approveOutward(owner, id);
+    expect((await owner.post(`/api/v1/outward-dcs/${id}/post`)).status).toBe(200);
+  });
+
+  it('can be switched off with the jobwork.outwardApprovalRequired setting', async () => {
+    const key = '/api/v1/settings/business/jobwork.outwardApprovalRequired';
+    expect((await owner.put(key, { value: false })).status).toBe(200);
+    try {
+      const lot = uid('AO');
+      await postedYarn(lot, '50');
+      const created = await owner.post('/api/v1/outward-dcs', draftBody(lot));
+      expect(created.body.data.approvalStatus).toBe('NOT_REQUIRED');
+      expect(await prisma.notification.count({ where: { eventKey: { startsWith: `OUTWARD_APPROVAL:${created.body.data.id}` } } })).toBe(0);
+      expect((await owner.post(`/api/v1/outward-dcs/${created.body.data.id}/post`)).status).toBe(200);
+    } finally {
+      expect((await owner.put(key, { value: true })).status).toBe(200);
+    }
   });
 });
 

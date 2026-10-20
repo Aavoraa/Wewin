@@ -161,6 +161,10 @@ export const mastersService = {
     if (!b) throw notFound('Buyer');
     return b;
   },
+  /** Active buyers in the shape the scan matcher uses (buyers carry no GSTIN / PAN). */
+  async buyersForMatching() {
+    return (await repo.buyersForMatching()).map((b) => ({ ...b, gstin: null, pan: null }));
+  },
   createBuyer(input: z.output<typeof zBuyerInput>) {
     return withTx((tx) => repo.createBuyer(tx, input), RC);
   },

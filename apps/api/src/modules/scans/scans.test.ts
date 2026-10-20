@@ -2,9 +2,9 @@ import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCanvas } from '@napi-rs/canvas';
 import { prisma } from '../../core/db';
-import { type Client, app, asUser, uid } from '../../../test/helpers';
+import { type Client, app, approveOutward, asUser, uid } from '../../../test/helpers';
 import { createOrder, createProgram, masters, type Masters } from '../../../test/fixtures';
-import { type FixtureInvoice, gstin, invoiceImages, invoicePdf, scannedPdf, totals, yarnInvoice } from '../../../test/invoice-fixtures';
+import { type FixtureInvoice, buyerPoPdf, dcPdf, gstin, invoiceImages, invoicePdf, scannedPdf, totals, yarnInvoice } from '../../../test/invoice-fixtures';
 import { scansService } from './scans.service';
 
 let owner: Client;
@@ -53,6 +53,8 @@ beforeAll(async () => {
   const v = await prisma.vendor.create({ data: { code: uid('MIL'), name: `Kaveri Test Spinners ${uid('')}`, gstin: g, stateCode: '33', creditDays: 30 } });
   await prisma.location.create({ data: { code: `V-${v.code}`, name: v.name, kind: 'VENDOR', vendorId: v.id } });
   mill = { id: v.id, gstin: g };
+  // The shared test database keeps the look-alike yarns of earlier runs; they would crowd the matcher.
+  await prisma.item.updateMany({ where: { OR: [{ name: { startsWith: '30s Organic Slub ' } }, { name: { startsWith: '40s Bamboo Modal ' } }], isActive: true }, data: { isActive: false } });
   yarn30 = await prisma.item.create({ data: { code: uid('Y30'), name: `30s Organic Slub ${TAG} Yarn`, type: 'YARN', unit: 'KG', hsnCode: '5205' } });
   yarn40 = await prisma.item.create({ data: { code: uid('Y40'), name: `40s Bamboo Modal ${TAG} Yarn`, type: 'YARN', unit: 'KG', hsnCode: '5205' } });
 });
@@ -290,6 +292,7 @@ describe('job-work invoice → vendor bill matched against inward D.C.s', () => 
     const yr = await owner.post('/api/v1/yarn-receipts', { docDate: '2026-10-01', vendorId: m.vendors.mill.id, lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '100', ratePerKg: '280' }] });
     ok(await owner.post(`/api/v1/yarn-receipts/${yr.body.data.id}/post`));
     const o = await owner.post('/api/v1/outward-dcs', { docDate: '2026-10-02', vendorId: knitter.id, programProcessId: pp, lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '100' }] });
+    await approveOutward(owner, o.body.data.id);
     ok(await owner.post(`/api/v1/outward-dcs/${o.body.data.id}/post`));
     const vdc = uid('KDC');
     const i = await owner.post('/api/v1/inward-dcs', { docDate: '2026-10-08', vendorId: knitter.id, vendorDcNo: vdc, lines: [{ itemId: m.items.greige.id, kg: '98', lot }], links: [{ outwardDcId: o.body.data.id, receivedKg: '98' }] });
@@ -324,6 +327,214 @@ describe('job-work invoice → vendor bill matched against inward D.C.s', () => 
     expect(bill.lines.map((l) => l.sourceId)).toEqual([i.body.data.id]);
     // Posting still goes through the existing bill rules (numbering, billed marks).
     ok(await owner.post(`/api/v1/vendor-bills/${bill.id}/post`));
+  });
+});
+
+describe('scanned delivery challans → draft outward / inward D.C.s', () => {
+  let pp1: string;
+  let knitterGstin: string;
+  let wewinGstin: string;
+  let dcClerk: Client;
+  const issues = (d: { validation: { issues: { code: string; acknowledged: boolean }[] } }) => d.validation.issues.filter((i) => !i.acknowledged).map((i) => i.code);
+  const patch = async (d: { id: string; version: number }, body: Record<string, unknown>) => {
+    const r = await dcClerk.patch(`/api/v1/invoice-scans/${d.id}/review`, { version: d.version, ...body });
+    ok(r);
+    return r.body.data;
+  };
+  async function postedYarn(lot: string, kg: string) {
+    const yr = await owner.post('/api/v1/yarn-receipts', { docDate: '2026-10-01', vendorId: m.vendors.mill.id, lines: [{ itemId: m.items.yarn.id, lot, qtyKg: kg, ratePerKg: '280' }] });
+    ok(yr, 201);
+    ok(await owner.post(`/api/v1/yarn-receipts/${yr.body.data.id}/post`));
+  }
+
+  beforeAll(async () => {
+    dcClerk = await asUser(['scans.view', 'scans.upload', 'scans.apply', 'jobwork.view', 'jobwork.create', 'masters.view']);
+    const order = await createOrder(owner, m);
+    const program = await createProgram(owner, m, order.id);
+    pp1 = program.processes.find((p) => p.sequence === 1)!.id;
+    knitterGstin = gstin('33', PAN());
+    await prisma.vendor.update({ where: { id: m.vendors.knitter.id }, data: { gstin: knitterGstin, stateCode: '33' } });
+    wewinGstin = (await prisma.companySettings.findUnique({ where: { id: 1 } }))?.gstin ?? gstin('33', 'AABFW9876Q');
+  });
+
+  it('our paper outward D.C. → draft outward D.C. (lot and stock checked, program process chosen, approval still required)', async () => {
+    const lot = uid('SL');
+    await postedYarn(lot, '100');
+    const dcNo = uid('PDC');
+    const pdf = await dcPdf({
+      issuerName: 'WEWIN KNIT FASHIONS',
+      issuerGstin: wewinGstin,
+      consigneeName: 'TEST KNITTER',
+      consigneeGstin: knitterGstin,
+      dcNo,
+      dcDate: '12-10-2026',
+      lines: [{ desc: 'Cotton yarn for knitting', lot, rolls: '4', kg: '60.000', rate: '280.00' }],
+    });
+    let d = await scan(dcClerk, pdf, 'outward-dc.pdf', 'application/pdf', 'OUTWARD_DC');
+    expect(d.review.target).toBe('OUTWARD_DC');
+    expect(d.extraction.classification.class).toBe('DELIVERY_CHALLAN');
+    expect(d.review.header.invoiceNo.value).toBe(dcNo);
+    expect(d.review.lines).toHaveLength(1);
+    expect(d.review.lines[0].fields).toMatchObject({ lot: expect.objectContaining({ value: lot }), qty: expect.objectContaining({ value: '60' }), bags: expect.objectContaining({ value: '4' }) });
+    expect(d.review.vendor).toMatchObject({ id: m.vendors.knitter.id, state: 'AUTO' }); // consignee GSTIN
+    // The program process is not printed: the reviewer picks one this vendor is set up for.
+    const opts = (await dcClerk.get(`/api/v1/invoice-scans/${d.id}/program-processes`)).body.data as { id: string }[];
+    expect(opts.map((o) => o.id)).toContain(pp1);
+    ok(await dcClerk.patch(`/api/v1/invoice-scans/${d.id}/review`, { version: d.version, programProcessId: m.items.yarn.id }), 400);
+
+    // A lot the store does not hold is caught before the draft exists.
+    d = await patch(d, { programProcessId: pp1, lines: [{ lineNo: 1, itemId: m.items.yarn.id, fields: { lot: { value: 'WRONG-LOT' } } }] });
+    expect(issues(d)).toContain('STOCK_SHORT');
+    d = await patch(d, { lines: [{ lineNo: 1, fields: { lot: { value: lot } } }] });
+    expect(issues(d)).not.toContain('STOCK_SHORT');
+    expect(d.status, JSON.stringify(issues(d))).toBe('READY');
+
+    // Needs jobwork.create as well as scans.apply.
+    const scanOnly = await asUser(['scans.view', 'scans.apply']);
+    expect((await scanOnly.post(`/api/v1/invoice-scans/${d.id}/apply`, { version: d.version })).status).toBe(403);
+
+    const a = await dcClerk.post(`/api/v1/invoice-scans/${d.id}/apply`, { version: d.version });
+    ok(a);
+    expect(a.body.data.applied).toMatchObject({ docType: 'OUTWARD_DC', status: 'DRAFT' });
+    const out = await prisma.outwardDc.findUniqueOrThrow({ where: { sourceScanId: d.id }, include: { lines: true } });
+    expect(out).toMatchObject({ status: 'DRAFT', vendorId: m.vendors.knitter.id, programProcessId: pp1, approvedAt: null });
+    expect(out.remarks).toContain(dcNo);
+    expect(out.lines[0]).toMatchObject({ itemId: m.items.yarn.id, lot, colour: '', rolls: 4 });
+    expect(out.lines[0]!.qtyKg.toFixed(3)).toBe('60.000');
+    // Idempotent: applying again returns the same draft.
+    const again = await dcClerk.post(`/api/v1/invoice-scans/${d.id}/apply`, { version: d.version });
+    expect(again.body.data.applied.id).toBe(out.id);
+    // Still a draft that needs management approval before posting.
+    expect((await owner.post(`/api/v1/outward-dcs/${out.id}/post`)).body.error.code).toBe('APPROVAL_REQUIRED');
+    await approveOutward(owner, out.id);
+    ok(await owner.post(`/api/v1/outward-dcs/${out.id}/post`));
+  });
+
+  it("job worker's return D.C. → draft inward D.C. linked to our outward D.C. by \"Your DC No\"", async () => {
+    const lot = uid('RL');
+    await postedYarn(lot, '100');
+    const o = await owner.post('/api/v1/outward-dcs', { docDate: '2026-10-02', vendorId: m.vendors.knitter.id, programProcessId: pp1, lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '100' }] });
+    ok(o, 201);
+    await approveOutward(owner, o.body.data.id);
+    const posted = await owner.post(`/api/v1/outward-dcs/${o.body.data.id}/post`);
+    ok(posted);
+    const ourDcNo = posted.body.data.docNo as string;
+    const theirDc = uid('KK');
+    const fx = {
+      issuerName: 'TEST KNITTING WORKS',
+      issuerGstin: knitterGstin,
+      consigneeName: 'WEWIN KNIT FASHIONS',
+      consigneeGstin: wewinGstin,
+      dcNo: theirDc,
+      dcDate: '14-10-2026',
+      yourDcNo: ourDcNo,
+      lines: [
+        { desc: 'Greige single jersey', lot, colour: 'GREY', rollNo: `${theirDc}-1`, kg: '48.500' },
+        { desc: 'Greige single jersey', lot, colour: 'GREY', rollNo: `${theirDc}-2`, kg: '49.000' },
+      ],
+    };
+    let d = await scan(dcClerk, await dcPdf(fx), 'return-dc.pdf', 'application/pdf', 'INWARD_DC');
+    expect(d.review.target).toBe('INWARD_DC');
+    expect(d.review.vendor).toMatchObject({ id: m.vendors.knitter.id, state: 'AUTO' });
+    expect(d.review.header.invoiceNo.value).toBe(theirDc);
+    expect(d.review.sources).toEqual([expect.objectContaining({ sourceType: 'OUTWARD_DC', sourceId: o.body.data.id, pendingKg: '100.000' })]);
+    expect(d.review.lines.map((l: { fields: { rollNo: { value: string }; colour: { value: string } } }) => [l.fields.rollNo.value, l.fields.colour.value])).toEqual([
+      [`${theirDc}-1`, 'GREY'],
+      [`${theirDc}-2`, 'GREY'],
+    ]);
+    expect(issues(d)).toContain('SOURCES_UNCONFIRMED');
+
+    // More kg than is pending is refused; Σ links must equal Σ rolls.
+    d = await patch(d, { sources: [{ sourceType: 'OUTWARD_DC', sourceId: o.body.data.id, kg: '120' }], confirm: ['sources'], lines: [1, 2].map((lineNo) => ({ lineNo, itemId: m.items.greige.id })) });
+    expect(issues(d)).toEqual(expect.arrayContaining(['OVER_PENDING', 'LINKS_VS_ROLLS']));
+    d = await patch(d, { sources: [{ sourceType: 'OUTWARD_DC', sourceId: o.body.data.id, kg: null }], confirm: ['sources'] });
+    expect(d.status, JSON.stringify(issues(d))).toBe('READY');
+
+    const a = await dcClerk.post(`/api/v1/invoice-scans/${d.id}/apply`, { version: d.version });
+    ok(a);
+    expect(a.body.data.applied).toMatchObject({ docType: 'INWARD_DC', status: 'DRAFT' });
+    const inw = await prisma.inwardDc.findUniqueOrThrow({ where: { sourceScanId: d.id }, include: { lines: { orderBy: { lineNo: 'asc' } }, links: true } });
+    expect(inw).toMatchObject({ status: 'DRAFT', vendorDcNo: theirDc, vendorId: m.vendors.knitter.id });
+    expect(inw.lines.map((l) => [l.rollNo, l.kg.toFixed(3), l.lot, l.colour])).toEqual([
+      [`${theirDc}-1`, '48.500', lot, 'GREY'],
+      [`${theirDc}-2`, '49.000', lot, 'GREY'],
+    ]);
+    expect(inw.links.map((k) => [k.outwardDcId, k.receivedKg.toFixed(3)])).toEqual([[o.body.data.id, '97.500']]);
+
+    // The same job-worker D.C. scanned again is a duplicate (never acknowledgeable).
+    const twice = await scan(dcClerk, await dcPdf({ ...fx, lines: fx.lines.slice(0, 1) }), 'return-dc-again.pdf', 'application/pdf', 'INWARD_DC');
+    expect(issues(twice)).toContain('DUPLICATE_INVOICE');
+    // Posting goes through the existing inward rules.
+    ok(await owner.post(`/api/v1/inward-dcs/${inw.id}/post`));
+  });
+});
+
+describe('scanned buyer PO → order (finished on the order form)', () => {
+  it('reads the colour × size grid, matches the buyer, and the order created from it marks the scan as used', async () => {
+    const buyer = await prisma.buyer.create({ data: { code: uid('BY'), name: `Nordic Test Kids ${TAG} AB`, currency: 'EUR' } });
+    const merch = await asUser(['scans.view', 'scans.upload', 'scans.apply', 'orders.view', 'orders.create', 'masters.view']);
+    const poNo = uid('NTK-PO');
+    const fx = {
+      buyerName: `NORDIC TEST KIDS ${TAG} AB`,
+      poNo,
+      poDate: '15-09-2026',
+      shipDate: '20-12-2026',
+      styleNo: 'KT-101',
+      styleName: 'Kids crew-neck tee',
+      sizes: ['2Y', '4Y', '6Y'],
+      rows: [
+        { colour: 'NAVY', qty: ['300', '450', ''], price: '3.25' },
+        { colour: 'RED', qty: ['200', '1,250', '275'], price: '3.40' },
+      ],
+    };
+    let d = await scan(merch, await buyerPoPdf(fx), 'buyer-po.pdf', 'application/pdf', 'ORDER');
+    expect(d.review.target).toBe('ORDER');
+    expect(d.extraction.classification.class).toBe('BUYER_PO');
+    expect(d.review.header).toMatchObject({
+      poNumber: expect.objectContaining({ value: poNo }),
+      invoiceDate: expect.objectContaining({ value: '2026-09-15' }),
+      shipDate: expect.objectContaining({ value: '2026-12-20' }),
+      styleNo: expect.objectContaining({ value: 'KT-101' }),
+      styleName: expect.objectContaining({ value: 'Kids crew-neck tee' }),
+    });
+    const cells = d.review.lines.map((l: { fields: Record<'colour' | 'size' | 'qty' | 'rate', { value: string | null }> }) => [l.fields.colour.value, l.fields.size.value, l.fields.qty.value, l.fields.rate.value]);
+    expect(cells).toEqual([
+      ['NAVY', '2Y', '300', '3.25'],
+      ['NAVY', '4Y', '450', '3.25'],
+      ['RED', '2Y', '200', '3.4'],
+      ['RED', '4Y', '1250', '3.4'],
+      ['RED', '6Y', '275', '3.4'],
+    ]);
+    // Buyers are matched by name only: suggested, never automatic.
+    expect(d.review.vendor.candidates[0]).toMatchObject({ id: buyer.id });
+    expect(d.status).toBe('NEEDS_REVIEW');
+    d = (await merch.patch(`/api/v1/invoice-scans/${d.id}/review`, { version: d.version, vendorId: buyer.id })).body.data;
+    expect(d.status, JSON.stringify(d.validation.issues)).toBe('READY');
+    // Not applied like an invoice: the order form finishes it.
+    expect((await merch.post(`/api/v1/invoice-scans/${d.id}/apply`, { version: d.version })).status).toBe(400);
+    await expect((await asUser(['scans.view', 'scans.apply'])).get(`/api/v1/invoice-scans/${d.id}/order-draft`).then((r) => r.status)).resolves.toBe(403);
+
+    const draft = (await merch.get(`/api/v1/invoice-scans/${d.id}/order-draft`)).body.data;
+    expect(draft).toMatchObject({ buyerId: buyer.id, buyerPoNo: poNo, poDate: '2026-09-15', shipDate: '2026-12-20', styleNo: 'KT-101', currency: 'USD', colours: ['NAVY', 'RED'], sizes: ['2Y', '4Y', '6Y'], sourceScanId: d.id });
+    expect(draft.lines).toContainEqual({ colour: 'RED', size: '4Y', qty: 1250, unitPrice: '3.4' });
+    const { buyerName: _n, ...payload } = draft;
+    const body = {
+      ...payload,
+      orderNo: uid('WW'),
+      garmentItemId: m.items.garment.id,
+      components: [{ code: 'FRONT', name: 'Front', panelItemId: m.items.front.id, pcsPerGarment: 1 }],
+    };
+    const created = await merch.post('/api/v1/orders', body);
+    ok(created, 201);
+    expect(created.body.data).toMatchObject({ sourceScanId: d.id, buyerPoNo: poNo, totals: expect.objectContaining({ pcs: 2475 }) });
+    const after = (await merch.get(`/api/v1/invoice-scans/${d.id}`)).body.data;
+    expect(after).toMatchObject({ status: 'APPLIED', applied: { docType: 'ORDER', id: created.body.data.id, docNo: body.orderNo } });
+    // One order per scan.
+    expect((await merch.post('/api/v1/orders', { ...body, orderNo: uid('WW') })).status).toBe(409);
+    // The same PO scanned again is a duplicate of that order.
+    let again = await scan(merch, await buyerPoPdf({ ...fx, rows: fx.rows.slice(0, 1) }), 'buyer-po-2.pdf', 'application/pdf', 'ORDER');
+    again = (await merch.patch(`/api/v1/invoice-scans/${again.id}/review`, { version: again.version, vendorId: buyer.id })).body.data;
+    expect(again.validation.issues.map((i: { code: string }) => i.code)).toContain('DUPLICATE_INVOICE');
   });
 });
 

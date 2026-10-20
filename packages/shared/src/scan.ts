@@ -7,15 +7,21 @@ import { zListQuery, zRef } from './api';
 
 // ───────── What the ERP can receive from a scanned document ─────────
 /** Existing Wewin documents a scan can fill. No new transaction types are introduced. */
-export const SCAN_TARGETS = ['YARN_RECEIPT', 'TRIMS_RECEIPT', 'VENDOR_BILL'] as const;
+export const SCAN_TARGETS = ['YARN_RECEIPT', 'TRIMS_RECEIPT', 'VENDOR_BILL', 'OUTWARD_DC', 'INWARD_DC', 'ORDER'] as const;
 export type ScanTarget = (typeof SCAN_TARGETS)[number];
+/** Delivery challans: no tax or totals; they move material, so they are matched to stock / outward D.C.s instead. */
+export const DC_TARGETS: readonly ScanTarget[] = ['OUTWARD_DC', 'INWARD_DC'];
+export const isDcTarget = (t: ScanTarget | null | undefined) => !!t && DC_TARGETS.includes(t);
 
-export const SCAN_CLASSES = ['YARN_PURCHASE', 'TRIMS_PURCHASE', 'JOBWORK_BILL', 'OTHER'] as const;
+export const SCAN_CLASSES = ['YARN_PURCHASE', 'TRIMS_PURCHASE', 'JOBWORK_BILL', 'DELIVERY_CHALLAN', 'BUYER_PO', 'OTHER'] as const;
 export type ScanClass = (typeof SCAN_CLASSES)[number];
+/** DELIVERY_CHALLAN → outward or inward is decided by who issued it (Wewin or the job worker). */
 export const CLASS_TARGET: Record<ScanClass, ScanTarget | null> = {
   YARN_PURCHASE: 'YARN_RECEIPT',
   TRIMS_PURCHASE: 'TRIMS_RECEIPT',
   JOBWORK_BILL: 'VENDOR_BILL',
+  DELIVERY_CHALLAN: null,
+  BUYER_PO: 'ORDER',
   OTHER: null,
 };
 
@@ -70,12 +76,16 @@ export const HEADER_FIELDS = [
   'totalAmount',
   'amountPayable',
   'advancePaid',
+  // Buyer purchase orders
+  'shipDate',
+  'styleNo',
+  'styleName',
 ] as const;
 export type HeaderField = (typeof HEADER_FIELDS)[number];
 export const zScanHeader = z.object(Object.fromEntries(HEADER_FIELDS.map((k) => [k, zScanField])) as Record<HeaderField, typeof zScanField>);
 export type ScanHeader = z.infer<typeof zScanHeader>;
 
-export const LINE_FIELDS = ['description', 'vendorItemCode', 'hsn', 'unit', 'qty', 'rate', 'gross', 'discount', 'taxable', 'taxRate', 'taxAmount', 'amount', 'count', 'lot', 'bags'] as const;
+export const LINE_FIELDS = ['description', 'vendorItemCode', 'hsn', 'unit', 'qty', 'rate', 'gross', 'discount', 'taxable', 'taxRate', 'taxAmount', 'amount', 'count', 'lot', 'bags', 'colour', 'rollNo', 'gsm', 'dia', 'size'] as const;
 export type LineField = (typeof LINE_FIELDS)[number];
 export const zScanLine = z.object({
   lineNo: z.number().int().min(1),
@@ -129,8 +139,23 @@ export const zReview = z.object({
   vendor: zMatch,
   header: zScanHeader,
   lines: z.array(zReviewLine),
-  /** Job-work bills: the inward D.C.s / panel inwards this invoice covers. */
-  sources: z.array(z.object({ sourceType: z.enum(['INWARD_DC', 'PANEL_IN']), sourceId: z.string(), docNo: z.string(), reason: z.string() })),
+  /**
+   * Job-work bills: the inward D.C.s / panel inwards this invoice covers. Inward D.C.s: our posted
+   * outward D.C.s the rolls come back against, with the kg counted against each (`kg` null = split
+   * automatically by what is pending).
+   */
+  sources: z.array(
+    z.object({
+      sourceType: z.enum(['INWARD_DC', 'PANEL_IN', 'OUTWARD_DC']),
+      sourceId: z.string(),
+      docNo: z.string(),
+      reason: z.string(),
+      kg: z.string().nullable().optional(),
+      pendingKg: z.string().nullable().optional(),
+    }),
+  ),
+  /** Outward D.C.s: the approved program process the material is sent under (not printed on a D.C.). */
+  programProcessId: z.string().nullable().optional(),
   /** Yarn / trims: when the receipt was already entered, the scan reconciles against it instead of creating another. */
   existingDocId: z.string().nullable(),
   /** Field keys (header:<key>, line:<n>:<key>, vendor, line:<n>:item) the reviewer confirmed. */
@@ -163,7 +188,11 @@ export const zReviewPatch = z.object({
     .max(1000)
     .optional(),
   addLine: z.boolean().optional(),
-  sources: z.array(z.object({ sourceType: z.enum(['INWARD_DC', 'PANEL_IN']), sourceId: zRef() })).max(500).optional(),
+  sources: z
+    .array(z.object({ sourceType: z.enum(['INWARD_DC', 'PANEL_IN', 'OUTWARD_DC']), sourceId: zRef(), kg: z.string().trim().regex(/^\d+(\.\d{1,3})?$/, 'Kg must be a number').nullable().optional() }))
+    .max(500)
+    .optional(),
+  programProcessId: zRef().nullable().optional(),
   existingDocId: zRef().nullable().optional(),
   /** Keys being confirmed by the reviewer in this save. */
   confirm: z.array(z.string().max(80)).max(2000).optional(),

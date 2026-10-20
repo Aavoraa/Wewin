@@ -4,6 +4,8 @@ import { api } from '@/lib/api';
 export interface OrderDetail {
   id: string;
   orderNo: string;
+  /** Set when the order was created from a scanned buyer PO. */
+  sourceScanId: string | null;
   buyerId: string;
   buyerPoNo: string;
   poDate: string;

@@ -32,11 +32,23 @@ export interface TargetSpec {
   /** Existing endpoint and screen that receive the draft. */
   endpoint: string;
   route: string;
-  createPermission: 'yarn.create' | 'trims.create' | 'accounts.bill.create';
+  createPermission: 'yarn.create' | 'trims.create' | 'accounts.bill.create' | 'jobwork.create' | 'orders.create';
   /** Item type the lines must resolve to (null for bills, which reference D.C.s instead). */
-  itemType: 'YARN' | 'TRIM' | null;
+  itemType: 'YARN' | 'TRIM' | 'FABRIC' | null;
+  /** Further item types a line may resolve to (an outward D.C. sends yarn or fabric). */
+  alsoItemTypes?: ('YARN' | 'FABRIC')[];
+  /** Delivery challan: no tax or totals are reconciled. */
+  dc?: boolean;
+  /**
+   * Buyer purchase order: the party is a buyer, lines are colour × size quantities, and the draft is
+   * finished on the order form (order no., style item and components are not on a buyer PO).
+   */
+  po?: boolean;
   fields: FieldMap[];
 }
+
+/** Item types a target's lines may use. */
+export const targetItemTypes = (spec: TargetSpec): string[] => (spec.itemType ? [spec.itemType, ...(spec.alsoItemTypes ?? [])] : []);
 
 const common = (invoiceNoTarget: string, dateTarget: string | null): FieldMap[] => [
   { source: 'vendor', target: 'vendorId', type: 'ref', normalize: 'GSTIN → vendor master; else name similarity', validate: 'active vendor', mandatory: true, confirm: 'if-uncertain', derivable: null },
@@ -110,6 +122,78 @@ export const TARGET_SPECS: Record<ScanTarget, TargetSpec> = {
       ...totalsKept.filter((f) => !['header:cgstAmount', 'header:sgstAmount', 'header:igstAmount'].includes(f.source)),
     ],
   },
+  OUTWARD_DC: {
+    label: 'Outward D.C.',
+    module: 'jobwork',
+    entity: 'OutwardDc',
+    endpoint: 'POST /api/v1/outward-dcs',
+    route: 'outward-dcs',
+    createPermission: 'jobwork.create',
+    itemType: 'YARN',
+    alsoItemTypes: ['FABRIC'],
+    dc: true,
+    fields: [
+      { source: 'vendor', target: 'vendorId', type: 'ref', normalize: 'consignee GSTIN → vendor master; else name similarity', validate: 'active job worker set up for the process', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:invoiceNo', target: 'remarks', type: 'text', normalize: 'paper D.C. no. kept in remarks — Wewin numbers the D.C. on posting', validate: '—', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'header:invoiceDate', target: null, type: 'date', normalize: 'DD-MM-YYYY etc. → ISO', validate: 'not in the future', mandatory: false, confirm: 'if-uncertain', derivable: null },
+      { source: 'derived:entryDate', target: 'docDate', type: 'date', normalize: 'today (IST) unless chosen', validate: 'inside an open financial year', mandatory: true, confirm: 'never', derivable: 'D.C. date' },
+      { source: 'review:programProcessId', target: 'programProcessId', type: 'ref', normalize: 'chosen by the reviewer (one candidate → filled in)', validate: 'approved program, open order, vendor set up for the process', mandatory: true, confirm: 'always', derivable: null },
+      { source: 'line:item', target: 'lines[].itemId', type: 'ref', normalize: 'approved alias → code → description', validate: 'YARN or FABRIC item, active', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'line:qty', target: 'lines[].qtyKg', type: 'qty', normalize: 'decimal, 3 places', validate: '> 0; unit must be KG; store holds this lot + colour', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'line:lot', target: 'lines[].lot', type: 'text', normalize: 'from "Lot" column / description', validate: 'must match the stock lot exactly', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'line:colour', target: 'lines[].colour', type: 'text', normalize: 'from "Colour" column', validate: 'must match the stock colour exactly (blank for raw yarn)', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'line:bags', target: 'lines[].rolls', type: 'int', normalize: 'rolls / bags count', validate: '≥ 0', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'line:rate', target: 'lines[].valuePerKg', type: 'rate', normalize: 'decimal, 4 places', validate: 'value for the D.C. only', mandatory: false, confirm: 'never', derivable: 'amount ÷ qty' },
+    ],
+  },
+  INWARD_DC: {
+    label: 'Inward D.C.',
+    module: 'jobwork',
+    entity: 'InwardDc',
+    endpoint: 'POST /api/v1/inward-dcs',
+    route: 'inward-dcs',
+    createPermission: 'jobwork.create',
+    itemType: 'FABRIC',
+    dc: true,
+    fields: [
+      { source: 'vendor', target: 'vendorId', type: 'ref', normalize: 'GSTIN → vendor master; else name similarity', validate: 'active vendor', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:invoiceNo', target: 'vendorDcNo', type: 'text', normalize: 'job worker\'s own D.C. no., ≤ 40 chars', validate: 'not already entered for this vendor', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:invoiceDate', target: 'vendorDcDate', type: 'date', normalize: 'DD-MM-YYYY etc. → ISO', validate: 'not in the future', mandatory: false, confirm: 'if-uncertain', derivable: null },
+      { source: 'derived:entryDate', target: 'docDate', type: 'date', normalize: 'today (IST) unless chosen', validate: 'inside an open financial year', mandatory: true, confirm: 'never', derivable: 'Entry date of the Wewin document' },
+      { source: 'review:sources', target: 'links[].outwardDcId + receivedKg', type: 'ref', normalize: '"Your D.C. No" → our posted outward D.C.s with kg pending at this vendor', validate: 'Σ linked kg = Σ roll kg; each ≤ pending', mandatory: true, confirm: 'always', derivable: 'kg split by what is pending' },
+      { source: 'line:item', target: 'lines[].itemId', type: 'ref', normalize: 'approved alias → code → description', validate: 'FABRIC item = output of the linked program process', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'line:qty', target: 'lines[].kg', type: 'qty', normalize: 'decimal, 3 places', validate: '> 0; unit must be KG', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'line:rollNo', target: 'lines[].rollNo', type: 'text', normalize: 'as printed; blank → numbered on posting', validate: 'unique roll no.', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'line:lot', target: 'lines[].lot', type: 'text', normalize: 'from "Lot" column / description', validate: '≤ 40 chars', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'line:colour', target: 'lines[].colour', type: 'text', normalize: 'from "Colour" column', validate: '≤ 30 chars', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'line:gsm', target: 'lines[].gsm', type: 'int', normalize: 'whole number', validate: '1–2000', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'line:dia', target: 'lines[].dia', type: 'text', normalize: 'as printed', validate: '≤ 30 chars', mandatory: false, confirm: 'never', derivable: null },
+    ],
+  },
+  ORDER: {
+    label: 'Buyer order',
+    module: 'orders',
+    entity: 'Order',
+    endpoint: 'POST /api/v1/orders (finished on the order form)',
+    route: 'orders',
+    createPermission: 'orders.create',
+    itemType: null,
+    po: true,
+    fields: [
+      { source: 'vendor', target: 'buyerId', type: 'ref', normalize: 'buyer name (top of the PO) → buyer master', validate: 'active buyer', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:poNumber', target: 'buyerPoNo', type: 'text', normalize: 'trim, ≤ 60 chars', validate: 'not already entered for this buyer', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:invoiceDate', target: 'poDate', type: 'date', normalize: 'PO date → ISO (scan.dateOrder)', validate: 'not in the future', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:shipDate', target: 'shipDate', type: 'date', normalize: 'ship / delivery / ex-factory date → ISO', validate: 'not before the PO date', mandatory: false, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:styleNo', target: 'styleNo', type: 'text', normalize: 'trim, ≤ 60 chars', validate: '—', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:styleName', target: 'styleName', type: 'text', normalize: 'trim, ≤ 120 chars', validate: '—', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'header:currency', target: 'currency', type: 'text', normalize: 'ISO code; else the buyer\'s currency', validate: '3 letters', mandatory: false, confirm: 'never', derivable: 'buyer master currency' },
+      { source: 'line:colour', target: 'colours[] + lines[].colour', type: 'text', normalize: 'as printed, ≤ 30 chars', validate: 'colour × size cell appears once', mandatory: true, confirm: 'never', derivable: null },
+      { source: 'line:size', target: 'sizes[] + lines[].size', type: 'text', normalize: 'grid column / size column, ≤ 30 chars', validate: 'colour × size cell appears once', mandatory: true, confirm: 'never', derivable: null },
+      { source: 'line:qty', target: 'lines[].qty', type: 'int', normalize: 'whole pieces', validate: '≥ 1', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'line:rate', target: 'lines[].unitPrice', type: 'rate', normalize: 'decimal, 4 places', validate: '—', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'form', target: 'orderNo, garmentItemId, components', type: 'ref', normalize: 'not on a buyer PO — entered on the order form', validate: 'existing order rules', mandatory: true, confirm: 'never', derivable: null },
+    ],
+  },
 };
 
 // ───────── Validation ─────────
@@ -139,6 +223,10 @@ export interface ValidationContext {
   billMatch: { withinTolerance: boolean; variance: string; missingRates: number } | null;
   /** Reconciling against an already-entered receipt. */
   existingLines: { itemId: string; qty: string; rate: string | null }[] | null;
+  /** Outward D.C.s: kg the source store holds for each line's item + lot + colour (by lineNo). */
+  stock?: Record<number, { availableKg: string; location: string }>;
+  /** Inward D.C.s: live kg pending at the vendor for each linked outward D.C. (by id). */
+  outwardPending?: Record<string, string>;
 }
 
 export interface Reconciliation {
@@ -212,12 +300,14 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
   const tol = D(ctx.tolerance);
   const spec = review.target ? TARGET_SPECS[review.target] : null;
 
-  if (!spec) push('ERROR', 'TARGET_REQUIRED', 'target', 'Choose what this document is: yarn receipt, trims receipt or job-work bill');
+  if (!spec) push('ERROR', 'TARGET_REQUIRED', 'target', 'Choose what this document is: yarn receipt, trims receipt, job-work bill, outward or inward D.C., or buyer order');
+  const docWord = spec?.dc ? 'D.C.' : spec?.po ? 'PO' : 'Invoice';
+  const party = spec?.po ? 'buyer' : 'vendor';
 
-  // Vendor
-  if (!review.vendor.id) push('ERROR', 'VENDOR_UNRESOLVED', 'vendor', 'Vendor not matched to the vendor master — pick the vendor');
-  else if (review.vendor.state === 'SUGGESTED' && !confirmed.has('vendor')) push('ERROR', 'VENDOR_UNCONFIRMED', 'vendor', 'Confirm the suggested vendor');
-  if (ctx.vendor && !ctx.vendor.isActive) push('ERROR', 'VENDOR_INACTIVE', 'vendor', 'The vendor is inactive');
+  // Vendor (the buyer, for a buyer PO)
+  if (!review.vendor.id) push('ERROR', 'VENDOR_UNRESOLVED', 'vendor', `${cap(party)} not matched to the ${party} master — pick the ${party}`);
+  else if (review.vendor.state === 'SUGGESTED' && !confirmed.has('vendor')) push('ERROR', 'VENDOR_UNCONFIRMED', 'vendor', `Confirm the suggested ${party}`);
+  if (ctx.vendor && !ctx.vendor.isActive) push('ERROR', 'VENDOR_INACTIVE', 'vendor', `The ${party} is inactive`);
   const g = review.header.vendorGstin.value;
   if (g && !isValidGstin(g)) push('WARNING', 'GSTIN_INVALID', 'header:vendorGstin', 'Vendor GSTIN fails the check digit — probably misread');
   if (g && ctx.vendor?.gstin && ctx.vendor.gstin.toUpperCase() !== g) push('ERROR', 'GSTIN_MISMATCH', 'header:vendorGstin', `GSTIN on the invoice (${g}) differs from the vendor master (${ctx.vendor.gstin})`, 'ack:gstin');
@@ -240,30 +330,44 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
     }
   }
   const inv = review.header.invoiceDate.value;
-  if (inv && inv > ctx.today) push('ERROR', 'FUTURE_DATE', 'header:invoiceDate', 'Invoice date is in the future');
+  if (inv && inv > ctx.today) push('ERROR', 'FUTURE_DATE', 'header:invoiceDate', `${docWord} date is in the future`);
   const due = review.header.dueDate.value;
   if (inv && due && due < inv) push('WARNING', 'DUE_BEFORE_INVOICE', 'header:dueDate', 'Due date is before the invoice date');
-  for (const d of ctx.duplicates) push('ERROR', 'DUPLICATE_INVOICE', 'header:invoiceNo', `This vendor invoice is already entered as ${d.docType.replace(/_/g, ' ').toLowerCase()} ${d.docNo ?? '(draft)'}`);
+  for (const d of ctx.duplicates) {
+    if (spec?.po) push('ERROR', 'DUPLICATE_INVOICE', 'header:poNumber', `This buyer PO is already entered as order ${d.docNo ?? '(draft)'}`);
+    else push('ERROR', 'DUPLICATE_INVOICE', 'header:invoiceNo', `This vendor ${spec?.dc ? 'D.C.' : 'invoice'} is already entered as ${d.docType.replace(/_/g, ' ').toLowerCase()} ${d.docNo ?? '(draft)'}`);
+  }
+
+  // Buyer PO: colour × size quantities in whole pieces, each cell once.
+  if (spec?.po) checkOrderLines(review, ctx, push);
 
   // Lines
   const lines = review.lines.filter((l) => l.include);
   if (spec?.itemType) {
-    if (!lines.length && !review.existingDocId) push('ERROR', 'NO_LINES', 'lines', 'No invoice lines are included');
+    if (!lines.length && !review.existingDocId) push('ERROR', 'NO_LINES', 'lines', `No ${spec.dc ? 'D.C.' : 'invoice'} lines are included`);
+    const allowedTypes = targetItemTypes(spec);
     for (const l of lines) {
       const lk = `line:${l.lineNo}`;
       const f = l.fields;
       if (!l.item.id) push('ERROR', 'ITEM_UNRESOLVED', `${lk}:item`, `Line ${l.lineNo}: match "${f.description.value ?? ''}" to an item`);
       else if (l.item.state === 'SUGGESTED' && !confirmed.has(`${lk}:item`)) push('ERROR', 'ITEM_UNCONFIRMED', `${lk}:item`, `Line ${l.lineNo}: confirm the suggested item`);
       const im = l.item.id ? ctx.itemUnits[l.item.id] : undefined;
-      if (im && im.type !== spec.itemType) push('ERROR', 'ITEM_TYPE', `${lk}:item`, `Line ${l.lineNo}: the item is ${im.type}, a ${spec.label.toLowerCase()} needs ${spec.itemType}`);
+      if (im && !allowedTypes.includes(im.type)) push('ERROR', 'ITEM_TYPE', `${lk}:item`, `Line ${l.lineNo}: the item is ${im.type}, a ${spec.label.toLowerCase()} needs ${allowedTypes.join(' or ')}`);
       if (im && !im.isActive) push('ERROR', 'ITEM_INACTIVE', `${lk}:item`, `Line ${l.lineNo}: the item is inactive`);
       const q = num(f.qty);
       if (!q || q.lte(0)) push('ERROR', 'QTY', `${lk}:qty`, `Line ${l.lineNo}: quantity is missing`);
       const u = normalizeUnit(f.unit.value).value;
-      const expectUnit = spec.itemType === 'YARN' ? 'KG' : im?.unit;
+      const expectUnit = spec.itemType === 'YARN' || spec.itemType === 'FABRIC' ? 'KG' : im?.unit;
       if (f.unit.value && !u) push('ERROR', 'UNIT_UNKNOWN', `${lk}:unit`, `Line ${l.lineNo}: unit "${f.unit.value}" is not a Wewin unit — enter the quantity in ${expectUnit ?? 'the item unit'}`, `ack:${lk}:unit`);
-      else if (u && expectUnit && u !== expectUnit) push('ERROR', 'UNIT_MISMATCH', `${lk}:unit`, `Line ${l.lineNo}: invoice unit ${u} differs from ${expectUnit}; convert the quantity yourself — no automatic conversion`, `ack:${lk}:unit`);
-      if (spec.itemType === 'YARN' && !f.lot.value) push('ERROR', 'LOT_MISSING', `${lk}:lot`, `Line ${l.lineNo}: enter the yarn lot (the store tracks stock by lot)`);
+      else if (u && expectUnit && u !== expectUnit) push('ERROR', 'UNIT_MISMATCH', `${lk}:unit`, `Line ${l.lineNo}: ${docWord.toLowerCase()} unit ${u} differs from ${expectUnit}; convert the quantity yourself — no automatic conversion`, `ack:${lk}:unit`);
+      const needsLot = review.target === 'YARN_RECEIPT' || (review.target === 'OUTWARD_DC' && im?.type === 'YARN');
+      if (needsLot && !f.lot.value) push('ERROR', 'LOT_MISSING', `${lk}:lot`, `Line ${l.lineNo}: enter the yarn lot (the store tracks stock by lot)`);
+      // Outward: the store must hold exactly this item + lot + colour, or posting will be refused later.
+      const st = ctx.stock?.[l.lineNo];
+      if (review.target === 'OUTWARD_DC' && st && q && D(st.availableKg).lt(q)) {
+        const what = `lot "${f.lot.value ?? ''}"${f.colour?.value ? `, colour "${f.colour.value}"` : ', no colour'}`;
+        push('ERROR', 'STOCK_SHORT', `${lk}:qty`, `Line ${l.lineNo}: ${st.location} holds ${D(st.availableKg).toFixed(3)} kg of this item with ${what} — check the lot and colour against the stock`, `ack:${lk}:stock`);
+      }
       for (const k of ['qty', 'rate', 'description'] as LineField[]) {
         const fv = f[k];
         const fk = `${lk}:${k}`;
@@ -289,6 +393,30 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
     }
   }
 
+  // Outward D.C.: the program process is not printed on a D.C.; the reviewer chooses it.
+  if (review.target === 'OUTWARD_DC' && !review.programProcessId) {
+    push('ERROR', 'PROGRAM_PROCESS_REQUIRED', 'programProcessId', 'Choose the program process this material is sent under');
+  }
+
+  // Inward D.C.: rolls come back against our posted outward D.C.s.
+  if (review.target === 'INWARD_DC') {
+    const links = review.sources.filter((s) => s.sourceType === 'OUTWARD_DC');
+    if (!links.length) push('ERROR', 'NO_SOURCES', 'sources', 'Tick the outward D.C.s these rolls come back against');
+    else {
+      if (!confirmed.has('sources')) push('ERROR', 'SOURCES_UNCONFIRMED', 'sources', 'Confirm the outward D.C.s and the kg counted against each');
+      const alloc = linkAllocation(review, ctx.outwardPending);
+      const rolls = lines.reduce((a, l) => a.plus(num(l.fields.qty) ?? 0), D(0));
+      const linked = alloc.reduce((a, x) => a.plus(D(x.receivedKg)), D(0));
+      if (!linked.equals(rolls)) push('ERROR', 'LINKS_VS_ROLLS', 'sources', `Kg counted against the outward D.C.s (${linked.toFixed(3)}) must equal the rolls received (${rolls.toFixed(3)})`);
+      for (const x of alloc) {
+        const pend = ctx.outwardPending ? ctx.outwardPending[x.outwardDcId] : x.pendingKg;
+        if (ctx.outwardPending && pend === undefined) push('ERROR', 'SOURCE_NOT_OPEN', 'sources', `Outward D.C. ${x.docNo} is no longer open at this vendor`);
+        else if (pend !== null && pend !== undefined && D(x.receivedKg).gt(D(pend))) push('ERROR', 'OVER_PENDING', 'sources', `${x.receivedKg} kg against ${x.docNo}, but only ${D(pend).toFixed(3)} kg is pending there`);
+        if (D(x.receivedKg).lte(0)) push('WARNING', 'LINK_EMPTY', 'sources', `No kg is left to count against ${x.docNo} — untick it or enter its kg`);
+      }
+    }
+  }
+
   // Reconciling an already-entered receipt
   if (ctx.existingLines && review.existingDocId) {
     for (const l of lines) {
@@ -303,7 +431,23 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
     }
   }
 
-  // Tax structure and totals
+  const rec = reconcile(review);
+  // Tax structure and totals (a delivery challan or buyer PO carries neither).
+  if (!spec?.dc && !spec?.po) checkTaxAndTotals(review, ctx, rec, spec, push);
+
+  const ready = !issues.some((i) => i.level === 'ERROR' && !i.acknowledged);
+  return { issues, reconciliation: rec, ready };
+}
+
+function checkTaxAndTotals(
+  review: Review,
+  ctx: ValidationContext,
+  rec: Reconciliation,
+  spec: TargetSpec | null,
+  push: (level: IssueLevel, code: string, field: string, message: string, ackKey?: string | null) => void,
+) {
+  const tol = D(ctx.tolerance);
+  const g = review.header.vendorGstin.value;
   const h = review.header;
   const cg = num(h.cgstAmount);
   const sg = num(h.sgstAmount);
@@ -316,7 +460,6 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
     if (intra && ig?.gt(0)) push('WARNING', 'TAX_PLACE', 'header:igstAmount', 'IGST charged by a vendor in the same state — expected CGST + SGST');
     if (!intra && (cg?.gt(0) || sg?.gt(0))) push('WARNING', 'TAX_PLACE', 'header:cgstAmount', 'CGST/SGST charged by an out-of-state vendor — expected IGST');
   }
-  const rec = reconcile(review);
   const taxableD = rec.taxable ? D(rec.taxable) : null;
   for (const [rateF, amtF, name] of [
     [h.cgstRate, h.cgstAmount, 'CGST'],
@@ -336,10 +479,65 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
     push('ERROR', 'TOTAL_MISMATCH', 'totals', `Taxable + tax${D(rec.charges).isZero() ? '' : ' + charges'} + round-off = ${rec.computedTotal}, invoice total is ${rec.statedTotal}`, 'ack:grand-total');
   }
   if (!rec.statedTotal) push('WARNING', 'TOTAL_MISSING', 'header:totalAmount', 'Invoice total not found — totals cannot be reconciled');
-
-  const ready = !issues.some((i) => i.level === 'ERROR' && !i.acknowledged);
-  return { issues, reconciliation: rec, ready };
 }
+
+/**
+ * Inward D.C. links: kg counted against each ticked outward D.C. A kg the reviewer entered is kept;
+ * the rest of the rolls' kg is split in order, each up to what is pending (the last one takes the rest).
+ */
+export function linkAllocation(review: Review, pending?: Record<string, string>): { outwardDcId: string; docNo: string; receivedKg: string; pendingKg: string | null }[] {
+  const srcs = review.sources.filter((s) => s.sourceType === 'OUTWARD_DC');
+  const total = review.lines.filter((l) => l.include).reduce((a, l) => a.plus(num(l.fields.qty) ?? 0), D(0));
+  const fixed = srcs.reduce((a, s) => (s.kg ? a.plus(D(s.kg)) : a), D(0));
+  let left = Dmax(total.minus(fixed), D(0));
+  const auto = srcs.filter((s) => !s.kg);
+  return srcs.map((s) => {
+    const pend = pending?.[s.sourceId] ?? s.pendingKg ?? null;
+    let kg: Dec;
+    if (s.kg) kg = D(s.kg);
+    else {
+      const last = s === auto.at(-1);
+      kg = last || pend === null ? left : Dmin(left, D(pend));
+      left = left.minus(kg);
+    }
+    return { outwardDcId: s.sourceId, docNo: s.docNo, receivedKg: kg.toFixed(3), pendingKg: pend };
+  });
+}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function checkOrderLines(review: Review, ctx: ValidationContext, push: (level: IssueLevel, code: string, field: string, message: string, ackKey?: string | null) => void) {
+  const confirmed = new Set(review.confirmed);
+  const lines = review.lines.filter((l) => l.include);
+  if (!lines.length) push('ERROR', 'NO_LINES', 'lines', 'No colour × size quantities are included');
+  const seen = new Map<string, number>();
+  for (const l of lines) {
+    const lk = `line:${l.lineNo}`;
+    const colour = l.fields.colour.value?.trim() ?? '';
+    const size = l.fields.size.value?.trim() ?? '';
+    if (!colour) push('ERROR', 'COLOUR_MISSING', `${lk}:colour`, `Line ${l.lineNo}: colour is missing`);
+    else if (colour.length > 30) push('ERROR', 'COLOUR_LONG', `${lk}:colour`, `Line ${l.lineNo}: colour is longer than 30 characters`);
+    if (!size) push('ERROR', 'SIZE_MISSING', `${lk}:size`, `Line ${l.lineNo}: size is missing`);
+    else if (size.length > 30) push('ERROR', 'SIZE_LONG', `${lk}:size`, `Line ${l.lineNo}: size is longer than 30 characters`);
+    const q = l.fields.qty.value;
+    if (!q || !/^\d+$/.test(q) || q === '0') push('ERROR', 'QTY', `${lk}:qty`, `Line ${l.lineNo}: quantity must be whole pieces (at least 1)${q ? ` — read "${q}"` : ''}`);
+    const fq = l.fields.qty;
+    if (q && fq.source === 'EXTRACTED' && ((fq.confidence ?? 0) < ctx.minConfidence || fq.corrected) && !confirmed.has(`${lk}:qty`)) {
+      push('ERROR', 'LOW_CONFIDENCE', `${lk}:qty`, `Line ${l.lineNo}: quantity "${q}" was read with low confidence — check and confirm`);
+    }
+    if (colour && size) {
+      const key = `${colour.toUpperCase()}|${size.toUpperCase()}`;
+      const first = seen.get(key);
+      if (first !== undefined) push('ERROR', 'DUPLICATE_CELL', lk, `Line ${l.lineNo}: ${colour} / ${size} already appears on line ${first} — merge them or untick one`);
+      else seen.set(key, l.lineNo);
+    }
+  }
+  const po = review.header.invoiceDate.value;
+  const ship = review.header.shipDate.value;
+  if (po && ship && ship < po) push('WARNING', 'SHIP_BEFORE_PO', 'header:shipDate', 'Ship date is before the PO date');
+}
+
+const Dmin = (a: Dec, b: Dec) => (a.lt(b) ? a : b);
+const Dmax = (a: Dec, b: Dec) => (a.gt(b) ? a : b);
 
 const LABELS: Partial<Record<HeaderField, string>> = {
   invoiceNo: 'Invoice no.',
@@ -397,6 +595,67 @@ export function buildPayload(review: Review, opts: { docDate: string }): Record<
         remarks: 'Entered from a scanned invoice',
         lines: review.sources.map((s) => ({ sourceType: s.sourceType, sourceId: s.sourceId, invoicedAmount: null })),
       };
+    case 'OUTWARD_DC':
+      return {
+        docDate: opts.docDate,
+        vendorId: review.vendor.id,
+        programProcessId: review.programProcessId ?? null,
+        fromVendorId: null,
+        expectedReturnDate: null,
+        purpose: 'For job work',
+        vehicleNo: null,
+        remarks: `Entered from a scanned D.C.${h.invoiceNo.value ? ` (paper D.C. no. ${h.invoiceNo.value})` : ''}`.slice(0, 500),
+        lines: inc.map((l) => ({
+          itemId: l.item.id,
+          lot: (l.fields.lot.value ?? '').slice(0, 40),
+          colour: (l.fields.colour?.value ?? '').slice(0, 30),
+          rollId: null,
+          qtyKg: v(l.fields.qty),
+          rolls: l.fields.bags.value ? Number(l.fields.bags.value) : null,
+          valuePerKg: v(l.fields.rate) ?? derivedRate(l),
+        })),
+      };
+    case 'INWARD_DC':
+      return {
+        docDate: opts.docDate,
+        vendorId: review.vendor.id,
+        vendorDcNo: h.invoiceNo.value?.slice(0, 40) ?? null,
+        vendorDcDate: v(h.invoiceDate),
+        holdAtVendor: false,
+        vehicleNo: null,
+        remarks: 'Entered from a scanned D.C.',
+        lines: inc.map((l) => ({
+          itemId: l.item.id,
+          rollNo: l.fields.rollNo?.value?.slice(0, 40) || null,
+          kg: v(l.fields.qty),
+          lot: (l.fields.lot.value ?? '').slice(0, 40),
+          colour: (l.fields.colour?.value ?? '').slice(0, 30),
+          gsm: l.fields.gsm?.value && /^\d+$/.test(l.fields.gsm.value) ? Number(l.fields.gsm.value) : null,
+          dia: l.fields.dia?.value?.slice(0, 30) || null,
+          remarks: null,
+        })),
+        links: linkAllocation(review)
+          .filter((x) => D(x.receivedKg).gt(0))
+          .map((x) => ({ outwardDcId: x.outwardDcId, receivedKg: x.receivedKg })),
+      };
+    case 'ORDER': {
+      // Partial order: order no., style item and components are completed on the order form.
+      const cells = inc.map((l) => ({ colour: (l.fields.colour.value ?? '').trim(), size: (l.fields.size.value ?? '').trim(), qty: l.fields.qty.value, rate: l.fields.rate.value }));
+      const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
+      return {
+        buyerId: review.vendor.id,
+        buyerPoNo: v(h.poNumber)?.slice(0, 60) ?? null,
+        poDate: v(h.invoiceDate),
+        shipDate: v(h.shipDate),
+        styleNo: v(h.styleNo)?.slice(0, 60) ?? null,
+        styleName: v(h.styleName)?.slice(0, 120) ?? null,
+        currency: v(h.currency),
+        colours: uniq(cells.map((c) => c.colour)),
+        sizes: uniq(cells.map((c) => c.size)),
+        lines: cells.map((c) => ({ colour: c.colour, size: c.size, qty: c.qty && /^\d+$/.test(c.qty) ? Number(c.qty) : null, unitPrice: c.rate ?? null })),
+        remarks: 'Entered from a scanned buyer PO',
+      };
+    }
     default:
       return {};
   }
