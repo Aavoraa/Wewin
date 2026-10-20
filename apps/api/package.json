@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "sample-data": "tsx --env-file=../../.env scripts/sample-data.ts"
+    "sample-data": "tsx --env-file=../../.env scripts/sample-data.ts",
+    "sample-docs": "tsx --env-file=../../.env scripts/make-sample-po-dcs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.130.0",

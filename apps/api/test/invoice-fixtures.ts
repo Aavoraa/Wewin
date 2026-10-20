@@ -305,6 +305,8 @@ export interface FixturePo {
   sizes: string[];
   /** One row per colour: a quantity per size ('' = empty cell) and the unit price. */
   rows: { colour: string; qty: string[]; price: string }[];
+  /** Printed currency (default USD). */
+  currency?: string;
 }
 
 /** Searchable PDF of a garment buyer's purchase order with a colour × size quantity grid. */
@@ -331,7 +333,7 @@ export async function buyerPoPdf(po: FixturePo): Promise<Buffer> {
   d(`Ship Date: ${po.shipDate}`, 330, y);
   y += 14;
   d(`Style Name: ${po.styleName}`, 40, y);
-  d('Currency: USD', 330, y);
+  d(`Currency: ${po.currency ?? 'USD'}`, 330, y);
   y += 14;
   d('Supplier: Wewin Knit Fashions, Tiruppur, India', 40, y);
   y += 30;
