@@ -54,7 +54,7 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 - [x] Web shell: login, auth context, api client, sidebar layout, DataTable, DocumentForm, LineGrid, print base, formatters
 - [x] Seed: owner, six roles, locations, series FY 26-27
 - [x] GitHub Actions CI (workflow written; runs once the repo is pushed to GitHub)
-- [ ] OpenAPI document from Zod schemas at /api/docs (dev) — deferred to Step 12 hardening
+- [x] OpenAPI document from Zod schemas at /api/docs (dev) — done in Step 12 hardening
 
 ### Step 2 — Masters
 - [x] Vendors (auto location), buyers, items, processes, locations, users, roles — API + tests + screens + pickers
@@ -89,13 +89,35 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 
 ## Phase 4 — Export and go-live
 - [x] Step 11 Export invoice from cartons, packing list, LUT/IGST, shipments, buyer receipts/realisation
-- [ ] Step 12 Dashboard, reports + Excel + async export, alerts/notifications UI, attachments, backups/restore doc, deploy docs, opening-data import, Playwright E2E
+- [x] Step 12 Dashboard, reports + Excel + async export, alerts/notifications UI, attachments, backups/restore doc, deploy docs, opening-data import, Playwright E2E
+  - [x] Dashboard with live figures per permission + "waiting for you"
+  - [x] Report catalogue (8 reports, Q-054), on-screen view, background Excel (pg-boss), 7-day retention (Q-055)
+  - [x] Attachments on documents (Q-056)
+  - [x] OpenAPI 3.1 + Swagger UI at /api/docs
+  - [x] Route-level code splitting (entry chunk 1.5 MB → 263 kB)
+  - [x] Opening-data import: orders, store stock, material at job workers, vendor balances (Q-027, Q-057, Q-058)
+  - [x] docs/DEPLOYMENT.md, docs/BACKUP-RESTORE.md, ops/ (Nginx, PM2, backup + restore-check scripts)
+  - [x] docs/AI-PROPOSAL.md (A10)
+  - [x] Coverage gates ≥ 90 % on ledger, numbering, match, loss (CI-enforced thresholds)
+  - [ ] Staging server, HTTPS and production pipeline — needs the VM, domain and repository access (DEPLOYMENT.md)
 - [ ] **Gate — Go-live sign-off** (requires Wewin UAT)
 
 ---
 
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
+
+### 2026-10-20 — Step 12 verified (software; go-live infrastructure pending)
+- Dashboard: tiles from `GET /dashboard` per permission (orders, at job workers, alerts, payables, export receivables, month figures, to-do). Browser-checked with seeded data.
+- Reports: catalogue + live run (≤ 2,000 rows on screen) + background Excel via pg-boss (`report-export`), requester-only download with permission re-check, nightly cleanup after 7 days. 6 API tests; browser: run → Excel READY → download.
+- Attachments: content-sniffed PDF / JPG / PNG / XLSX ≤ 10 MB, macro / scripted-PDF refusal, owner-document view permission, row-audited removal. 3 API tests; panel on every document form.
+- OpenAPI: generated from the routers' own Zod schemas and permissions (cannot drift); Swagger UI served locally; off in production unless `API_DOCS=true`. 2 tests.
+- Code splitting: every page and the print templates lazy-loaded; react / vendor chunks; no chunk over 600 kB.
+- Opening data: migration `opening_import` (`opening_imports`, `vendor_bills.is_opening`, OPENING location, OPN series). Upload → validated rows / row problems → post in one transaction (draft orders, ledger movements OPENING → store, draft outward D.C.s, posted opening bills) → cancel undoes unless moved on. 4 shared unit + 5 API tests.
+- Coverage: shared 95.8 % lines (loss.ts 100 %), API 85.4 % overall, ledger / numbering / match / loss ≥ 96 %; per-file thresholds enforced by `pnpm test:coverage`.
+- Totals: 95 shared + 208 API tests; Playwright 27 (new: dashboard, reports + Excel download, attachments, opening import with problems → post → opening bill).
+- Flaky test fixed: OCR test invoice numbers are digits only (random hex made B/8 misreads).
+- Not done here: staging VM, HTTPS, production pipeline and UAT — need the server, domain and repository access.
 
 ### 2026-10-20 — Step 11 Export verified
 - Migration `export`: `export_invoices` (+ lines, packing-list links), `shipments`, `buyer_receipts` (+ allocations); CHECKs (number by status, LUT or IGST rate, positive amounts); `packing_lists.export_invoice_id` FK.

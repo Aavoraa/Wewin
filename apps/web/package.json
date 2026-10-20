@@ -46,6 +46,7 @@
     "@wewin/config": "workspace:*",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
+    "exceljs": "^4.4.0",
     "tailwindcss": "^4.1.13",
     "typescript": "~5.9.2",
     "vite": "^7.1.6",
