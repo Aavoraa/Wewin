@@ -6,16 +6,17 @@ services:
     name: wewin-api
     runtime: node
     region: singapore
-    plan: starter # a persistent disk needs a paid instance; attachments and scans live on it
+    # Free trial plan. For production use `plan: starter` and restore the disk below (attachments and scans).
+    plan: free
     branch: main
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @wewin/api build
     startCommand: bash ops/render/start.sh
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: wewin-storage
-      mountPath: /var/data
-      sizeGB: 5
+    # disk:            # needs a paid instance
+    #   name: wewin-storage
+    #   mountPath: /var/data
+    #   sizeGB: 5
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -36,7 +37,7 @@ services:
       - key: TRUST_PROXY_HOPS
         value: "2" # Vercel + Render's load balancer
       - key: STORAGE_DIR
-        value: /var/data/storage
+        value: /tmp/wewin-storage # temporary on the free plan – files are lost on restart; use /var/data/storage with the disk
       - key: SEED_OWNER_PASSWORD
         sync: false # first owner password; remove after the first login
       - key: SEED_DEMO
