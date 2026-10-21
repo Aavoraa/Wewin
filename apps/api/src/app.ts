@@ -19,7 +19,7 @@ import { docsRouter } from './core/docs.routes';
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 1); // behind Nginx in production
+  app.set('trust proxy', env.TRUST_PROXY_HOPS); // Nginx = 1; Vercel in front of Nginx = 2
   app.set('json replacer', (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
 
   app.use(helmet());

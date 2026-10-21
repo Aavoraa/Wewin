@@ -7,6 +7,8 @@ const zEnv = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   CORS_ORIGIN: z.string().min(1),
   PORT: z.coerce.number().int().default(4000),
+  /** Proxies in front of the API (Nginx = 1; Vercel + Nginx = 2), so client IPs are read correctly. */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   TZ: z.literal('Asia/Kolkata'),
   FY_START_MONTH: z.coerce.number().int().min(1).max(12).default(4),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
