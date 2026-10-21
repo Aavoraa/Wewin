@@ -2,7 +2,8 @@ import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { type AttachmentOwner } from '@wewin/shared';
 import { AttachmentsPanel } from './AttachmentsPanel';
-import { Ban, CheckCircle2, Lock, Printer, Save, Send, Trash2 } from 'lucide-react';
+import { type VoiceForm, useRegisterVoiceForm, useVoice, useVoiceConfig } from '@/lib/voice';
+import { Ban, CheckCircle2, Lock, Mic, Printer, Save, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { errorMessage } from '@/lib/api';
 import { focusNextField, useDocumentHotkeys } from '@/lib/hotkeys';
@@ -52,6 +53,8 @@ export interface DocumentFormProps {
   cancelDescription?: ReactNode;
   /** Attachments panel: defaults from the register this form belongs to (backHref) and the :id route param. */
   attachTo?: { type: AttachmentOwner; id: string } | null;
+  /** Voice filling of this form (Q-060): what can be said and how it is applied. Null when not editable. */
+  voice?: VoiceForm | null;
 }
 
 const ATTACH_BY_ROUTE: Record<string, AttachmentOwner> = {
@@ -83,6 +86,11 @@ export function DocumentForm(p: DocumentFormProps) {
   const [confirm, setConfirm] = useState<null | 'post' | 'cancel' | 'close' | 'delete'>(null);
   const isDraft = p.status === 'DRAFT';
   const editable = p.editable ?? (isDraft && p.canEdit !== false);
+  const voice = useVoice();
+  const voiceCfg = useVoiceConfig();
+  const voiceForm = editable && p.voice ? p.voice : null;
+  useRegisterVoiceForm(voiceForm);
+  const voiceOn = !!voiceForm && !!voiceCfg.data?.enabled && !!voiceCfg.data?.ai;
   const postLabel = p.postLabel ?? 'Post';
   const cancelOk = (p.cancelStatuses ?? ['POSTED']).includes(p.status);
   const closeOk = (p.closeStatuses ?? ['POSTED']).includes(p.status);
@@ -138,7 +146,14 @@ export function DocumentForm(p: DocumentFormProps) {
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">{p.extraActions}</div>
+        <div className="flex items-center gap-2">
+          {voiceOn ? (
+            <Button variant="outline" size="sm" onClick={voice.open} title="Say the document's contents (Alt+V)">
+              <Mic /> Fill by voice
+            </Button>
+          ) : null}
+          {p.extraActions}
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">

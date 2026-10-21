@@ -70,10 +70,14 @@ export function ReportsPage() {
   const [runKey, setRunKey] = useState(0);
   useEffect(() => {
     if (report) {
-      setValues(defaults(report));
-      setRunKey(0);
+      // Filters can arrive in the link (e.g. from a voice answer): ?report=key&<param>=<value>&run=1
+      const fromUrl = Object.fromEntries(report.params.flatMap((p) => (search.get(p.key) ? [[p.key, search.get(p.key)!]] : [])));
+      setValues({ ...defaults(report), ...fromUrl });
+      const urlLabels = Object.fromEntries(report.params.flatMap((p) => (search.get(p.key) && search.get(`${p.key}Label`) ? [[p.key, search.get(`${p.key}Label`)!]] : [])));
+      if (Object.keys(urlLabels).length) setLabels((l) => ({ ...l, ...urlLabels }));
+      setRunKey(search.get('run') === '1' ? 1 : 0);
     }
-  }, [report]);
+  }, [report]); // eslint-disable-line react-hooks/exhaustive-deps
   const query = useMemo(() => Object.fromEntries(Object.entries(values).filter(([, v]) => v)), [values]);
   const run = useQuery({ queryKey: ['report-run', report?.key, query, runKey], queryFn: () => api.get<RunResult>(`/reports/run/${report!.key}`, query), enabled: !!report && runKey > 0 });
   const exportsQ = useQuery({

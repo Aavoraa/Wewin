@@ -21,3 +21,4 @@ export * from './scan-mapping';
 export * from './export';
 export * from './attachments';
 export * from './opening';
+export * from './voice';

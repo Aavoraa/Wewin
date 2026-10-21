@@ -66,6 +66,16 @@ export const SETTINGS_SCHEMA = {
     default: 90,
     description: 'Days after which discarded or failed scans and their files are deleted. Applied scans are kept (Q-044).',
   },
+  'voice.enabled': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Show the microphone for voice questions and filling forms. Speech is converted to text by the browser (Q-060).',
+  },
+  'voice.language': {
+    schema: z.enum(['en-IN', 'en-US', 'en-GB', 'ta-IN', 'hi-IN']),
+    default: 'en-IN',
+    description: 'Language the browser listens for (Q-060).',
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS_SCHEMA;

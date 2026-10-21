@@ -31,6 +31,9 @@ const zEnv = z.object({
   SCAN_AI_PROVIDER: z.enum(['', 'anthropic']).optional().default(''),
   SCAN_AI_MODEL: z.string().optional().default('claude-opus-5-5'),
   OCR_LANG_PATH: z.string().optional().default(''),
+  // Voice commands: speech-to-text runs in the browser; understanding the request uses Claude when enabled (Q-060).
+  VOICE_AI_PROVIDER: z.enum(['', 'anthropic']).optional().default(''),
+  VOICE_AI_MODEL: z.string().optional().default('claude-opus-5-5'),
   SCAN_MAX_PAGES: z.coerce.number().int().min(1).max(200).default(30),
   SCAN_OCR_TIMEOUT_MS: z.coerce.number().int().min(5000).default(120000),
 });

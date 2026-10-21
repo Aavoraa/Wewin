@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
 import { pickers } from '../orders/api';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 export interface YarnReceipt {
   id: string;
@@ -110,6 +112,28 @@ interface FormValues {
   remarks: string;
   lines: LineRow[];
 }
+const VOICE: VoiceFormSpec = {
+  title: 'Yarn receipt',
+  fields: [
+    { name: 'docDate', label: 'Receipt date', type: 'date' },
+    { name: 'vendorId', label: 'Mill / supplier', type: 'vendor' },
+    { name: 'supplierInvoiceNo', label: 'Supplier invoice no.', type: 'text' },
+    { name: 'supplierInvoiceDate', label: 'Invoice date', type: 'date' },
+    { name: 'orderId', label: 'Order', type: 'order' },
+    { name: 'vehicleNo', label: 'Vehicle no.', type: 'text' },
+    { name: 'remarks', label: 'Remarks', type: 'text' },
+  ],
+  lines: {
+    label: 'Yarn lots',
+    fields: [
+      { name: 'itemId', label: 'Yarn', type: 'item', itemType: 'YARN' },
+      { name: 'lot', label: 'Lot no.', type: 'text' },
+      { name: 'bags', label: 'Bags', type: 'number' },
+      { name: 'qtyKg', label: 'Kg', type: 'number' },
+      { name: 'ratePerKg', label: 'Rate per kg', type: 'number' },
+    ],
+  },
+};
 const blankLine = (): LineRow => ({ _key: newKey(), itemId: '', lot: '', bags: '', qtyKg: '', ratePerKg: '' });
 
 export function YarnReceiptPage() {
@@ -123,6 +147,7 @@ export function YarnReceiptPage() {
     defaultValues: { docDate: todayIst(), vendorId: '', orderId: '', supplierInvoiceNo: '', supplierInvoiceDate: '', vehicleNo: '', remarks: '', lines: [blankLine()] },
   });
   const e = form.formState.errors;
+  const voice = useVoiceFill({ form, spec: VOICE, enabled: (r?.status ?? 'DRAFT') === 'DRAFT' && can('yarn.create'), setLabels, linesName: 'lines', newLine: blankLine, isBlankLine: (l: LineRow) => !l.itemId && !l.lot && !l.qtyKg });
 
   useEffect(() => {
     if (!r) return;
@@ -185,6 +210,7 @@ export function YarnReceiptPage() {
       onCancel={(reason) => d.action('cancel', { reason })}
       onDelete={d.isNew ? undefined : d.remove}
       printHref={r ? `/print/yarn-receipt/${r.id}` : undefined}
+      voice={voice}
       header={
         <>
           <Field label="Receipt date *" error={e.docDate?.message}>

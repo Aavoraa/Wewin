@@ -71,4 +71,17 @@ test.describe.serial('dashboard, reports, attachments, opening data', () => {
     await expect(page.getByText(ref).first()).toBeVisible();
     await expect(page.getByText('POSTED').first()).toBeVisible();
   });
+
+  test('voice: the assistant opens with Alt+V and a spoken command opens a screen (no AI needed)', async () => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Voice command (Alt+V)' })).toBeVisible();
+    await page.keyboard.press('Alt+v');
+    const dialog = page.getByRole('dialog', { name: 'Ask or command' });
+    await expect(dialog).toBeVisible();
+    // Headless Chromium has no speech service; typing goes through the same path as recognised speech.
+    await dialog.getByLabel('What you said').fill('open packing lists');
+    await dialog.getByLabel('What you said').press('Enter');
+    await expect(page).toHaveURL(/\/packing-lists$/);
+    await expect(page.getByRole('heading', { name: 'Packing lists' })).toBeVisible();
+  });
 });

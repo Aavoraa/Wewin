@@ -162,6 +162,7 @@ export const mastersService = {
     return b;
   },
   /** Active buyers in the shape the scan matcher uses (buyers carry no GSTIN / PAN). */
+  processesForMatching: () => repo.processesForMatching(),
   async buyersForMatching() {
     return (await repo.buyersForMatching()).map((b) => ({ ...b, gstin: null, pan: null }));
   },

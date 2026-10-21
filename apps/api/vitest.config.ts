@@ -26,6 +26,7 @@ export default defineConfig({
       // Scans in tests: private test storage, local extraction only (never calls an external AI service).
       STORAGE_DIR: path.join(root, 'storage', 'test'),
       SCAN_AI_PROVIDER: '',
+      VOICE_AI_PROVIDER: '',
     },
     coverage: {
       provider: 'v8',

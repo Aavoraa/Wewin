@@ -28,6 +28,8 @@ import { pickers } from '../orders/api';
 import { docNoCol } from '../production/common';
 import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { type BillCandidate, type MatchResult, type VendorBill } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const qtyText = (q: string, unit: string) => (unit === 'KG' ? `${formatKg(q)} kg` : `${formatQty(q)} pcs`);
 
@@ -162,6 +164,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+const VOICE_BILL: VoiceFormSpec = { title: 'Vendor bill', fields: [{ name: 'docDate', label: 'Bill entry date', type: 'date' }, { name: 'vendorId', label: 'Vendor', type: 'vendor' }, { name: 'vendorInvoiceNo', label: 'Vendor invoice no.', type: 'text' }, { name: 'vendorInvoiceDate', label: 'Invoice date', type: 'date' }, { name: 'taxableAmount', label: 'Taxable amount', type: 'number' }, { name: 'cgstAmount', label: 'CGST', type: 'number' }, { name: 'sgstAmount', label: 'SGST', type: 'number' }, { name: 'igstAmount', label: 'IGST', type: 'number' }, { name: 'remarks', label: 'Remarks', type: 'text' }] };
+
 export function VendorBillPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -177,6 +181,7 @@ export function VendorBillPage() {
     resolver: zodResolver(zHeader as never),
     defaultValues: { docDate: todayIst(), vendorId: '', orderId: null, vendorInvoiceNo: '', vendorInvoiceDate: todayIst(), taxableAmount: '', cgstAmount: '0', sgstAmount: '0', igstAmount: '0', remarks: '' },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_BILL, enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('accounts.bill.create'), setLabels });
 
   useEffect(() => {
     if (!doc) return;
@@ -245,6 +250,7 @@ export function VendorBillPage() {
   return (
     <>
       <DocumentForm
+      voice={voice}
         title="Vendor bill"
         docNo={doc?.docNo}
         status={status}

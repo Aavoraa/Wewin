@@ -25,6 +25,8 @@ import { pickers } from '../orders/api';
 import { StatusFilter } from '../yarn/YarnPages';
 import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { type InwardDc, type PendingOutward } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const columns: DTColumn<InwardDc>[] = [
   { key: 'docNo', header: 'Inward no.', sort: 'docNo', cell: (r) => <span className="font-mono">{r.docNo ?? 'Draft'}</span> },
@@ -88,6 +90,8 @@ interface FormValues {
 }
 const blankRoll = (itemId = '', lot = '', colour = ''): RollRow => ({ _key: newKey(), itemId, rollNo: '', kg: '', lot, colour, gsm: '', dia: '', remarks: '' });
 
+const VOICE_INWARD: VoiceFormSpec = { title: 'Inward D.C.', fields: [{ name: 'docDate', label: 'Receipt date', type: 'date' }, { name: 'vendorId', label: 'Job worker', type: 'vendor' }, { name: 'vendorDcNo', label: 'Vendor D.C. no.', type: 'text' }, { name: 'vendorDcDate', label: 'Vendor D.C. date', type: 'date' }, { name: 'vehicleNo', label: 'Vehicle no.', type: 'text' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Rolls', fields: [{ name: 'itemId', label: 'Fabric', type: 'item', itemType: 'FABRIC' }, { name: 'rollNo', label: 'Roll no.', type: 'text' }, { name: 'kg', label: 'Kg', type: 'number' }, { name: 'lot', label: 'Lot / dye lot', type: 'text' }, { name: 'colour', label: 'Colour', type: 'text' }, { name: 'gsm', label: 'GSM', type: 'number' }, { name: 'dia', label: 'Dia', type: 'text' }] } };
+
 export function InwardDcPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -98,6 +102,7 @@ export function InwardDcPage() {
     resolver: zodResolver(zInwardDcInput as never),
     defaultValues: { docDate: todayIst(), vendorId: '', vendorDcNo: '', vendorDcDate: '', holdAtVendor: false, vehicleNo: '', remarks: '', lines: [blankRoll()], links: [] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_INWARD, enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('jobwork.create'), setLabels, linesName: 'lines', newLine: () => blankRoll(), isBlankLine: (l: RollRow) => !l.itemId && !l.kg });
   const e = form.formState.errors;
   const vendorId = form.watch('vendorId');
   const status = doc?.status ?? 'DRAFT';
@@ -184,6 +189,7 @@ export function InwardDcPage() {
 
   return (
     <DocumentForm
+      voice={voice}
       title="Inward D.C."
       docNo={doc?.docNo}
       status={status}

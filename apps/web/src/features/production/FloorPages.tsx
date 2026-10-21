@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,6 +22,8 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { pickers, useOrder } from '../orders/api';
 import { DocRegister, docNoCol, lookupBundle } from './common';
 import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 function OrderField({ value, onChange, label, disabled, labels }: { value: string; onChange(id: string, label?: string): void; label?: string; disabled?: boolean; labels: Record<string, string> }) {
   return (
@@ -277,6 +279,21 @@ function CellsInput({ colours, sizes, value, onChange, disabled }: { colours: st
   );
 }
 
+/** Colour and size can only be the order's own: offer them as choices once an order is picked. */
+function withOrderCells(spec: VoiceFormSpec, order: { colours: string[]; sizes: string[] } | undefined): VoiceFormSpec {
+  if (!order || !spec.lines) return spec;
+  return {
+    ...spec,
+    lines: {
+      ...spec.lines,
+      fields: spec.lines.fields.map((f) => (f.name === 'colour' ? { ...f, type: 'select' as const, options: order.colours } : f.name === 'size' ? { ...f, type: 'select' as const, options: order.sizes } : f)),
+    },
+  };
+}
+const cellKey = (l: { colour: string; size: string }) => `${l.colour}|${l.size}`;
+
+const VOICE_SEWING: VoiceFormSpec = { title: 'Sewing output', fields: [{ name: 'docDate', label: 'Date', type: 'date' }, { name: 'orderId', label: 'Order', type: 'order' }, { name: 'sewingLine', label: 'Sewing line, written as Line 1, Line 2', type: 'text' }, { name: 'shift', label: 'Shift', type: 'text' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Garments sewn', fields: [{ name: 'colour', label: 'Colour', type: 'text' }, { name: 'size', label: 'Size', type: 'text' }, { name: 'pcs', label: 'Pieces', type: 'number' }] } };
+
 export function SewingEntryPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -288,6 +305,18 @@ export function SewingEntryPage() {
     defaultValues: { docDate: todayIst(), orderId: '', sewingLine: 'Line 1', shift: '', remarks: '', lines: [] },
   });
   const order = useOrder(form.watch('orderId') || undefined);
+  const voiceSpec = useMemo(() => withOrderCells(VOICE_SEWING, order.data), [order.data]);
+  const voice = useVoiceFill({
+    form,
+    spec: voiceSpec,
+    enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('sewing.create'),
+    setLabels,
+    linesName: 'lines',
+    newLine: () => ({ colour: '', size: '', pcs: 0 }),
+    isBlankLine: (l: { pcs: number }) => !l.pcs,
+    lineValue: (n: string, v: string) => (n === 'pcs' ? Number(v) : order.data ? v : v.toUpperCase()),
+    mergeKey: cellKey,
+  });
   useEffect(() => {
     if (!doc) return;
     form.reset({ docDate: doc.docDate, orderId: doc.orderId, sewingLine: doc.sewingLine, shift: doc.shift ?? '', remarks: doc.remarks ?? '', lines: doc.lines.map((l) => ({ colour: l.colour, size: l.size, pcs: l.pcs })) });
@@ -300,6 +329,7 @@ export function SewingEntryPage() {
   const lines = form.watch('lines');
   return (
     <DocumentForm
+      voice={voice}
       title="Sewing output"
       docNo={doc?.docNo}
       status={status}
@@ -399,6 +429,8 @@ export function CartonsPage() {
   );
 }
 
+const VOICE_CARTON: VoiceFormSpec = { title: 'Carton', fields: [{ name: 'docDate', label: 'Date', type: 'date' }, { name: 'orderId', label: 'Order', type: 'order' }, { name: 'grossKg', label: 'Gross kg', type: 'number' }, { name: 'netKg', label: 'Net kg', type: 'number' }, { name: 'lengthCm', label: 'Length cm', type: 'number' }, { name: 'widthCm', label: 'Width cm', type: 'number' }, { name: 'heightCm', label: 'Height cm', type: 'number' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Garments in the carton', fields: [{ name: 'colour', label: 'Colour', type: 'text' }, { name: 'size', label: 'Size', type: 'text' }, { name: 'pcs', label: 'Pieces', type: 'number' }] } };
+
 export function CartonPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -410,6 +442,18 @@ export function CartonPage() {
     defaultValues: { docDate: todayIst(), orderId: '', grossKg: '', netKg: '', lengthCm: '', widthCm: '', heightCm: '', remarks: '', lines: [] },
   });
   const order = useOrder(form.watch('orderId') || undefined);
+  const voiceSpec = useMemo(() => withOrderCells(VOICE_CARTON, order.data), [order.data]);
+  const voice = useVoiceFill({
+    form,
+    spec: voiceSpec,
+    enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('packing.create'),
+    setLabels,
+    linesName: 'lines',
+    newLine: () => ({ colour: '', size: '', pcs: 0 }),
+    isBlankLine: (l: { pcs: number }) => !l.pcs,
+    lineValue: (n: string, v: string) => (n === 'pcs' ? Number(v) : order.data ? v : v.toUpperCase()),
+    mergeKey: cellKey,
+  });
   useEffect(() => {
     if (!doc) return;
     form.reset({ docDate: doc.docDate, orderId: doc.orderId, grossKg: doc.grossKg ?? '', netKg: doc.netKg ?? '', lengthCm: doc.lengthCm ?? '', widthCm: doc.widthCm ?? '', heightCm: doc.heightCm ?? '', remarks: doc.remarks ?? '', lines: doc.lines.map((l) => ({ colour: l.colour, size: l.size, pcs: l.pcs })) });
@@ -422,6 +466,7 @@ export function CartonPage() {
   const lines = form.watch('lines');
   return (
     <DocumentForm
+      voice={voice}
       title="Carton"
       docNo={doc?.docNo}
       status={status}
@@ -670,6 +715,8 @@ export function TrimsDocsPage() {
 }
 
 type TrimRow = GridRow & { itemId: string; lot: string; qty: string; rate: string };
+const VOICE_TRIMS: VoiceFormSpec = { title: 'Trims document', fields: [{ name: 'type', label: 'Receipt or issue', type: 'select', options: ['RECEIPT', 'ISSUE'] }, { name: 'docDate', label: 'Date', type: 'date' }, { name: 'vendorId', label: 'Supplier (receipts)', type: 'vendor' }, { name: 'orderId', label: 'Order (issues)', type: 'order' }, { name: 'supplierInvoiceNo', label: 'Supplier invoice no.', type: 'text' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Trims', fields: [{ name: 'itemId', label: 'Trim', type: 'item', itemType: 'TRIM' }, { name: 'lot', label: 'Lot', type: 'text' }, { name: 'qty', label: 'Quantity', type: 'number' }, { name: 'rate', label: 'Rate', type: 'number' }] } };
+
 export function TrimsDocPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -680,6 +727,7 @@ export function TrimsDocPage() {
     resolver: zodResolver(zTrimsDocInput as never),
     defaultValues: { type: 'ISSUE', docDate: todayIst(), vendorId: '', orderId: '', supplierInvoiceNo: '', remarks: '', lines: [{ _key: newKey(), itemId: '', lot: '', qty: '', rate: '' }] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_TRIMS, enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('trims.create'), setLabels, linesName: 'lines', newLine: () => ({ _key: newKey(), itemId: '', lot: '', qty: '', rate: '' }) as TrimRow, isBlankLine: (l: TrimRow) => !l.itemId && !l.qty });
   useEffect(() => {
     if (!doc) return;
     form.reset({ type: doc.type, docDate: doc.docDate, vendorId: doc.vendorId ?? '', orderId: doc.orderId ?? '', supplierInvoiceNo: doc.supplierInvoiceNo ?? '', remarks: doc.remarks ?? '', lines: doc.lines.map((l) => ({ _key: l.id, itemId: l.itemId, lot: l.lot, qty: l.qty, rate: l.rate ?? '' })) });
@@ -693,6 +741,7 @@ export function TrimsDocPage() {
   const e = form.formState.errors;
   return (
     <DocumentForm
+      voice={voice}
       title={type === 'RECEIPT' ? 'Trims receipt' : 'Trims issue'}
       docNo={doc?.docNo}
       status={status}

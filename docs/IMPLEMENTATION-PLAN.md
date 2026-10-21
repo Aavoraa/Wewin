@@ -107,6 +107,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-10-21 — Voice commands (change request 1, Q-060)
+- Top-bar microphone (Alt+V) for questions and opening screens; Fill by voice on 10 document forms (orders header, yarn receipts, outward / inward D.C.s, trims, sewing output, cartons, debit notes, payments, vendor bills header). Speech recognised in the browser; understanding by Claude when VOICE_AI_PROVIDER=anthropic; without it, open-screen commands and dictation into a field.
+- Safety: read-only endpoint (rate-limited), answers only from reports the user may run, screens only from the user's navigation, master names resolved or offered as choices, every value validated; nothing saved or posted by voice.
+- Tests: 5 shared unit (name matching incl. misheard names, ambiguity, local navigation, request limits), 6 API (no-AI navigation, enquiry via report with search and permission, vendor resolution, form fill with lines and problems, nothing written, setting off → 409), Playwright Alt+V command. Live browser check with Claude on yarn receipt, sewing output and a pending-D.C. question.
+- Fix found while testing: an effect returned the opener function as its cleanup, re-opening the assistant on every render.
+
 ### 2026-10-20 — Step 12 verified (software; go-live infrastructure pending)
 - Dashboard: tiles from `GET /dashboard` per permission (orders, at job workers, alerts, payables, export receivables, month figures, to-do). Browser-checked with seeded data.
 - Reports: catalogue + live run (≤ 2,000 rows on screen) + background Excel via pg-boss (`report-export`), requester-only download with permission re-check, nightly cleanup after 7 days. 6 API tests; browser: run → Excel READY → download.

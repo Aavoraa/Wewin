@@ -17,6 +17,8 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { TopbarExtras } from './TopbarExtras';
+import { VoiceAssistant } from '../VoiceAssistant';
+import { VoiceProvider } from '@/lib/voice';
 
 const COLLAPSED_KEY = 'wewin.sidebarCollapsed';
 
@@ -103,6 +105,7 @@ export function AppShell() {
   };
 
   return (
+    <VoiceProvider>
     <div className="flex h-full">
       <aside className={cn('no-print hidden shrink-0 transition-[width] lg:block', collapsed ? 'w-14' : 'w-60')}>
         <div className={cn('fixed inset-y-0 transition-[width]', collapsed ? 'w-14' : 'w-60')}>
@@ -138,6 +141,7 @@ export function AppShell() {
           </Button>
           <TopbarExtras />
           <div className="ml-auto flex items-center gap-2">
+            <VoiceAssistant />
             <label className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
               FY
               <Select className="h-8 w-24" value={fy.fyCode} onChange={(e) => fy.setFy(e.target.value)} aria-label="Financial year">
@@ -176,5 +180,6 @@ export function AppShell() {
         </main>
       </div>
     </div>
+    </VoiceProvider>
   );
 }

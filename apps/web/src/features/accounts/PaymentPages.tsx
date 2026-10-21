@@ -21,6 +21,8 @@ import { Table, TBody, TD, TFoot, TH, THead, TR } from '@/components/ui/table';
 import { pickers } from '../orders/api';
 import { DocRegister, docNoCol } from '../production/common';
 import { type OpenBill, type Payment } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const money = /^\d+(\.\d{1,2})?$/;
 const dec = (s: string | undefined | null) => (s && money.test(s) ? D(s) : D(0));
@@ -63,6 +65,8 @@ interface PayForm {
   remarks: string;
 }
 
+const VOICE_PAYMENT: VoiceFormSpec = { title: 'Payment voucher', fields: [{ name: 'docDate', label: 'Date', type: 'date' }, { name: 'vendorId', label: 'Vendor', type: 'vendor' }, { name: 'mode', label: 'Mode', type: 'select', options: ['NEFT', 'RTGS', 'CHEQUE', 'UPI', 'CASH', 'ADJUSTMENT'] }, { name: 'reference', label: 'UTR / cheque no.', type: 'text' }, { name: 'bankAccount', label: 'Bank account', type: 'text' }, { name: 'amount', label: 'Amount', type: 'number' }, { name: 'tdsAmount', label: 'TDS amount', type: 'number' }, { name: 'remarks', label: 'Remarks', type: 'text' }] };
+
 export function PaymentPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -77,6 +81,7 @@ export function PaymentPage() {
     resolver: zodResolver(zPaymentInput as never),
     defaultValues: { docDate: todayIst(), vendorId: '', mode: 'NEFT', reference: '', bankAccount: '', amount: '', tdsAmount: '0', useAdvance: false, remarks: '' },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_PAYMENT, enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('accounts.payment.create'), setLabels });
   useEffect(() => {
     if (!doc) return;
     form.reset({
@@ -148,6 +153,7 @@ export function PaymentPage() {
   const mode = form.watch('mode');
   return (
     <DocumentForm
+      voice={voice}
       title="Payment voucher"
       docNo={doc?.docNo}
       status={status}

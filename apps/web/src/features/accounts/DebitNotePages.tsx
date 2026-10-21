@@ -18,6 +18,8 @@ import { Input, Select } from '@/components/ui/input';
 import { pickers } from '../orders/api';
 import { DocRegister, docNoCol } from '../production/common';
 import { type DebitNote, type OpenBill } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const REASONS: Record<string, string> = {
   EXCESS_LOSS: 'Excess process loss',
@@ -60,6 +62,8 @@ interface DnForm {
   lines: DnRow[];
 }
 
+const VOICE_DN: VoiceFormSpec = { title: 'Debit note', fields: [{ name: 'docDate', label: 'Date', type: 'date' }, { name: 'vendorId', label: 'Vendor', type: 'vendor' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Charges', fields: [{ name: 'description', label: 'Description', type: 'text' }, { name: 'qty', label: 'Quantity', type: 'number' }, { name: 'unit', label: 'Unit', type: 'text' }, { name: 'rate', label: 'Rate', type: 'number' }] } };
+
 export function DebitNotePage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -70,6 +74,7 @@ export function DebitNotePage() {
     resolver: zodResolver(zDebitNoteInput as never),
     defaultValues: { docDate: todayIst(), vendorId: '', billId: null, remarks: '', lines: [{ _key: newKey(), description: '', qty: '', unit: 'PCS', rate: '' }] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_DN, enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('accounts.debitnote.create'), setLabels, linesName: 'lines', newLine: () => ({ _key: newKey(), description: '', qty: '', unit: 'PCS', rate: '' }) as DnRow, isBlankLine: (l: DnRow) => !l.description && !l.qty });
   useEffect(() => {
     if (!doc) return;
     form.reset({
@@ -107,6 +112,7 @@ export function DebitNotePage() {
   const taxable = lines.reduce((a, l) => (/^\d+(\.\d+)?$/.test(l.qty) && /^\d+(\.\d+)?$/.test(l.rate) ? a.plus(D(l.qty).times(D(l.rate)).toDecimalPlaces(2)) : a), D(0));
   return (
     <DocumentForm
+      voice={voice}
       title={doc?.isAuto ? 'Debit note (automatic)' : 'Debit note'}
       docNo={doc?.docNo}
       status={status}

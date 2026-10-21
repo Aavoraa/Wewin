@@ -28,6 +28,8 @@ import { pickers } from '../orders/api';
 import { StatusFilter } from '../yarn/YarnPages';
 import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { type OutwardDc } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const columns: DTColumn<OutwardDc>[] = [
   { key: 'docNo', header: 'D.C. no.', sort: 'docNo', cell: (r) => <span className="font-mono">{r.docNo ?? 'Draft'}</span> },
@@ -137,6 +139,8 @@ interface ProgramOpt {
 }
 const blankLine = (itemId = '', valuePerKg = ''): LineRow => ({ _key: newKey(), itemId, lot: '', colour: '', rollId: '', rollNo: '', qtyKg: '', rolls: '', valuePerKg });
 
+const VOICE_OUTWARD: VoiceFormSpec = { title: 'Outward D.C.', fields: [{ name: 'docDate', label: 'D.C. date', type: 'date' }, { name: 'vendorId', label: 'Job worker', type: 'vendor' }, { name: 'orderId', label: 'Order', type: 'order' }, { name: 'expectedReturnDate', label: 'Expected return', type: 'date' }, { name: 'vehicleNo', label: 'Vehicle no.', type: 'text' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Material', fields: [{ name: 'itemId', label: 'Yarn / fabric', type: 'item' }, { name: 'lot', label: 'Lot', type: 'text' }, { name: 'colour', label: 'Colour', type: 'text' }, { name: 'qtyKg', label: 'Kg', type: 'number' }, { name: 'rolls', label: 'Bags / rolls', type: 'number' }] } };
+
 export function OutwardDcPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -149,6 +153,7 @@ export function OutwardDcPage() {
     resolver: zodResolver(zOutwardDcInput as never),
     defaultValues: { docDate: todayIst(), orderId: '', programProcessId: '', vendorId: '', fromVendorId: '', expectedReturnDate: '', purpose: 'For job work', vehicleNo: '', remarks: '', lines: [blankLine()] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_OUTWARD, enabled: (o?.status ?? 'DRAFT') === 'DRAFT' && can('jobwork.create'), setLabels, linesName: 'lines', newLine: () => blankLine(), isBlankLine: (l: LineRow) => !l.itemId && !l.qtyKg && !l.rollId });
   const e = form.formState.errors;
   const orderId = form.watch('orderId');
   const ppId = form.watch('programProcessId');
@@ -244,6 +249,7 @@ export function OutwardDcPage() {
   return (
     <>
     <DocumentForm
+      voice={voice}
       title="Outward D.C."
       docNo={o?.docNo}
       status={status}

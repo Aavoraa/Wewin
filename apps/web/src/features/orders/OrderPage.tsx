@@ -17,6 +17,8 @@ import { formatQty } from '@/lib/format';
 import { ChipsInput, MatrixEditor, type MatrixCell } from './MatrixEditor';
 import { type OrderDetail, pickers, useOrder } from './api';
 import { OrderTabs } from './OrderTabs';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 type ComponentRow = GridRow & {
   code: string;
@@ -76,6 +78,8 @@ const blank: FormValues = {
 };
 
 /** Order document: header, colour × size matrix, garment components; costing, programs and trims BOM below. */
+const VOICE_ORDER: VoiceFormSpec = { title: 'Order', fields: [{ name: 'orderNo', label: 'Order no.', type: 'text' }, { name: 'buyerId', label: 'Buyer', type: 'buyer' }, { name: 'buyerPoNo', label: 'Buyer PO no.', type: 'text' }, { name: 'poDate', label: 'PO date', type: 'date' }, { name: 'shipDate', label: 'Ship date', type: 'date' }, { name: 'styleNo', label: 'Style no.', type: 'text' }, { name: 'styleName', label: 'Style name', type: 'text' }, { name: 'garmentItemId', label: 'Style item (garment)', type: 'item', itemType: 'GARMENT' }, { name: 'currency', label: 'Currency', type: 'select', options: ['USD', 'EUR', 'GBP', 'INR'] }, { name: 'remarks', label: 'Remarks', type: 'text' }] };
+
 export function OrderPage() {
   const { id } = useParams();
   const isNew = !id || id === 'new';
@@ -89,6 +93,7 @@ export function OrderPage() {
     resolver: zodResolver((isNew ? zOrderInput : zOrderUpdate) as never),
     defaultValues: blank,
   });
+  const voice = useVoiceFill({ form, spec: VOICE_ORDER, enabled: (o?.status ?? 'DRAFT') === 'DRAFT' && can('orders.create'), setLabels });
   const e = form.formState.errors;
 
   // New order filled from a scanned buyer PO (Orders › Upload buyer PO).
@@ -185,6 +190,7 @@ export function OrderPage() {
 
   return (
     <DocumentForm
+      voice={voice}
       title="Order"
       docNo={o?.orderNo}
       status={status}
