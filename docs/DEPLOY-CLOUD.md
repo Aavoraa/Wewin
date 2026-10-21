@@ -23,14 +23,13 @@ touch the database. Nothing secret is committed.
 
    | Key | Value |
    |---|---|
-   | `JWT_SECRET` | 64 random characters (e.g. a password manager's generator) |
-   | `CRON_SECRET` | another 32+ random characters |
+   | `CRON_SECRET` | 32+ random characters (without it the scheduled jobs are refused) |
    | `SEED_OWNER_PASSWORD` | first password for `owner` (10+ characters; must be changed at first login) |
    | `ANTHROPIC_API_KEY` | optional — Claude for invoice reading and voice |
    | `SCAN_AI_PROVIDER`, `VOICE_AI_PROVIDER` | `anthropic` (only with the key above) |
 
    Set automatically, no action: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BLOB_READ_WRITE_TOKEN`,
-   and the defaults applied by the API on Vercel (time zone IST, secure cookies, CORS for the
+   and the defaults applied by the API on Vercel (token key derived from the database credentials unless `JWT_SECRET` is set, time zone IST, secure cookies, CORS for the
    production domain, jobs inline).
 4. **Deployments → latest → Redeploy.** The build log shows `applying database migrations` and
    `loading foundation data`. Open `https://wewin.vercel.app`, log in as `owner`, choose a new

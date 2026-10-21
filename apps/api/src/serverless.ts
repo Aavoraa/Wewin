@@ -4,6 +4,7 @@
  * scheduled jobs come from Vercel Cron (/api/cron/<job>). Defaults below suit Vercel and can be
  * overridden by the project's environment variables.
  */
+import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 process.env.TZ = 'Asia/Kolkata';
@@ -11,6 +12,11 @@ process.env.JOBS_ENABLED = 'false';
 process.env.COOKIE_SECURE ??= 'true';
 process.env.TRUST_PROXY_HOPS ??= '1';
 if (!process.env.CORS_ORIGIN && process.env.VERCEL_PROJECT_PRODUCTION_URL) process.env.CORS_ORIGIN = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+// Token signing key: JWT_SECRET when set; otherwise derived from the database credentials Vercel
+// stores for the connected Neon database (as secret as the database itself, stable across deploys;
+// rotating the database password signs everyone out).
+const dbSecret = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+if (!process.env.JWT_SECRET && dbSecret) process.env.JWT_SECRET = createHmac('sha256', dbSecret).update('wewin-jwt-v1').digest('base64url');
 // Neon's pooled address (PgBouncer, transaction mode) needs Prisma's pgbouncer mode.
 if (process.env.DATABASE_URL && /-pooler\./.test(process.env.DATABASE_URL) && !/pgbouncer=true/.test(process.env.DATABASE_URL)) {
   process.env.DATABASE_URL += `${process.env.DATABASE_URL.includes('?') ? '&' : '?'}pgbouncer=true&connection_limit=5`;
