@@ -8,6 +8,7 @@ import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 process.env.TZ = 'Asia/Kolkata';
+process.env.NODE_ENV = 'production'; // a copied NODE_ENV=development would load developer-only tools
 process.env.JOBS_ENABLED = 'false';
 process.env.COOKIE_SECURE ??= 'true';
 process.env.TRUST_PROXY_HOPS ??= '1';

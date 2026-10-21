@@ -14,7 +14,8 @@ export const logger = pino({
     ],
     censor: '[redacted]',
   },
-  ...(env.NODE_ENV === 'development'
+  // Pretty, human-readable logs only on a developer machine (never on Vercel, where the package is not deployed).
+  ...(env.NODE_ENV === 'development' && !process.env.VERCEL
     ? { transport: { target: 'pino-pretty', options: { translateTime: 'SYS:standard', singleLine: true } } }
     : {}),
 });
