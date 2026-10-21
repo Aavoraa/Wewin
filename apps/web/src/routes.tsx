@@ -142,10 +142,12 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
 ];
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
   if (status === 'loading') return <LoadingState label="Starting…" />;
   if (status === 'anonymous') return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  // A first or reset password must be replaced before anything else (owner on a new server, Users › reset).
+  if (user?.mustChangePassword && location.pathname !== '/account/password') return <Navigate to="/account/password" replace />;
   return children;
 }
 

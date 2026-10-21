@@ -1,0 +1,51 @@
+# Render Blueprint for the Wewin API (docs/DEPLOY-CLOUD.md). The web app is on Vercel and forwards
+# /api here; PostgreSQL is on Neon. Secrets marked `sync: false` are entered in the Render dashboard
+# when the Blueprint is created — never committed.
+services:
+  - type: web
+    name: wewin-api
+    runtime: node
+    region: singapore
+    plan: starter # a persistent disk needs a paid instance; attachments and scans live on it
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @wewin/api build
+    startCommand: bash ops/render/start.sh
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: wewin-storage
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Asia/Kolkata
+      - key: FY_START_MONTH
+        value: "4"
+      - key: DATABASE_URL
+        sync: false # Neon connection string (direct, not pooled), with sslmode=require
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://wewin.vercel.app
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY_HOPS
+        value: "2" # Vercel + Render's load balancer
+      - key: STORAGE_DIR
+        value: /var/data/storage
+      - key: SEED_OWNER_PASSWORD
+        sync: false # first owner password; remove after the first login
+      - key: SEED_DEMO
+        value: "false"
+      - key: ANTHROPIC_API_KEY
+        sync: false # optional: invoice reading and voice understanding with Claude
+      - key: SCAN_AI_PROVIDER
+        value: anthropic
+      - key: VOICE_AI_PROVIDER
+        value: anthropic
+      - key: LOG_LEVEL
+        value: info

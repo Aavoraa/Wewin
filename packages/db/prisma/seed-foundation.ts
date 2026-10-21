@@ -18,7 +18,7 @@ import {
  * Idempotent foundation seed: permissions, six roles, owner user, own + virtual locations,
  * document series with FY rows, business settings defaults and a PLACEHOLDER company (Q-024).
  */
-export async function seedFoundation(prisma: PrismaClient, opts: { ownerPassword: string; fyCodes: string[] }) {
+export async function seedFoundation(prisma: PrismaClient, opts: { ownerPassword: string; fyCodes: string[]; ownerMustChangePassword?: boolean }) {
   for (const key of PERMISSION_KEYS) {
     await prisma.permission.upsert({
       where: { key },
@@ -53,6 +53,7 @@ export async function seedFoundation(prisma: PrismaClient, opts: { ownerPassword
         username: 'owner',
         fullName: 'Owner',
         passwordHash: await argon2.hash(opts.ownerPassword, { type: argon2.argon2id }),
+        mustChangePassword: opts.ownerMustChangePassword ?? false,
         roles: { create: [{ roleId: roleIds.OWNER! }] },
       },
     });

@@ -16,7 +16,8 @@ async function main() {
   const fy = Number(process.env.FY_START_MONTH ?? 4);
   const fyCodes = Array.from(new Set(['26-27', fyCodeFor(todayIst(), fy)]));
   try {
-    await seedFoundation(prisma, { ownerPassword, fyCodes });
+    // On a hosted server the first owner password is a bootstrap value: it must be changed at first login.
+    await seedFoundation(prisma, { ownerPassword, fyCodes, ownerMustChangePassword: process.env.NODE_ENV === 'production' });
     if (process.env.SEED_DEMO !== 'false') await seedDemo(prisma);
     console.warn(`Seed complete (FY ${fyCodes.join(', ')}). Login as "owner" with SEED_OWNER_PASSWORD from .env.`);
   } finally {
