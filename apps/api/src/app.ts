@@ -15,6 +15,7 @@ import { settingsRouter } from './core/settings/settings.routes';
 import { notifyRouter } from './core/notify/notify.routes';
 import { moduleRouters } from './modules';
 import { docsRouter } from './core/docs.routes';
+import { CRON_JOBS, runJobNow } from './jobs/queue';
 
 export function createApp() {
   const app = express();
@@ -51,6 +52,26 @@ export function createApp() {
   app.get('/api/health/ready', async (_req, res) => {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ ok: true, db: 'up' });
+  });
+
+  // Vercel Cron: scheduled jobs when pg-boss workers are not running. Vercel sends the CRON_SECRET.
+  app.get('/api/cron/:job', async (req, res) => {
+    const secret = process.env.CRON_SECRET ?? '';
+    const sent = Buffer.from(req.get('authorization') ?? '');
+    const expected = Buffer.from(`Bearer ${secret}`);
+    if (!secret || sent.length !== expected.length || !crypto.timingSafeEqual(sent, expected)) {
+      res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Cron secret required' } });
+      return;
+    }
+    const job = String(req.params.job);
+    if (!CRON_JOBS.includes(job)) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Unknown job' } });
+      return;
+    }
+    const started = Date.now();
+    await runJobNow(job);
+    logger.info({ job, ms: Date.now() - started }, 'cron job done');
+    res.json({ ok: true, job });
   });
 
   const v1 = Router();

@@ -3,7 +3,9 @@
 // Only apps/api/src/core/ledger writes stock_movements. audit_log and stock_movements are append-only (DB triggers).
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // native = this machine; rhel-openssl-3.0.x = Vercel functions (Node 22)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

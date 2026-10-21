@@ -1,4 +1,5 @@
 import PgBoss from 'pg-boss';
+import { waitUntil } from '@vercel/functions';
 import { env } from '../config/env';
 import { logger } from '../core/logger';
 import { prisma } from '../core/db';
@@ -27,6 +28,20 @@ export function registerJob(name: string, handler: Handler): void {
 export function jobsRunning(): boolean {
   return boss !== null;
 }
+
+/** Scheduled jobs that Vercel Cron may trigger (/api/cron/<name>). */
+export const CRON_JOBS: string[] = [QUEUES.AGEING_SNAPSHOT, QUEUES.DC_OVERDUE, QUEUES.PAYMENT_DUE, QUEUES.SCAN_RETENTION, QUEUES.REPORT_EXPORT_CLEANUP];
+
+/**
+ * Work started after the response. On Vercel the function is kept alive until it finishes (waitUntil);
+ * elsewhere it simply runs on the event loop.
+ */
+function background(name: string, task: () => Promise<void>): Promise<void> {
+  const p = new Promise<void>((r) => setImmediate(r)).then(task).catch((err) => logger.error({ err, job: name }, 'inline job failed'));
+  if (process.env.VERCEL) waitUntil(p);
+  return p;
+}
+let pendingRefresh: Promise<void> | null = null;
 
 /** IST cron schedules (A§11). */
 const SCHEDULES: { name: string; cron: string }[] = [
@@ -89,6 +104,11 @@ export const jobs = {
       await boss.sendDebounced(QUEUES.REFRESH_STOCK, {}, {}, 2, 'all');
       return;
     }
+    if (process.env.VERCEL) {
+      // No timers after the response on Vercel: one refresh per burst, kept alive with waitUntil.
+      pendingRefresh ??= background(QUEUES.REFRESH_STOCK, refreshStockBalancesNow).finally(() => (pendingRefresh = null));
+      return;
+    }
     if (refreshTimer) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = null;
@@ -100,9 +120,7 @@ export const jobs = {
   async send(name: string, data: Record<string, unknown>, opts: PgBoss.SendOptions = {}): Promise<string | null> {
     if (boss) return boss.send(name, data, opts);
     // Workers disabled: run inline after the current tick so the HTTP response is not delayed.
-    setImmediate(() => {
-      runJobNow(name, data).catch((err) => logger.error({ err, job: name }, 'inline job failed'));
-    });
+    void background(name, () => runJobNow(name, data));
     return null;
   },
 };

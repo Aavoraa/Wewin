@@ -1,6 +1,37 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "pnpm install --frozen-lockfile --filter @wewin/web...",
-  "buildCommand": "pnpm --filter @wewin/web build && node apps/web/scripts/vercel-output.mjs"
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "bash ops/vercel/build.sh",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 300,
+      "memory": 2048,
+      "includeFiles": "{node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/**,node_modules/.pnpm/tesseract.js*/**,node_modules/.pnpm/pdfjs-dist*/node_modules/pdfjs-dist/legacy/build/**}"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000" }
+      ]
+    },
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ],
+  "crons": [
+    { "path": "/api/cron/ageing-snapshot", "schedule": "0 18 * * *" },
+    { "path": "/api/cron/dc-overdue-check", "schedule": "30 2 * * *" },
+    { "path": "/api/cron/payment-due-check", "schedule": "45 2 * * *" },
+    { "path": "/api/cron/scan-retention", "schedule": "30 20 * * *" },
+    { "path": "/api/cron/report-export-cleanup", "schedule": "45 20 * * *" }
+  ]
 }

@@ -116,19 +116,8 @@ backup (BACKUP-RESTORE.md) — never edit migrated tables by hand.
 - File storage is local disk on the VM (`STORAGE_DIR`), included in the daily backup. ARCHITECTURE §11
   mentions S3-compatible storage for production; that adapter is not built yet — see OPEN-QUESTIONS Q-059.
 
-## 7. Web app on Vercel (API hosted separately)
+## 7. Vercel
 
-The React app can be served by Vercel while the API and PostgreSQL run on the server described
-above. Vercel forwards `/api/*` to the API, so the browser sees one site: login cookies and uploads
-work as on the VM.
-
-- `vercel.json` sets the framework to *Other* (overrides a wrong preset such as FastAPI), installs
-  only the web app, builds it, and runs `apps/web/scripts/vercel-output.mjs`, which writes the
-  Build Output (static files without source maps, security headers, `/api` forwarding, SPA routes).
-- **Project settings › Environment Variables:** `API_ORIGIN` = the API's public https origin, e.g.
-  `https://api.erp.<domain>` (no path). Without it `/api` answers 503 *API not configured*.
-  Redeploy after changing it.
-- **On the API server:** `COOKIE_SECURE=true`, `TRUST_PROXY_HOPS=2` (Vercel + Nginx), and
-  `CORS_ORIGIN` listing the Vercel domain(s). The Nginx site for the API only needs the
-  `location /api/` block (the web build is served by Vercel).
-- Nothing secret goes to Vercel: the web build contains no environment values.
+The whole system (web, API, database, files, scheduled jobs) can run on Vercel instead of a VM —
+see docs/DEPLOY-CLOUD.md for the setup and its limits. TRUST_PROXY_HOPS, cookies and CORS are set by
+the API itself on Vercel.

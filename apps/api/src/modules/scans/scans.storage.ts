@@ -1,8 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { env } from '../../config/env';
 import { AppError } from '../../core/errors/app-error';
+import { fileStore } from '../../core/storage';
 
 export const MAX_SCAN_BYTES = 10 * 1024 * 1024;
 
@@ -17,14 +16,10 @@ export function sniff(buf: Buffer): ScanMime | null {
 }
 
 const EXT: Record<ScanMime, string> = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
-const root = () => path.resolve(env.STORAGE_DIR, 'scans');
-
-/** Resolve a stored key to a path inside the scans folder; anything else is refused (path traversal). */
-function keyPath(key: string): string {
+/** Only server-generated keys are accepted (path traversal and foreign keys refused). */
+function checkKey(key: string): string {
   if (!/^\d{4}\/\d{2}\/[0-9a-f-]{36}\.(pdf|jpg|png)$/.test(key)) throw new AppError('VALIDATION_ERROR', 'Invalid file key', 400);
-  const p = path.resolve(root(), key);
-  if (!p.startsWith(root() + path.sep)) throw new AppError('VALIDATION_ERROR', 'Invalid file key', 400);
-  return p;
+  return key;
 }
 
 /**
@@ -45,9 +40,7 @@ export async function storeUpload(file: { buffer: Buffer; originalname: string; 
   }
   const now = new Date();
   const key = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${randomUUID()}.${EXT[mime]}`;
-  const p = keyPath(key);
-  await mkdir(path.dirname(p), { recursive: true });
-  await writeFile(p, file.buffer, { flag: 'wx', mode: 0o600 });
+  await fileStore.put('scans', checkKey(key), file.buffer, mime);
   return {
     key,
     mime,
@@ -58,5 +51,5 @@ export async function storeUpload(file: { buffer: Buffer; originalname: string; 
   };
 }
 
-export const readStored = (key: string) => readFile(keyPath(key));
-export const removeStored = (key: string) => rm(keyPath(key), { force: true });
+export const readStored = (key: string) => fileStore.get('scans', checkKey(key));
+export const removeStored = (key: string) => fileStore.remove('scans', checkKey(key));

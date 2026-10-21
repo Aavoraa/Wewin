@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 // Bundle the API with the internal workspace packages (@wewin/shared, @wewin/db) inlined (D-07).
 export default defineConfig({
-  entry: ['src/main.ts'],
+  entry: ['src/main.ts', 'src/serverless.ts'],
   format: ['esm'],
   target: 'node20',
   platform: 'node',

@@ -13,6 +13,8 @@ const zEnv = z.object({
   FY_START_MONTH: z.coerce.number().int().min(1).max(12).default(4),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   STORAGE_DIR: z.string().default('./storage'),
+  /** Where files live: '' = disk, or Vercel Blob when running on Vercel with a Blob store; 'disk' / 'blob' to force. */
+  STORAGE_DRIVER: z.enum(['', 'disk', 'blob']).optional().default(''),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('false')

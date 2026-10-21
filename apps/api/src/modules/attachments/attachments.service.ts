@@ -1,17 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ATTACHMENT_MAX_BYTES, ATTACHMENT_OWNERS, type AttachmentOwner } from '@wewin/shared';
-import { env } from '../../config/env';
 import { withTx } from '../../core/db';
 import { AppError, notFound } from '../../core/errors/app-error';
 import { assertPermission } from '../../core/auth/auth.middleware';
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { attachmentsRepo as repo } from './attachments.repo';
+import { fileStore } from '../../core/storage';
 
 type Kind = 'application/pdf' | 'image/jpeg' | 'image/png' | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const EXT: Record<Kind, string> = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' };
-const root = () => path.resolve(env.STORAGE_DIR, 'attachments');
 
 /** Identify by content: PDF, JPEG, PNG, or an Office Open XML workbook (zip with xl/ parts). */
 export function sniffAttachment(buf: Buffer): Kind | null {
@@ -28,9 +26,9 @@ export function sniffAttachment(buf: Buffer): Kind | null {
   return null;
 }
 
-function keyPath(key: string) {
+function checkKey(key: string) {
   if (!/^\d{4}\/\d{2}\/[0-9a-f-]{36}\.(pdf|jpg|png|xlsx)$/.test(key)) throw new AppError('VALIDATION_ERROR', 'Invalid file key', 400);
-  return path.resolve(root(), key);
+  return key;
 }
 
 function canSee(user: CurrentUser, ownerType: AttachmentOwner) {
@@ -58,9 +56,7 @@ export const attachmentsService = {
     if (!(await repo.ownerExists(ownerType, ownerId))) throw notFound('Document');
     const now = new Date();
     const key = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${randomUUID()}.${EXT[kind]}`;
-    const p = keyPath(key);
-    await mkdir(path.dirname(p), { recursive: true });
-    await writeFile(p, file.buffer, { flag: 'wx', mode: 0o600 });
+    await fileStore.put('attachments', checkKey(key), file.buffer, kind);
     try {
       return await withTx(
         (tx) =>
@@ -76,7 +72,7 @@ export const attachmentsService = {
         { isolation: 'ReadCommitted' },
       );
     } catch (err) {
-      await rm(p, { force: true });
+      await fileStore.remove('attachments', key);
       throw err;
     }
   },
@@ -85,7 +81,7 @@ export const attachmentsService = {
     const a = await repo.get(id);
     if (!a) throw notFound('Attachment');
     canSee(user, a.ownerType as AttachmentOwner);
-    return { buf: await readFile(keyPath(a.fileKey)), mime: a.mimeType, name: a.originalName };
+    return { buf: await fileStore.get('attachments', checkKey(a.fileKey)), mime: a.mimeType, name: a.originalName };
   },
 
   /** Remove: the uploader, or anyone allowed to upload, while seeing the document (row audit records it). */
@@ -95,6 +91,6 @@ export const attachmentsService = {
     if (!a) throw notFound('Attachment');
     canSee(user, a.ownerType as AttachmentOwner);
     await withTx((tx) => repo.remove(tx, id), { isolation: 'ReadCommitted' });
-    await rm(keyPath(a.fileKey), { force: true });
+    await fileStore.remove('attachments', checkKey(a.fileKey));
   },
 };

@@ -5,6 +5,7 @@
  */
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
+import os from 'node:os';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { type LayoutWord, type PageLayout } from '@wewin/shared';
 import type * as PdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -36,7 +37,8 @@ type Worker = Tesseract.Worker;
 
 async function ocrWorker(): Promise<Worker> {
   const { createWorker } = await import('tesseract.js');
-  const cachePath = path.resolve(env.STORAGE_DIR, 'ocr-cache');
+  // Vercel functions can only write to the temporary folder.
+  const cachePath = process.env.VERCEL ? path.join(os.tmpdir(), 'ocr-cache') : path.resolve(env.STORAGE_DIR, 'ocr-cache');
   await mkdir(cachePath, { recursive: true });
   return createWorker('eng', 1, { cachePath, ...(env.OCR_LANG_PATH ? { langPath: env.OCR_LANG_PATH } : {}) });
 }

@@ -1,8 +1,6 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { fileStore } from '../../core/storage';
 import { type Prisma } from '@wewin/db';
 import { D, fyRangeFor, todayIst } from '@wewin/shared';
-import { env } from '../../config/env';
 import { withTx } from '../../core/db';
 import { AppError, notFound } from '../../core/errors/app-error';
 import { buildWorkbook } from '../../core/excel';
@@ -23,7 +21,6 @@ import { reportExportsRepo as exportsRepo } from './report-exports.repo';
 /** Rows returned to the screen; beyond this the user is offered the background Excel export. */
 export const LIVE_ROW_LIMIT = 2000;
 const EXPORT_DAYS = 7;
-const exportsDir = () => path.resolve(env.STORAGE_DIR, 'exports');
 
 function requireReport(key: string, user: CurrentUser): ReportDef {
   const r = reportByKey(key);
@@ -75,9 +72,8 @@ export const reportsService = {
       if (!r) throw new AppError('NOT_FOUND', 'Report no longer exists', 404);
       const rows = await r.run(e.params as Record<string, string | undefined>);
       const wb = await buildWorkbook({ title: r.title, columns: r.columns, rows });
-      await mkdir(exportsDir(), { recursive: true });
       const fileKey = `${e.id}.xlsx`;
-      await writeFile(path.join(exportsDir(), fileKey), Buffer.from(await wb.xlsx.writeBuffer()), { mode: 0o600 });
+      await fileStore.put('exports', fileKey, Buffer.from(await wb.xlsx.writeBuffer()), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       const fileName = `${r.title.replace(/[^\w -]/g, '')} ${todayIst()}.xlsx`;
       await withTx(async (tx) => {
         await exportsRepo.update(tx, id, { status: 'READY', fileKey, fileName, rowCount: rows.length, completedAt: new Date() });
@@ -98,7 +94,7 @@ export const reportsService = {
     requireReport(e.reportKey, user);
     assertPermission(user, 'reports.export');
     if (e.status !== 'READY' || !e.fileKey) throw new AppError('INVALID_STATE', 'The export is not ready', 409);
-    const buf = await readFile(path.join(exportsDir(), e.fileKey)).catch(() => {
+    const buf = await fileStore.get('exports', e.fileKey).catch(() => {
       throw new AppError('NOT_FOUND', `Exports are kept for ${EXPORT_DAYS} days; run it again`, 404);
     });
     return { buf, name: e.fileName ?? `${e.reportKey}.xlsx` };
@@ -106,7 +102,7 @@ export const reportsService = {
 
   async purgeExports() {
     const old = await exportsRepo.olderThan(new Date(Date.now() - EXPORT_DAYS * 86_400_000));
-    for (const e of old) if (e.fileKey) await rm(path.join(exportsDir(), e.fileKey), { force: true });
+    for (const e of old) if (e.fileKey) await fileStore.remove('exports', e.fileKey);
     await exportsRepo.clearFiles(old.map((e) => e.id));
     return { purged: old.length };
   },
