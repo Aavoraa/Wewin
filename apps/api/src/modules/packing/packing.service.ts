@@ -11,6 +11,7 @@ import { assertDraft, assertPosted, dateOnly, toDbDate } from '../../core/docume
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { mastersService } from '../masters/masters.service';
 import { ordersService } from '../orders/orders.service';
+import { qualityService } from '../quality/quality.service';
 import { type CartonDetail, type PackingListDetail, packingRepo as repo } from './packing.repo';
 
 export const DOC_CARTON = 'CARTON';
@@ -119,6 +120,8 @@ export const packingService = {
       const loc = await mastersService.systemLocations(['FINISHING', 'FG_STORE'], tx);
       const docDate = dateOnly(c.docDate)!;
       const seq = await repo.nextCartonSeq(tx, c.orderId);
+      // Only pieces passed in final inspection may be packed (Q-063); the order row is locked above.
+      await qualityService.assertPackable(tx, c.orderId, c.lines, await repo.packedByCell(c.orderId, tx));
       const { docNo } = await numbering.next('CARTON', docDate, tx);
       try {
         await ledger.post(
@@ -136,6 +139,9 @@ export const packingService = {
     });
     return this.getCarton(id);
   },
+  /** Pieces in posted cartons per colour × size (QC cancel guard). */
+  packedByCell: (orderId: string, tx: Tx) => repo.packedByCell(orderId, tx),
+
   /** Cancel: refused while on a packing list, or once the carton itself has left FG_STORE. */
   async cancelCarton(id: string, reason: string, user: CurrentUser) {
     await withTx(async (tx) => {

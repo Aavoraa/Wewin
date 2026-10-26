@@ -82,6 +82,27 @@ export async function approveOutward(c: Client, id: string) {
   return r.body.data;
 }
 
+/** Manager approval of a draft cutting lay — required before posting (Q-062). */
+export async function approveLay(c: Client, id: string) {
+  const r = await c.post(`/api/v1/cut-lays/${id}/approve`, { note: 'Marker and rolls checked' });
+  expect(r.status, JSON.stringify(r.body)).toBe(200);
+  return r.body.data;
+}
+
+/** Approved final inspection passing these pieces, so they can be packed (Q-063). */
+export async function passFinalQc(c: Client, orderId: string, cells: { colour: string; size: string; pcs: number }[], docDate = '2026-10-16') {
+  const q = await c.post('/api/v1/qc', {
+    kind: 'FINAL',
+    docDate,
+    orderId,
+    lines: cells.map((x) => ({ colour: x.colour, size: x.size, checkedPcs: x.pcs, passedPcs: x.pcs, rejectedPcs: 0, defects: [] })),
+  });
+  expect(q.status, JSON.stringify(q.body)).toBe(201);
+  const a = await c.post(`/api/v1/qc/${q.body.data.id}/approve`, { note: 'Final inspection passed' });
+  expect(a.status, JSON.stringify(a.body)).toBe(200);
+  return a.body.data;
+}
+
 /** Run code as if inside a request by the given user (so withTx tags audit rows). */
 export function asContext<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   return runWithContext({ requestId: crypto.randomUUID(), userId }, fn);

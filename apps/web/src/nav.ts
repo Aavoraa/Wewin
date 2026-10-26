@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   Box,
   Brush,
   ClipboardCheck,
@@ -17,6 +18,7 @@ import {
   Building2,
   Factory,
   MapPin,
+  MapPinned,
   Package,
   ShieldCheck,
   Users,
@@ -95,6 +97,7 @@ export const NAV: NavGroup[] = [
       { label: 'Recut slips', to: '/recut-slips', icon: ClipboardCheck, perm: 'panels.view' },
       { label: 'Sewing issues', to: '/sewing-issues', icon: Shirt, perm: 'sewing.view' },
       { label: 'Sewing output', to: '/sewing-entries', icon: Shirt, perm: 'sewing.view' },
+      { label: 'Quality checks', to: '/qc', icon: BadgeCheck, perm: 'qc.view' },
       { label: 'Cartons', to: '/cartons', icon: Box, perm: 'packing.view' },
       { label: 'Packing lists', to: '/packing-lists', icon: PackageCheck, perm: 'packing.view' },
       { label: 'Trims', to: '/trims-docs', icon: Ribbon, perm: 'trims.view' },
@@ -126,6 +129,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Scan invoices', to: '/scans', icon: ScanText, perm: 'scans.view' },
       { label: 'Yarn receipts', to: '/yarn-receipts', icon: PackageOpen, perm: 'yarn.view' },
+      { label: 'Item locator', to: '/stock/locate', icon: MapPinned, perm: 'stock.view' },
       { label: 'Stock balances', to: '/stock/balances', icon: Boxes, perm: 'stock.view' },
       { label: 'Stock movements', to: '/stock/movements', icon: History, perm: 'stock.view' },
     ],

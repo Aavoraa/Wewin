@@ -288,16 +288,17 @@ REST over JSON under `/api/v1`, with the same conventions for every document typ
 | Programs | `/programs`, `/programs/:id/processes`, `/programs/:id/trims-bom` | Approve |
 | Yarn | `/yarn-receipts` | Post, cancel |
 | Job work | `/outward-dcs`, `/inward-dcs`, `/outward-dcs/:id/loss` | Approve outward (management, Q-048), post, cancel, close; link inward ↔ outward |
-| Cutting | `/cut-lays`, `/bundles`, `/bundles/:id/ticket` | Post; print tickets |
+| Cutting | `/cut-lays`, `/bundles`, `/bundles/:id/ticket` | Approve (Q-062), post; print tickets |
+| Quality | `/qc` (kind FABRIC_ROLL / INLINE / FINAL), `/qc/roll-status`, `/qc/summary`, `/qc/config` | Approve, cancel (Q-063) |
 | Panels | `/panel-dcs` (type OUT / IN) | Post, cancel, close |
 | Sewing | `/sewing-entries`, `/sewing-issues` | Post |
 | Packing | `/cartons`, `/packing-lists` | Post; print labels |
 | Trims | `/trims-receipts`, `/trims-issues` | Post |
 | Export | `/export-invoices`, `/shipments`, `/buyer-receipts` | Post, cancel |
 | Accounts | `/rate-contracts`, `/vendor-bills`, `/vendor-bills/match`, `/debit-notes`, `/payments` | Match, approve, post; allocate |
-| Stock | `/stock/balances`, `/stock/movements`, `/stock/at-vendors` | — |
+| Stock | `/stock/balances`, `/stock/movements`, `/stock/at-vendors`, `/stock/locate` (item locator) | — |
 | Reports | `/reports/:key` (+ `?format=xlsx`) | Export |
-| Dashboard | `/dashboard/summary` | — |
+| Dashboard | `/dashboard/summary`, `/dashboard/overview`, `/dashboard/tasks` | — |
 
 An OpenAPI document is generated from the Zod schemas (zod-to-openapi) and served at `/api/docs` in development.
 

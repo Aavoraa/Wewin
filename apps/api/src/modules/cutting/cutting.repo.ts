@@ -6,6 +6,7 @@ type Db = Tx | typeof prisma;
 
 const include = {
   order: { select: { id: true, orderNo: true, styleNo: true, status: true, buyer: { select: { name: true } } } },
+  approvedBy: { select: { id: true, fullName: true } },
   rolls: { orderBy: { lineNo: 'asc' }, include: { roll: { select: { id: true, rollNo: true, itemId: true, lot: true, colour: true, kg: true, gsm: true, dia: true, item: { select: { code: true, name: true } } } } } },
   bundles: { orderBy: { lineNo: 'asc' }, include: { panelItem: { select: { id: true, code: true, name: true } } } },
 } satisfies Prisma.CutLayInclude;

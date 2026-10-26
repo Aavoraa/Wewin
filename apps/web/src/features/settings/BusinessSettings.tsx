@@ -9,11 +9,15 @@ import { LoadingState } from '@/components/states';
 
 interface Setting {
   key: string;
-  value: string | number | boolean;
+  value: string | number | boolean | string[];
   description: string;
 }
 
-function parsed(s: Setting, v: string): string | number | boolean {
+/** Lists (defect names, roles) are edited as comma-separated text. */
+const shown = (s: Setting) => (Array.isArray(s.value) ? s.value.join(', ') : String(s.value));
+
+function parsed(s: Setting, v: string): string | number | boolean | string[] {
+  if (Array.isArray(s.value)) return v.split(',').map((x) => x.trim()).filter(Boolean);
   if (typeof s.value === 'number') return Number(v);
   if (typeof s.value === 'boolean') return v === 'true';
   return v;
@@ -21,7 +25,7 @@ function parsed(s: Setting, v: string): string | number | boolean {
 
 function SettingRow({ s, editable }: { s: Setting; editable: boolean }) {
   const qc = useQueryClient();
-  const [v, setV] = useState(String(s.value));
+  const [v, setV] = useState(shown(s));
   const save = useMutation({
     mutationFn: () => api.put(`/settings/business/${s.key}`, { value: parsed(s, v) }),
     onSuccess: () => {
@@ -45,12 +49,14 @@ function SettingRow({ s, editable }: { s: Setting; editable: boolean }) {
           <option value="true">Yes</option>
           <option value="false">No</option>
         </Select>
+      ) : Array.isArray(s.value) ? (
+        <Input value={v} onChange={(e) => setV(e.target.value)} disabled={!editable} title={v} />
       ) : (
         <Input value={v} onChange={(e) => setV(e.target.value)} disabled={!editable} inputMode="decimal" className="num" />
       )}
       <span className="text-xs text-muted-foreground">{s.description}</span>
       {editable ? (
-        <Button size="sm" variant="outline" disabled={v === String(s.value)} loading={save.isPending} onClick={() => save.mutate()}>
+        <Button size="sm" variant="outline" disabled={v === shown(s)} loading={save.isPending} onClick={() => save.mutate()}>
           Save
         </Button>
       ) : null}
@@ -70,7 +76,7 @@ export function BusinessSettings({ editable }: { editable: boolean }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="py-1">
-        {q.isLoading ? <LoadingState /> : q.data?.map((s) => <SettingRow key={`${s.key}:${String(s.value)}`} s={s} editable={editable} />)}
+        {q.isLoading ? <LoadingState /> : q.data?.map((s) => <SettingRow key={`${s.key}:${shown(s)}`} s={s} editable={editable} />)}
       </CardContent>
     </Card>
   );

@@ -12,10 +12,29 @@ test.describe.serial('dashboard, reports, attachments, opening data', () => {
   });
   test.afterAll(async () => page.close());
 
-  test('dashboard shows live tiles', async () => {
+  test('dashboard shows live tiles, the pipeline and pending tasks', async () => {
     await page.goto('/');
-    for (const t of ['Open orders', 'At job workers', 'Active alerts', 'Vendor payables', 'Export receivables']) {
-      await expect(page.getByRole('main').getByText(t, { exact: true })).toBeVisible();
+    const main = page.getByRole('main');
+    for (const t of ['Active Orders', 'Production In Progress', 'Pending Receipts', 'Invoices for Review', 'Overdue Activities']) {
+      await expect(main.getByText(t, { exact: true })).toBeVisible();
+    }
+    for (const s of ['Order Management', 'Materials & Inventory', 'Production', 'Dispatch & Export', 'Finance & Accounts']) {
+      await expect(main.getByText(s).first()).toBeVisible();
+    }
+    await expect(main.getByText('Pending Tasks')).toBeVisible();
+  });
+
+  test('mobile app: /m shows the phone preview; a phone gets the phone shell', async () => {
+    await page.goto('/m');
+    await expect(page.getByRole('heading', { name: 'Wewin mobile app' })).toBeVisible();
+    await expect(page.frameLocator('iframe[title="Wewin mobile"]').getByRole('link', { name: 'Approvals' })).toBeVisible();
+    // A phone-sized screen gets the phone shell (same page, so the same session).
+    await page.setViewportSize({ width: 390, height: 844 });
+    try {
+      await page.goto('/m/menu');
+      await expect(page.getByRole('link', { name: 'Quality checks' })).toBeVisible();
+    } finally {
+      await page.setViewportSize({ width: 1366, height: 860 });
     }
   });
 

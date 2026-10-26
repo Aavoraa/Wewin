@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { generateBundles } from '@wewin/shared';
 import { prisma, withTx } from '../../core/db';
 import { ledger } from '../../core/ledger/ledger.service';
-import { type Client, asUser, assertLedgerInvariants, locationId } from '../../../test/helpers';
+import { type Client, approveLay, asUser, assertLedgerInvariants, locationId, passFinalQc } from '../../../test/helpers';
 import { type Masters, createOrder, createProgram, dyedRolls, masters } from '../../../test/fixtures';
 
 let owner: Client;
@@ -22,6 +22,7 @@ async function bal(itemId: string, loc: string, colour = 'NAVY', size = '2Y') {
 async function doc(path: string, body: object) {
   const r = await owner.post(path, body);
   ok(r, 201);
+  if (path.endsWith('/cut-lays')) await approveLay(owner, r.body.data.id);
   const p = await owner.post(`${path}/${r.body.data.id}/post`);
   ok(p);
   return p.body.data;
@@ -83,6 +84,7 @@ describe('cutting', () => {
       bundles: [{ componentCode: 'FRONT', size: '2Y', pcs: 1 }],
     });
     ok(r, 201);
+    await approveLay(owner, r.body.data.id);
     const p = await owner.post(`/api/v1/cut-lays/${r.body.data.id}/post`);
     expect(p.status).toBe(409);
     expect(p.body.error.code).toBe('NEGATIVE_STOCK');
@@ -247,6 +249,7 @@ describe('sewing, packing, trims and WIP', () => {
 
   let carton: { id: string; docNo: string; cartonSeq: number };
   it('cartons move garments FINISHING → FG_STORE with a carton sequence per order', async () => {
+    await passFinalQc(owner, order.id, [{ colour: 'NAVY', size: '2Y', pcs: 18 }], '2026-10-17');
     carton = await doc('/api/v1/cartons', { docDate: '2026-10-17', orderId: order.id, grossKg: '6.2', netKg: '5.4', lines: [{ colour: 'NAVY', size: '2Y', pcs: 12 }] });
     expect(carton.cartonSeq).toBe(1);
     expect(carton.docNo).toMatch(/^CTN\/26-27\/\d{4}$/);
@@ -283,6 +286,30 @@ describe('sewing, packing, trims and WIP', () => {
     const cell = r.body.data.cells.find((c: { colour: string; size: string }) => c.colour === 'NAVY' && c.size === '2Y');
     expect(cell).toMatchObject({ po: 100, cutSets: 20, sewn: 18, packed: 12 });
     await assertLedgerInvariants();
+  });
+
+  it('item locator: a bundle with where it is and its trail; a used-up roll; the order’s material', async () => {
+    const b = lay.bundles.find((x) => x.componentCode === 'BACK' && x.size === '2Y')!;
+    const r = await owner.get(`/api/v1/stock/locate?q=${encodeURIComponent(b.bundleNo)}`);
+    ok(r);
+    const m = r.body.data.matches.find((x: { kind: string; label: string }) => x.kind === 'BUNDLE' && x.label === b.bundleNo);
+    // Back 2Y was issued to sewing (sewing output consumes panels by colour × size, not by bundle).
+    expect(m.locations).toEqual([expect.objectContaining({ code: 'SEWING_WIP', qty: `${b.pcs}.000` })]);
+    expect(r.body.data.trail).toMatchObject({ kind: 'BUNDLE', label: b.bundleNo });
+    expect(r.body.data.trail.rows.at(-1)).toMatchObject({ sourceType: 'CUT_LAY', to: expect.any(String) });
+
+    const used = await owner.get(`/api/v1/stock/locate?q=${encodeURIComponent(rolls[0]!.rollNo)}`);
+    const roll = used.body.data.matches.find((x: { kind: string }) => x.kind === 'ROLL');
+    expect(roll).toMatchObject({ total: '0.000', unit: 'KG' }); // fully cut: nothing on hand…
+    expect(roll.locations).toContainEqual(expect.objectContaining({ code: 'CONSUMED', qty: '60.000' })); // …and where it went
+
+    const ord = await owner.get(`/api/v1/stock/locate?q=${encodeURIComponent(order.orderNo)}`);
+    const pcs = ord.body.data.matches.find((x: { kind: string; unit: string }) => x.kind === 'ORDER' && x.unit === 'PCS');
+    expect(pcs.locations.some((l: { code: string }) => l.code === 'FG_STORE')).toBe(true);
+    expect(pcs.locations.every((l: { kind: string }) => l.kind !== 'VIRTUAL')).toBe(true);
+
+    expect((await owner.get('/api/v1/stock/locate?q=x')).status).toBe(400);
+    expect((await (await asUser(['orders.view'])).get('/api/v1/stock/locate?q=CUT')).status).toBe(403);
   });
 
   it('permissions on production documents', async () => {

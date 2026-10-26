@@ -31,6 +31,15 @@ const zEnv = z.object({
   WHATSAPP_PROVIDER: z.string().optional().default(''),
   WHATSAPP_API_URL: z.string().optional().default(''),
   WHATSAPP_API_TOKEN: z.string().optional().default(''),
+  // Email notifications (accounts feed, Q-064). Off unless SMTP_HOST and SMTP_FROM are set.
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASS: z.string().optional().default(''),
+  SMTP_FROM: z.string().optional().default(''),
+  /** Public address of the web app, used for links in emails (e.g. https://wewin.vercel.app). */
+  APP_URL: z.string().optional().default(''),
   // Invoice scanning. Local extraction (PDF text + Tesseract OCR) needs no credentials; AI extraction is opt-in.
   SCAN_AI_PROVIDER: z.enum(['', 'anthropic']).optional().default(''),
   SCAN_AI_MODEL: z.string().optional().default('claude-opus-5-5'),

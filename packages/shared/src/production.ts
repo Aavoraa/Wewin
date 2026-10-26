@@ -15,6 +15,8 @@ export const zProductionListQuery = zListQuery.extend({
   orderId: zRef().optional(),
   vendorId: zRef().optional(),
   type: z.enum(['OUT', 'IN', 'RECEIPT', 'ISSUE']).optional(),
+  /** Cutting lays: PENDING = drafts awaiting approval (Q-062); APPROVED = approved, any status. */
+  approval: z.enum(['PENDING', 'APPROVED']).optional(),
 });
 
 // ───────── Cutting (Step 6) ─────────

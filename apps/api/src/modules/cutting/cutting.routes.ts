@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { zCutLayInput, zCutLayUpdate, zIdParam, zProductionListQuery, zReason } from '@wewin/shared';
+import { zApprove, zCutLayInput, zCutLayUpdate, zIdParam, zProductionListQuery, zReason } from '@wewin/shared';
 import { requirePermission } from '../../core/auth/auth.middleware';
 import { HANDLED, ListResult, handle, type HandlerInput } from '../../core/http';
 import { cuttingService as svc } from './cutting.service';
@@ -23,6 +23,7 @@ export const cuttingController = {
     res.status(204).end();
     return HANDLED;
   },
+  approve: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zApprove }>) => svc.approve(params.id, body.note, user),
   post: ({ params, user }: In<{ params: typeof zIdParam }>) => svc.post(params.id, user),
   cancel: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zReason }>) => svc.cancel(params.id, body.reason, user),
   movements: ({ params }: In<{ params: typeof zIdParam }>) => svc.movements(params.id),
@@ -45,6 +46,7 @@ cuttingRouter.get('/cut-lays/:id/movements', requirePermission('cutting.view', '
 cuttingRouter.post('/cut-lays', create, handle({ body: zCutLayInput }, c.create, { status: 201 }));
 cuttingRouter.patch('/cut-lays/:id', create, handle({ params: zIdParam, body: zCutLayUpdate }, c.update));
 cuttingRouter.delete('/cut-lays/:id', create, handle({ params: zIdParam }, c.remove));
+cuttingRouter.post('/cut-lays/:id/approve', requirePermission('cutting.approve'), handle({ params: zIdParam, body: zApprove }, c.approve));
 cuttingRouter.post('/cut-lays/:id/post', requirePermission('cutting.post'), handle({ params: zIdParam }, c.post));
 cuttingRouter.post('/cut-lays/:id/cancel', requirePermission('cutting.cancel'), handle({ params: zIdParam, body: zReason }, c.cancel));
 cuttingRouter.get('/bundles', view, handle({ query: zBundleQuery }, c.bundles));

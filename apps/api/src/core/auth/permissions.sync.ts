@@ -1,9 +1,11 @@
-import { PERMISSIONS, PERMISSION_KEYS, permissionModule } from '@wewin/shared';
+import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, PERMISSION_KEYS, ROLE_CODES, permissionModule } from '@wewin/shared';
 import { withTx } from '../db';
 
 /**
  * Make the permissions table match @wewin/shared at start-up and keep the OWNER role complete.
- * Other roles are never changed here (their bundles are edited by the Owner).
+ * A permission seen for the first time is also given to the system roles whose default bundle
+ * includes it (so a new feature reaches its intended roles on existing databases). Permissions that
+ * already exist are never re-granted: the Owner's later edits of role bundles stand.
  */
 export async function syncPermissions(): Promise<void> {
   await withTx(
@@ -15,6 +17,14 @@ export async function syncPermissions(): Promise<void> {
           data: missing.map((key) => ({ key, module: permissionModule(key), description: PERMISSIONS[key] })),
           skipDuplicates: true,
         });
+        // Only when the permissions table was already populated: a fresh database gets its bundles from the seed.
+        if (existing.size) {
+          const roles = await tx.role.findMany({ where: { code: { in: [...ROLE_CODES] } }, select: { id: true, code: true } });
+          const grants = roles.flatMap((r) =>
+            missing.filter((k) => DEFAULT_ROLE_PERMISSIONS[r.code as (typeof ROLE_CODES)[number]].includes(k)).map((permissionKey) => ({ roleId: r.id, permissionKey })),
+          );
+          if (grants.length) await tx.rolePermission.createMany({ data: grants, skipDuplicates: true });
+        }
       }
       const owner = await tx.role.findUnique({ where: { code: 'OWNER' } });
       if (owner) {

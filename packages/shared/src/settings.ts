@@ -16,6 +16,41 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: 'Outward D.C.s must be approved by management (jobwork.outward.approve) before posting (Q-048).',
   },
+  'cutting.layApprovalRequired': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Draft cutting lays must be approved (cutting.approve) before posting (Q-062).',
+  },
+  'qc.finalRequiredForPacking': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Cartons can hold only pieces passed in an approved final inspection, per colour × size (Q-063).',
+  },
+  'qc.fabricInspectionRequired': {
+    schema: z.boolean(),
+    default: false,
+    description: 'Only rolls passed in an approved fabric inspection can be cut. Rolls on hold or rejected are always blocked (Q-063).',
+  },
+  'qc.defectCodes': {
+    schema: z.array(z.string().trim().min(1).max(40)).min(1).max(60),
+    default: ['Hole', 'Stain / oil mark', 'Shade variation', 'Slub / yarn fault', 'Broken stitch', 'Skip stitch', 'Open seam', 'Puckering', 'Measurement out', 'Uncut thread', 'Print / embroidery fault', 'Label / trim missing'],
+    description: 'Defect names offered on quality checks (Q-063).',
+  },
+  'accounts.feedEnabled': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Send the accounts team the details of every posted, approved, closed or cancelled document as it happens (Q-064).',
+  },
+  'accounts.feedRoles': {
+    schema: z.array(z.enum(['OWNER', 'MERCHANDISER', 'STORE_KEEPER', 'PRODUCTION_SUPERVISOR', 'EXPORT_EXECUTIVE', 'ACCOUNTANT'])).max(6),
+    default: ['ACCOUNTANT'],
+    description: 'Roles that receive the accounts feed (Q-064).',
+  },
+  'accounts.feedEmail': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Also email the accounts feed to recipients with an email address, when SMTP is configured (Q-064).',
+  },
   'match.toleranceAbs': {
     schema: zMoney(),
     default: '1.00',

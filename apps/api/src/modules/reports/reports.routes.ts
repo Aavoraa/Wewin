@@ -4,12 +4,15 @@ import { zIdParam } from '@wewin/shared';
 import { requirePermission } from '../../core/auth/auth.middleware';
 import { HANDLED, handle } from '../../core/http';
 import { reportsService as s } from './reports.service';
+import { overviewService } from './overview.service';
 
 /** /api/v1/dashboard, /reports-catalogue, /reports/run/:key, /report-exports (A8). */
 export const reportsRouter = Router();
 const key = z.object({ key: z.string().regex(/^[a-z0-9-]{2,60}$/) });
 
 reportsRouter.get('/dashboard', requirePermission('dashboard.view'), handle({}, ({ user }) => s.dashboard(user)));
+reportsRouter.get('/dashboard/overview', requirePermission('dashboard.view'), handle({}, ({ user }) => overviewService.overview(user)));
+reportsRouter.get('/dashboard/tasks', requirePermission('dashboard.view'), handle({}, ({ user }) => overviewService.tasks(user)));
 reportsRouter.get('/reports-catalogue', requirePermission('reports.view'), handle({}, async ({ user }) => s.catalogue(user)));
 // The report's own module permission is checked in the service (each report differs).
 reportsRouter.get('/reports/run/:key', requirePermission('reports.view'), handle({ params: key }, ({ params, req, user }) => s.run(params.key, req.query as Record<string, unknown>, user)));

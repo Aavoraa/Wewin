@@ -8,7 +8,7 @@ export async function login(page: Page) {
   await page.getByLabel('Username').fill('owner');
   await page.getByLabel('Password').fill(E2E_OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
-  await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operations Overview' })).toBeVisible();
 }
 
 /** API client (owner) for reading values the UI shows elsewhere (roll / bundle numbers). */

@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Tags, Wand2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ShieldCheck, Tags, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { D, generateBundles, todayIst, zCutLayInput } from '@wewin/shared';
+import { D, type VoiceFormSpec, generateBundles, todayIst, zCutLayInput } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useDocument } from '@/lib/documents';
-import { formatKg, formatQty } from '@/lib/format';
+import { formatDateTimeIst, formatKg, formatQty } from '@/lib/format';
+import { useVoiceFill } from '@/lib/voice';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Badge } from '@/components/ui/badge';
 import { DataTable, type DTColumn } from '@/components/DataTable';
 import { DocumentForm, Field } from '@/components/DocumentForm';
 import { EntityPicker } from '@/components/EntityPicker';
@@ -35,6 +39,10 @@ export interface CutLay {
   version: number;
   postedAt: string | null;
   cancelReason: string | null;
+  approvalStatus: 'PENDING' | 'APPROVED' | 'NOT_REQUIRED';
+  approvedAt: string | null;
+  approvalNote: string | null;
+  approvedBy: { id: string; fullName: string } | null;
   order: { id: string; orderNo: string; styleNo: string; buyer: { name: string } };
   rolls: { id: string; rollId: string; kgUsed: string; roll: { id: string; rollNo: string; lot: string; colour: string; kg: string; gsm: number | null; dia: string | null; item: { name: string } } }[];
   bundles: { id: string; lineNo: number; bundleNo: string | null; componentCode: string; colour: string; size: string; pcs: number; panelItem: { name: string } }[];
@@ -61,10 +69,52 @@ export function CutLaysPage() {
         { key: 'totals.bundles', header: 'Bundles', type: 'int' },
         { key: 'totals.pcs', header: 'Pieces', type: 'qty' },
         { key: 'status', header: 'Status', type: 'status' },
+        { key: 'approvalStatus', header: 'Approval', noExport: true, cell: (r) => <ApprovalBadge status={r.status} approval={r.approvalStatus} /> },
       ]}
     />
   );
 }
+
+export function ApprovalBadge({ status, approval }: { status: string; approval: string }) {
+  if (approval === 'PENDING') return <Badge variant="warning">Awaiting approval</Badge>;
+  if (status === 'DRAFT' && approval === 'APPROVED') return <Badge variant="success">Approved</Badge>;
+  return null;
+}
+
+/** Latest fabric-inspection result per roll (Q-063), for the roll grid. */
+export function useRollQc(rollIds: string[]) {
+  const ids = [...new Set(rollIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ['roll-qc', ids],
+    queryFn: () => api.get<Record<string, { result: 'PASS' | 'HOLD' | 'REJECT'; docNo: string }>>(`/qc/roll-status?${ids.map((i) => `ids=${i}`).join('&')}`),
+    enabled: ids.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+export function RollQcBadge({ qc }: { qc?: { result: string; docNo: string } }) {
+  if (!qc) return <span className="text-[11px] text-muted-foreground">not inspected</span>;
+  const v = qc.result === 'PASS' ? 'success' : qc.result === 'HOLD' ? 'warning' : 'danger';
+  return (
+    <Badge variant={v} title={qc.docNo}>
+      QC {qc.result.toLowerCase()}
+    </Badge>
+  );
+}
+
+const VOICE_LAY: VoiceFormSpec = {
+  title: 'Cutting lay',
+  fields: [
+    { name: 'docDate', label: 'Lay date', type: 'date' },
+    { name: 'orderId', label: 'Order', type: 'order' },
+    { name: 'colour', label: 'Colour', type: 'text' },
+    { name: 'plies', label: 'Plies', type: 'number' },
+    { name: 'pcsPerBundle', label: 'Pieces per bundle', type: 'number' },
+    { name: 'markerLength', label: 'Marker length in metres', type: 'number' },
+    { name: 'remarks', label: 'Remarks', type: 'text' },
+  ],
+  lines: { label: 'Bundles', fields: [{ name: 'componentCode', label: 'Component code', type: 'text' }, { name: 'size', label: 'Size', type: 'text' }, { name: 'pcs', label: 'Pieces', type: 'number' }] },
+};
 
 type RollRow = GridRow & { rollId: string; rollNo: string; available: string; kgUsed: string; info: string };
 type BundleRow = GridRow & { componentCode: string; size: string; pcs: string | number };
@@ -94,6 +144,22 @@ export function CutLayPage() {
   const e = form.formState.errors;
   const orderId = form.watch('orderId');
   const order = useOrder(orderId || undefined);
+  const [approving, setApproving] = useState(false);
+  const voiceSpec = useMemo<VoiceFormSpec>(
+    () => (order.data ? { ...VOICE_LAY, fields: VOICE_LAY.fields.map((f) => (f.name === 'colour' ? { ...f, type: 'select' as const, options: order.data!.colours.slice(0, 40) } : f)) } : VOICE_LAY),
+    [order.data],
+  );
+  const voice = useVoiceFill({
+    form,
+    spec: voiceSpec,
+    enabled: (lay?.status ?? 'DRAFT') === 'DRAFT' && can('cutting.create'),
+    setLabels,
+    linesName: 'bundles',
+    newLine: () => ({ _key: newKey(), componentCode: '', size: '', pcs: '' }) as BundleRow,
+    isBlankLine: (l: BundleRow) => !l.pcs,
+    lineValue: (name, v) => (name === 'pcs' ? Number(v) || '' : v),
+  });
+  const rollQc = useRollQc(form.watch('rolls').map((r) => r.rollId));
 
   useEffect(() => {
     if (!lay) return;
@@ -120,6 +186,9 @@ export function CutLayPage() {
   const rolls = form.watch('rolls');
   const fabricKg = rolls.reduce((a, r) => (/^\d+(\.\d+)?$/.test(r.kgUsed) ? a.plus(D(r.kgUsed)) : a), D(0));
   const pieces = bundles.reduce((a, b) => a + (Number(b.pcs) || 0), 0);
+  const dirty = form.formState.isDirty;
+  const awaitingApproval = lay?.approvalStatus === 'PENDING';
+  const canApprove = !!lay && status === 'DRAFT' && awaitingApproval && can('cutting.approve');
 
   async function addRoll(code: string) {
     try {
@@ -170,14 +239,17 @@ export function CutLayPage() {
     });
 
   return (
+    <>
     <DocumentForm
+      voice={voice}
       title="Cutting lay"
       docNo={lay?.docNo}
       status={status}
       postedAt={lay?.postedAt}
       backHref="/cut-lays"
       canEdit={can('cutting.create')}
-      canPost={!d.isNew && can('cutting.post')}
+      canPost={!d.isNew && can('cutting.post') && !awaitingApproval}
+      postDescription="Posting numbers the lay and its bundles, consumes the rolls and moves the bundles into the cut panel store. It needs approval first; editing an approved draft clears the approval."
       canCancel={can('cutting.cancel')}
       onSave={save}
       onPost={async () => {
@@ -192,6 +264,10 @@ export function CutLayPage() {
             <Link to={`/print/bundle-tickets/${lay.id}`} target="_blank">
               <Tags /> Bundle tickets
             </Link>
+          </Button>
+        ) : canApprove ? (
+          <Button variant="outline" onClick={() => setApproving(true)} disabled={dirty} title={dirty ? 'Save your changes first' : undefined}>
+            <ShieldCheck /> Approve
           </Button>
         ) : null
       }
@@ -266,6 +342,7 @@ export function CutLayPage() {
                     columns={[
                       { key: 'rollNo', header: 'Roll', width: '150px', readOnly: true, display: (r) => <span className="font-mono">{r.rollNo || '—'}</span> },
                       { key: 'info', header: 'Fabric / lot / colour', readOnly: true, display: (r) => r.info || '—' },
+                      { key: 'qc', header: 'QC', width: '120px', readOnly: true, display: (r) => (r.rollId ? <RollQcBadge qc={rollQc.data?.[r.rollId]} /> : null) },
                       { key: 'available', header: 'Roll kg', type: 'kg', width: '100px', readOnly: true, display: (r) => formatKg(r.available) },
                       { key: 'kgUsed', header: 'Kg used', type: 'kg', width: '110px', total: true },
                     ]}
@@ -320,6 +397,7 @@ export function CutLayPage() {
         </>
       }
       aside={
+        <>
         <Card>
           <CardContent className="grid gap-1 text-sm">
             <div className="text-xs text-muted-foreground">Fabric used</div>
@@ -330,8 +408,52 @@ export function CutLayPage() {
             {lay?.cancelReason ? <div className="rounded bg-red-50 p-2 text-xs text-destructive">Cancelled: {lay.cancelReason}</div> : null}
           </CardContent>
         </Card>
+        {lay ? <LayApprovalPanel lay={lay} canApprove={canApprove} /> : null}
+        </>
       }
     />
+      <ConfirmDialog
+        open={approving}
+        onOpenChange={setApproving}
+        title="Approve this cutting lay?"
+        description={lay ? `${lay.order.orderNo} · ${lay.colour} · ${formatKg(lay.totals.fabricKg)} kg fabric · ${lay.totals.bundles} bundles / ${formatQty(lay.totals.pcs)} pieces. The approval is recorded with your note; posting is then allowed.` : undefined}
+        confirmLabel="Approve"
+        requireReason
+        reasonLabel="Approval note"
+        onConfirm={async (note) => {
+          try {
+            await d.action('approve', { note });
+            toast.success('Lay approved');
+          } catch (err) {
+            toast.error(errorMessage(err));
+            throw err;
+          }
+        }}
+      />
+    </>
+  );
+}
+
+export function LayApprovalPanel({ lay, canApprove }: { lay: Pick<CutLay, 'approvalStatus' | 'approvedAt' | 'approvalNote' | 'approvedBy'>; canApprove: boolean }) {
+  if (lay.approvalStatus === 'APPROVED') {
+    return (
+      <Card>
+        <CardContent className="grid gap-1 text-xs">
+          <div className="flex items-center gap-1 font-medium text-emerald-800">
+            <ShieldCheck className="size-4" /> Approved by {lay.approvedBy?.fullName ?? '—'}
+          </div>
+          <div className="text-muted-foreground">{formatDateTimeIst(lay.approvedAt)}</div>
+          {lay.approvalNote ? <div>{lay.approvalNote}</div> : null}
+        </CardContent>
+      </Card>
+    );
+  }
+  if (lay.approvalStatus !== 'PENDING') return null;
+  return (
+    <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+      <div className="font-medium">Awaiting approval</div>
+      {canApprove ? 'Check the rolls and bundles, then click Approve. It can be posted once approved.' : 'It can be posted once a manager approves it.'}
+    </div>
   );
 }
 

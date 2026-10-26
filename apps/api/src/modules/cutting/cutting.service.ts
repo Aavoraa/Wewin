@@ -9,6 +9,10 @@ import { numbering } from '../../core/numbering/numbering.service';
 import { ledger, type MovementInput } from '../../core/ledger/ledger.service';
 import { assertDraft, assertPosted, dateOnly, toDbDate } from '../../core/documents';
 import { type CurrentUser } from '../../core/auth/auth.types';
+import { assertPermission } from '../../core/auth/auth.middleware';
+import { notify } from '../../core/notify/notify.service';
+import { settingsService } from '../../core/settings/settings.service';
+import { qualityService } from '../quality/quality.service';
 import { mastersService } from '../masters/masters.service';
 import { ordersService } from '../orders/orders.service';
 import { type CutLayDetail, cuttingRepo as repo } from './cutting.repo';
@@ -17,11 +21,32 @@ const DOC = 'CUT_LAY';
 type Input = z.output<typeof zCutLayInput>;
 const RC = { isolation: 'ReadCommitted' } as const;
 
-function shape(l: CutLayDetail) {
+/** Manager approval state (Q-062). A draft needs it only while the setting is on. */
+function layApproval(l: Pick<CutLayDetail, 'status' | 'approvedAt'>, required: boolean) {
+  if (l.approvedAt) return 'APPROVED' as const;
+  if (l.status !== 'DRAFT') return 'NOT_REQUIRED' as const;
+  return required ? ('PENDING' as const) : ('NOT_REQUIRED' as const);
+}
+
+/** Tell approvers a draft lay is waiting (once per draft version), only while approval is required. */
+async function notifyApprovers(tx: Tx, id: string, version: number, what: string) {
+  if (!(await settingsService.get('cutting.layApprovalRequired', tx))) return;
+  await notify.event(tx, {
+    eventKey: `LAY_APPROVAL:${id}:${version}`,
+    kind: 'APPROVAL_REQUIRED',
+    title: 'Cutting lay awaiting approval',
+    body: `${what}: a draft lay needs approval before it can be posted`,
+    link: `/cut-lays/${id}`,
+    permission: 'cutting.approve',
+  });
+}
+
+function shape(l: CutLayDetail, approvalRequired = false) {
   const kg = l.rolls.reduce((a, r) => a.plus(D(r.kgUsed.toString())), D(0));
   const pcs = l.bundles.reduce((a, b) => a + b.pcs, 0);
   return {
     ...l,
+    approvalStatus: layApproval(l, approvalRequired),
     docDate: dateOnly(l.docDate)!,
     markerLength: l.markerLength?.toString() ?? null,
     rolls: l.rolls.map((r) => ({ ...r, kgUsed: r.kgUsed.toFixed(3), roll: { ...r.roll, kg: r.roll.kg.toFixed(3) } })),
@@ -46,6 +71,7 @@ async function validate(input: Input, db: Tx | typeof prisma) {
     if (roll.item.type !== 'FABRIC') throw new AppError('VALIDATION_ERROR', `Roll ${roll.rollNo} is not fabric`, 400);
     if (roll.colour && roll.colour !== input.colour) throw new AppError('VALIDATION_ERROR', `Roll ${roll.rollNo} is ${roll.colour}, not ${input.colour}`, 400);
   });
+  await qualityService.assertRollsCuttable([...rolls.values()].map((r) => ({ id: r.id, rollNo: r.rollNo })), db);
   return { order, bundles, rolls };
 }
 
@@ -79,6 +105,7 @@ export const cuttingService = {
     const where: Prisma.CutLayWhereInput = {
       ...(q.status ? { status: q.status } : {}),
       ...(q.orderId ? { orderId: q.orderId } : {}),
+      ...(q.approval === 'PENDING' ? { status: 'DRAFT', approvedAt: null } : q.approval === 'APPROVED' ? { approvedAt: { not: null } } : {}),
       ...(q.from || q.to ? { docDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
       ...(q.q ? { OR: [{ docNo: { contains: q.q, mode: 'insensitive' } }, { order: { orderNo: { contains: q.q, mode: 'insensitive' } } }, { colour: { contains: q.q, mode: 'insensitive' } }] } : {}),
     };
@@ -87,18 +114,23 @@ export const cuttingService = {
       orderBy<Prisma.CutLayOrderByWithRelationInput>(q.sort, { docDate: (d) => ({ docDate: d }), docNo: (d) => ({ docNo: d }) }, { createdAt: 'desc' }),
       p,
     );
-    return { rows: rows.map(shape), total, p };
+    const required = await settingsService.get('cutting.layApprovalRequired');
+    return { rows: rows.map((l) => shape(l, required)), total, p };
   },
 
   async get(id: string) {
     const l = await repo.get(id);
     if (!l) throw notFound('Cutting lay');
-    return shape(l);
+    return shape(l, await settingsService.get('cutting.layApprovalRequired'));
   },
 
   async create(input: Input, user: CurrentUser) {
     const v = await validate(input, prisma);
-    const id = await withTx(async (tx) => (await repo.create(tx, { ...header(input), createdById: user.id }, input.rolls, v.bundles)).id, RC);
+    const id = await withTx(async (tx) => {
+      const l = await repo.create(tx, { ...header(input), createdById: user.id }, input.rolls, v.bundles);
+      await notifyApprovers(tx, l.id, l.version, `${v.order.orderNo} · ${input.colour}`);
+      return l.id;
+    }, RC);
     return this.get(id);
   },
 
@@ -108,7 +140,10 @@ export const cuttingService = {
       const cur = await repo.get(id, tx);
       if (!cur) throw notFound('Cutting lay');
       assertDraft(cur, 'Cutting lay');
-      if (!(await repo.update(tx, id, input.version, header(input), input.rolls, v.bundles))) throw versionConflict();
+      // Any edit voids the approval (Q-062): what was approved is no longer what will be cut.
+      const data = { ...header(input), approvedAt: null, approvedById: null, approvalNote: null };
+      if (!(await repo.update(tx, id, input.version, data, input.rolls, v.bundles))) throw versionConflict();
+      await notifyApprovers(tx, id, input.version + 1, `${v.order.orderNo} · ${input.colour}`);
     }, RC);
     return this.get(id);
   },
@@ -122,6 +157,22 @@ export const cuttingService = {
     }, RC);
   },
 
+  /** Manager approval of a draft lay (Q-062), with the note in the audit log. */
+  async approve(id: string, note: string, user: CurrentUser) {
+    assertPermission(user, 'cutting.approve');
+    await withTx(async (tx) => {
+      await repo.lock(tx, id);
+      const l = await repo.get(id, tx);
+      if (!l) throw notFound('Cutting lay');
+      assertDraft(l, 'Cutting lay');
+      if (l.approvedAt) throw new AppError('INVALID_STATE', 'This lay is already approved', 409);
+      await validate(inputFrom(l), tx);
+      await repo.setState(tx, id, { approvedAt: new Date(), approvedById: user.id, approvalNote: note });
+      await audit.log(tx, { docType: DOC, recordId: id, action: 'APPROVE', reason: note, data: { order: l.order.orderNo, colour: l.colour } });
+    });
+    return this.get(id);
+  },
+
   /** Post (A§6): rolls FABRIC_STORE → CONSUMED; numbered bundles PRODUCTION → CUT_STORE. */
   async post(id: string, user: CurrentUser) {
     await withTx(async (tx) => {
@@ -129,6 +180,9 @@ export const cuttingService = {
       const l = await repo.get(id, tx);
       if (!l) throw notFound('Cutting lay');
       assertDraft(l, 'Cutting lay');
+      if (!l.approvedAt && (await settingsService.get('cutting.layApprovalRequired', tx))) {
+        throw new AppError('APPROVAL_REQUIRED', 'This lay must be approved before it can be posted', 409);
+      }
       const v = await validate(inputFrom(l), tx);
       const loc = await mastersService.systemLocations(['FABRIC_STORE', 'CONSUMED', 'PRODUCTION', 'CUT_STORE'], tx);
       await ledger.assertUnitsAvailable(

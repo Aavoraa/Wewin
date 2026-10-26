@@ -26,10 +26,40 @@ export function setOnAuthLost(fn: () => void) {
   onAuthLost = fn;
 }
 
+/** The session handle a page offers to the mobile preview frame it contains (same origin). */
+interface SessionHost {
+  refresh(): Promise<boolean>;
+  token(): string | null;
+}
+const HOST_KEY = '__wewinSession';
+if (typeof window !== 'undefined') (window as unknown as Record<string, SessionHost>)[HOST_KEY] = { refresh: () => refreshAccessToken(), token: () => accessToken };
+
+/**
+ * Inside the /m preview frame, borrow the outer page's session: two documents rotating the same
+ * refresh cookie at once would make the server refuse one of them (and log it out).
+ */
+function frameHost(): SessionHost | null {
+  try {
+    if (window.parent === window) return null;
+    return (window.parent as unknown as Record<string, SessionHost | undefined>)[HOST_KEY] ?? null;
+  } catch {
+    return null; // cross-origin parent
+  }
+}
+
 /** One refresh at a time (several 401s in parallel share it). */
 export function refreshAccessToken(): Promise<boolean> {
   refreshing ??= (async () => {
     try {
+      const host = frameHost();
+      if (host) {
+        // Take the outer page's token; ask it to refresh only when it has none, or when that token
+        // is the one that was just refused.
+        const current = host.token();
+        if ((!current || current === accessToken) && !(await host.refresh())) return false;
+        accessToken = host.token();
+        return !!accessToken;
+      }
       const res = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'same-origin' });
       if (!res.ok) return false;
       const body = (await res.json()) as { data: { accessToken: string } };

@@ -83,6 +83,7 @@ model User {
   sessions           Session[]
   notifications      Notification[]
   outwardApprovals   OutwardDc[]    @relation("outwardApprovedBy")
+  layApprovals       CutLay[]       @relation("layApprovedBy")
 
   @@map("users")
 }
@@ -608,6 +609,7 @@ model Order {
   rateContracts RateContract[]      @relation("rateOrder")
   bills         VendorBill[]        @relation("billOrder")
   exportLines   ExportInvoiceLine[] @relation("exportLineOrder")
+  qcInspections QcInspection[]      @relation("qcOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -947,21 +949,22 @@ model DcConsumption {
 
 /// Fabric roll created by a posted inward D.C. Its location is derived from the ledger (roll_id).
 model FabricRoll {
-  id           String          @id @default(uuid()) @db.Uuid
-  rollNo       String          @unique @map("roll_no")
-  itemId       String          @map("item_id") @db.Uuid
-  lot          String          @default("")
-  colour       String          @default("")
+  id           String             @id @default(uuid()) @db.Uuid
+  rollNo       String             @unique @map("roll_no")
+  itemId       String             @map("item_id") @db.Uuid
+  lot          String             @default("")
+  colour       String             @default("")
   gsm          Int?
   dia          String?
-  kg           Decimal         @db.Decimal(12, 3)
-  orderId      String?         @map("order_id") @db.Uuid
-  inwardLineId String          @unique @map("inward_line_id") @db.Uuid
-  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  item         Item            @relation("rollItem", fields: [itemId], references: [id], onDelete: Restrict)
-  inwardLine   InwardDcLine    @relation(fields: [inwardLineId], references: [id], onDelete: Restrict)
-  outwardLines OutwardDcLine[] @relation("outwardRoll")
-  layRolls     CutLayRoll[]    @relation("layRoll")
+  kg           Decimal            @db.Decimal(12, 3)
+  orderId      String?            @map("order_id") @db.Uuid
+  inwardLineId String             @unique @map("inward_line_id") @db.Uuid
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  item         Item               @relation("rollItem", fields: [itemId], references: [id], onDelete: Restrict)
+  inwardLine   InwardDcLine       @relation(fields: [inwardLineId], references: [id], onDelete: Restrict)
+  outwardLines OutwardDcLine[]    @relation("outwardRoll")
+  layRolls     CutLayRoll[]       @relation("layRoll")
+  qcLines      QcInspectionLine[] @relation("qcRoll")
 
   @@index([itemId, lot])
   @@map("fabric_rolls")
@@ -986,6 +989,11 @@ model CutLay {
   pcsPerBundle  Int?         @map("pcs_per_bundle")
   remarks       String?
   status        DocStatus    @default(DRAFT)
+  /// Manager approval of the draft (Q-062). Any edit of the draft clears it; posting requires it
+  /// while the setting cutting.layApprovalRequired is on.
+  approvedAt    DateTime?    @map("approved_at") @db.Timestamptz(3)
+  approvedById  String?      @map("approved_by_id") @db.Uuid
+  approvalNote  String?      @map("approval_note")
   version       Int          @default(1)
   postedAt      DateTime?    @map("posted_at") @db.Timestamptz(3)
   postedById    String?      @map("posted_by_id") @db.Uuid
@@ -996,6 +1004,7 @@ model CutLay {
   createdById   String?      @map("created_by_id") @db.Uuid
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   order         Order        @relation("cutOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  approvedBy    User?        @relation("layApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   rolls         CutLayRoll[]
   bundles       CutBundle[]
 
@@ -1019,20 +1028,21 @@ model CutLayRoll {
 
 /// Bundle of cut panels; number assigned at posting. Location derived from the ledger (bundle_id).
 model CutBundle {
-  id            String            @id @default(uuid()) @db.Uuid
-  layId         String            @map("lay_id") @db.Uuid
-  lineNo        Int               @map("line_no")
-  bundleNo      String?           @unique @map("bundle_no")
-  orderId       String            @map("order_id") @db.Uuid
-  componentCode String            @map("component_code")
-  panelItemId   String            @map("panel_item_id") @db.Uuid
+  id            String             @id @default(uuid()) @db.Uuid
+  layId         String             @map("lay_id") @db.Uuid
+  lineNo        Int                @map("line_no")
+  bundleNo      String?            @unique @map("bundle_no")
+  orderId       String             @map("order_id") @db.Uuid
+  componentCode String             @map("component_code")
+  panelItemId   String             @map("panel_item_id") @db.Uuid
   colour        String
   size          String
   pcs           Int
-  lay           CutLay            @relation(fields: [layId], references: [id], onDelete: Cascade)
-  panelItem     Item              @relation("bundlePanel", fields: [panelItemId], references: [id], onDelete: Restrict)
+  lay           CutLay             @relation(fields: [layId], references: [id], onDelete: Cascade)
+  panelItem     Item               @relation("bundlePanel", fields: [panelItemId], references: [id], onDelete: Restrict)
   panelDcLines  PanelDcLine[]
   sewingLines   SewingIssueLine[]
+  qcLines       QcInspectionLine[] @relation("qcBundle")
 
   @@index([orderId, colour, size])
   @@map("cut_bundles")
@@ -1853,4 +1863,77 @@ model OpeningImport {
 
   @@index([kind, status])
   @@map("opening_imports")
+}
+
+// ───────────────────────────── Quality checks (Q-063) ─────────────────────────────
+
+enum QcKind {
+  FABRIC_ROLL
+  INLINE
+  FINAL
+}
+
+enum QcResult {
+  PASS
+  HOLD
+  REJECT
+}
+
+/// Quality check: fabric roll inspection, inline sewing check or final garment inspection.
+/// Non-stock document. Draft → POSTED (= approved by qc.approve, numbered QC/FY/NNNN) → CANCELLED.
+model QcInspection {
+  id            String             @id @default(uuid()) @db.Uuid
+  docNo         String?            @unique @map("doc_no")
+  docDate       DateTime           @map("doc_date") @db.Date
+  kind          QcKind
+  orderId       String?            @map("order_id") @db.Uuid
+  sewingLine    String?            @map("sewing_line")
+  inspector     String?
+  remarks       String?
+  status        DocStatus          @default(DRAFT)
+  version       Int                @default(1)
+  approvalNote  String?            @map("approval_note")
+  postedAt      DateTime?          @map("posted_at") @db.Timestamptz(3)
+  postedById    String?            @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?          @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?            @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?            @map("cancel_reason")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?            @map("created_by_id") @db.Uuid
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order         Order?             @relation("qcOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  lines         QcInspectionLine[]
+
+  @@index([kind, status, docDate])
+  @@index([orderId])
+  @@map("qc_inspections")
+}
+
+/// FABRIC_ROLL lines: roll + result (+ GSM, defect points). INLINE lines: checked / defective pcs per
+/// line, bundle or operator. FINAL lines: checked = passed + rejected pcs per colour × size.
+model QcInspectionLine {
+  id           String       @id @default(uuid()) @db.Uuid
+  inspectionId String       @map("inspection_id") @db.Uuid
+  lineNo       Int          @map("line_no")
+  rollId       String?      @map("roll_id") @db.Uuid
+  bundleId     String?      @map("bundle_id") @db.Uuid
+  colour       String?
+  size         String?
+  operator     String?
+  result       QcResult?
+  gsm          Int?
+  defectPoints Int?         @map("defect_points")
+  checkedPcs   Int?         @map("checked_pcs")
+  passedPcs    Int?         @map("passed_pcs")
+  rejectedPcs  Int?         @map("rejected_pcs")
+  /// [{ code, count }] — codes from the qc.defectCodes setting.
+  defects      Json         @default("[]")
+  remarks      String?
+  inspection   QcInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  roll         FabricRoll?  @relation("qcRoll", fields: [rollId], references: [id], onDelete: Restrict)
+  bundle       CutBundle?   @relation("qcBundle", fields: [bundleId], references: [id], onDelete: Restrict)
+
+  @@index([rollId])
+  @@index([bundleId])
+  @@map("qc_inspection_lines")
 }

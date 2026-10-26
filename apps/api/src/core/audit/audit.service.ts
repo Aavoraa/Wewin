@@ -1,13 +1,14 @@
 import { Prisma } from '@wewin/db';
 import { getContext } from '../context';
 import { type Tx, prisma } from '../db';
+import { accountsFeed } from '../notify/accounts-feed';
 
 export type AuditAction = 'POST' | 'CANCEL' | 'CLOSE' | 'APPROVE' | 'REJECT' | 'CONFIRM' | 'REOPEN' | 'EXPORT' | 'LOGIN' | 'ACKNOWLEDGE' | 'APPLY' | 'DISCARD';
 
 /**
  * Explicit business-action audit rows (post / cancel / close / approve with reason).
  * Row-level create/update/delete auditing is done by the `audit_row_change` trigger (D-03),
- * inside the same transaction.
+ * inside the same transaction. Each business action is also reported to the accounts team (Q-064).
  */
 export const audit = {
   async log(
@@ -27,6 +28,7 @@ export const audit = {
         newData: e.data === undefined ? Prisma.JsonNull : (e.data as Prisma.InputJsonValue),
       },
     });
+    await accountsFeed.onAction(tx, e);
   },
 
   list(filter: { tableName?: string; recordId?: string; userId?: string; action?: string; skip: number; take: number }) {

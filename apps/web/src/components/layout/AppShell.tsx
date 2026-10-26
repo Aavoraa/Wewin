@@ -1,6 +1,7 @@
 import { Suspense, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router';
-import { KeyRound, LogOut, Menu, PanelLeftClose, PanelLeftOpen, UserCircle2, X } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { BookOpen, ChevronDown, CircleHelp, Keyboard, KeyRound, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { ROLE_NAMES, type RoleCode } from '@wewin/shared';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
 import { cn } from '@/lib/utils';
@@ -17,8 +18,12 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { TopbarExtras } from './TopbarExtras';
+import { NotificationBell } from './NotificationBell';
 import { VoiceAssistant } from '../VoiceAssistant';
 import { VoiceProvider } from '@/lib/voice';
+import { setViewPref, useViewMode } from '@/lib/view-mode';
+import { MobilePreview, MobileShell } from '@/features/mobile/MobileShell';
+import { Smartphone } from 'lucide-react';
 
 const COLLAPSED_KEY = 'wewin.sidebarCollapsed';
 
@@ -85,15 +90,69 @@ function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
   );
 }
 
-/** App shell (A§9): module sidebar, top bar with search, FY switch and user menu. */
+const initials = (name?: string) =>
+  (name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('') || '?';
+const roleLabel = (roles?: string[]) => (roles?.length ? roles.map((r) => ROLE_NAMES[r as RoleCode] ?? r).join(', ') : '');
+
+/** Help: keyboard shortcuts and where to find things. */
+function HelpMenu() {
+  const navigate = useNavigate();
+  const shortcuts: [string, string][] = [
+    ['Ctrl K', 'Search orders'],
+    ['Alt V', 'Voice command'],
+    ['Ctrl S', 'Save a document'],
+    ['Ctrl Enter', 'Post a document'],
+  ];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Help">
+          <CircleHelp />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="flex items-center gap-2">
+          <Keyboard className="size-4" /> Keyboard shortcuts
+        </DropdownMenuLabel>
+        {shortcuts.map(([k, what]) => (
+          <div key={k} className="flex items-center justify-between px-2 py-1 text-sm">
+            <span>{what}</span>
+            <kbd className="rounded border bg-muted px-1.5 text-[11px] text-muted-foreground">{k}</kbd>
+          </div>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate('/reports')}>
+          <BookOpen /> Reports
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** App shell (A§9): module sidebar, top bar with brand, search, notifications, help and user menu. */
 export function AppShell() {
   const { user, logout } = useAuth();
   const fy = useFy();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [savedCollapsed, setCollapsed] = useState(readCollapsed);
+  // The dashboard's pipeline needs the full width: there the sidebar starts as icons (expandable
+  // for the visit); every other page keeps the user's saved choice.
+  const onDashboard = useLocation().pathname === '/';
+  const view = useViewMode();
+  const [dashboardExpanded, setDashboardExpanded] = useState(false);
+  const collapsed = onDashboard ? !dashboardExpanded : savedCollapsed;
 
   const toggleCollapsed = () => {
+    if (onDashboard) {
+      setDashboardExpanded((v) => !v);
+      return;
+    }
     setCollapsed((c) => {
       try {
         localStorage.setItem(COLLAPSED_KEY, c ? '0' : '1');
@@ -103,6 +162,15 @@ export function AppShell() {
       return !c;
     });
   };
+
+  if (view.preview) return <MobilePreview />;
+  if (view.mobile) {
+    return (
+      <VoiceProvider>
+        <MobileShell />
+      </VoiceProvider>
+    );
+  }
 
   return (
     <VoiceProvider>
@@ -125,7 +193,7 @@ export function AppShell() {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print sticky top-0 z-30 flex h-12 items-center gap-2 border-b bg-card px-3">
+        <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card px-3 sm:px-4">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu />
           </Button>
@@ -140,7 +208,9 @@ export function AppShell() {
             {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
           </Button>
           <TopbarExtras />
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5">
+            <NotificationBell />
+            <HelpMenu />
             <VoiceAssistant />
             <label className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
               FY
@@ -154,15 +224,29 @@ export function AppShell() {
             </label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <UserCircle2 /> <span className="hidden sm:inline">{user?.fullName}</span>
-                </Button>
+                <button className="flex items-center gap-2.5 rounded-lg px-2 py-1 text-left hover:bg-accent" aria-label="Account menu">
+                  <span className="grid size-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">{initials(user?.fullName)}</span>
+                  <span className="hidden leading-tight sm:block">
+                    <span className="block text-sm font-medium text-slate-900">{user?.fullName}</span>
+                    <span className="block text-xs text-muted-foreground">{roleLabel(user?.roles)}</span>
+                  </span>
+                  <ChevronDown className="hidden size-4 text-muted-foreground sm:block" />
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>
                   {user?.username} · {user?.roles.join(', ')}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    // On a phone this returns to the phone app; on a wide screen it opens the preview.
+                    setViewPref('auto');
+                    navigate('/m');
+                  }}
+                >
+                  <Smartphone /> Mobile app
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => navigate('/account/password')}>
                   <KeyRound /> Change password
                 </DropdownMenuItem>

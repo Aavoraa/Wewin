@@ -2,7 +2,7 @@ import { type PermissionKey } from '@wewin/shared';
 import { type Tx, afterCommit, withTx } from '../db';
 import { logger } from '../logger';
 import { QUEUES, jobs, registerJob } from '../../jobs/queue';
-import { inAppChannel, whatsAppChannel } from './channels';
+import { emailChannel, inAppChannel, whatsAppChannel } from './channels';
 import { notifyRepo as repo } from './notify.repo';
 
 export interface NotifyEvent {
@@ -17,16 +17,25 @@ export interface NotifyEvent {
   permission?: PermissionKey;
   /** Or explicit users (e.g. the requester of an export). */
   userIds?: string[];
+  /** Or everyone holding one of these roles (accounts feed, Q-064). */
+  roles?: string[];
+  /** Also send by email (to users with an email address) when SMTP is configured. */
+  email?: boolean;
 }
 
 /**
  * Notification service (automation A7). Writes in-app notifications inside the caller's transaction
- * (so they exist only if the business event commits), and queues WhatsApp deliveries only when a
+ * (so they exist only if the business event commits), and queues WhatsApp / email deliveries only when a
  * provider is configured; otherwise records SKIPPED_NOT_CONFIGURED — never a fake "sent".
  */
 export const notify = {
   async event(tx: Tx, e: NotifyEvent): Promise<number> {
-    const users = e.userIds?.length ? e.userIds.map((id) => ({ id })) : await repo.usersWithPermission(tx, e.permission ?? 'alerts.receive');
+    const users = e.userIds?.length
+      ? await repo.usersByIds(tx, e.userIds)
+      : e.roles
+        ? await repo.usersWithRoles(tx, e.roles)
+        : await repo.usersWithPermission(tx, e.permission ?? 'alerts.receive');
+    const emailOf = new Map(users.map((u) => [u.id, u.email]));
     const created = await repo.createForUsers(tx, users, {
       kind: e.kind,
       title: e.title,
@@ -36,14 +45,24 @@ export const notify = {
       alertId: e.alertId ?? null,
     });
     const wa = whatsAppChannel.isConfigured();
+    const mail = emailChannel.isConfigured();
     await repo.createDeliveries(
       tx,
       created.flatMap((n) => [
         { notificationId: n.id, channel: inAppChannel.name, status: 'SENT' as const },
         { notificationId: n.id, channel: whatsAppChannel.name, status: wa ? ('PENDING' as const) : ('SKIPPED_NOT_CONFIGURED' as const) },
+        ...(e.email
+          ? [
+              !mail
+                ? { notificationId: n.id, channel: emailChannel.name, status: 'SKIPPED_NOT_CONFIGURED' as const }
+                : emailOf.get(n.userId)
+                  ? { notificationId: n.id, channel: emailChannel.name, status: 'PENDING' as const }
+                  : { notificationId: n.id, channel: emailChannel.name, status: 'FAILED' as const, lastError: 'User has no email address' },
+            ]
+          : []),
       ]),
     );
-    if (wa && created.length) afterCommit(tx, async () => void (await jobs.send(QUEUES.NOTIFY_DISPATCH, {})));
+    if ((wa || (e.email && mail)) && created.length) afterCommit(tx, async () => void (await jobs.send(QUEUES.NOTIFY_DISPATCH, {})));
     return created.length;
   },
 
@@ -57,14 +76,15 @@ export const notify = {
     let sent = 0;
     let failed = 0;
     for (const d of await repo.pendingDeliveries()) {
-      const to = d.notification.user.phone;
+      const channel = d.channel === 'EMAIL' ? emailChannel : whatsAppChannel;
+      const to = d.channel === 'EMAIL' ? d.notification.user.email : d.notification.user.phone;
       if (!to) {
-        await repo.markDelivery(d.id, { status: 'FAILED', lastError: 'User has no phone number' });
+        await repo.markDelivery(d.id, { status: 'FAILED', lastError: d.channel === 'EMAIL' ? 'User has no email address' : 'User has no phone number' });
         failed++;
         continue;
       }
       try {
-        const r = await whatsAppChannel.send({ to, title: d.notification.title, body: d.notification.body, link: d.notification.link });
+        const r = await channel.send({ to, title: d.notification.title, body: d.notification.body, link: d.notification.link });
         await repo.markDelivery(d.id, { status: 'SENT', providerMessageId: r.providerMessageId ?? null, lastError: null });
         sent++;
       } catch (err) {

@@ -1,6 +1,6 @@
 import { ListResult, type HandlerInput } from '../../core/http';
 import { stockService } from './stock.service';
-import { type zBalanceQuery, type zMovementQuery } from './stock.schemas';
+import { type zBalanceQuery, type zLocateQuery, type zMovementQuery } from './stock.schemas';
 
 export const stockController = {
   async balances({ query }: HandlerInput<{ query: typeof zBalanceQuery }>) {
@@ -19,6 +19,10 @@ export const stockController = {
     const { page, pageSize, ...f } = query;
     const r = await stockService.movements({ ...f, skip: (page - 1) * pageSize, take: pageSize });
     return new ListResult(r.rows, { page, pageSize, total: r.total });
+  },
+
+  locate({ query }: HandlerInput<{ query: typeof zLocateQuery }>) {
+    return stockService.locate(query.q);
   },
 
   refresh() {

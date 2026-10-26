@@ -22,6 +22,8 @@ import { Table, TBody, TD, TFoot, TH, THead, TR } from '@/components/ui/table';
 import { pickers } from '../orders/api';
 import { DocRegister, docNoCol } from '../production/common';
 import { type BuyerReceipt, type ExportInvoice, type OpenExportInvoice, type Shipment } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const fc = (cur: string, v: string) => `${cur} ${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const money = /^\d+(\.\d{1,2})?$/;
@@ -61,6 +63,8 @@ type ShipForm = {
 } & Record<'shippingBillNo' | 'shippingBillDate' | 'portCode' | 'blAwbNo' | 'blAwbDate' | 'carrier' | 'vesselFlight' | 'containerNo' | 'sealNo' | 'forwarder' | 'etd' | 'eta' | 'remarks', string>;
 const SHIP_TEXT = ['shippingBillNo', 'shippingBillDate', 'portCode', 'blAwbNo', 'blAwbDate', 'carrier', 'vesselFlight', 'containerNo', 'sealNo', 'forwarder', 'etd', 'eta', 'remarks'] as const;
 
+const VOICE_SHIPMENT: VoiceFormSpec = {"title":"Shipment","fields":[{"name":"docDate","label":"Date","type":"date"},{"name":"buyerId","label":"Buyer","type":"buyer"},{"name":"mode","label":"Mode (SEA, AIR, COURIER, ROAD)","type":"select","options":["SEA","AIR","COURIER","ROAD"]},{"name":"shippingBillNo","label":"Shipping bill no.","type":"text"},{"name":"shippingBillDate","label":"Shipping bill date","type":"date"},{"name":"portCode","label":"Port code","type":"text"},{"name":"blAwbNo","label":"B/L or AWB no.","type":"text"},{"name":"blAwbDate","label":"B/L or AWB date","type":"date"},{"name":"carrier","label":"Carrier / shipping line","type":"text"},{"name":"vesselFlight","label":"Vessel or flight","type":"text"},{"name":"containerNo","label":"Container no.","type":"text"},{"name":"sealNo","label":"Seal no.","type":"text"},{"name":"forwarder","label":"Forwarder","type":"text"},{"name":"etd","label":"ETD","type":"date"},{"name":"eta","label":"ETA","type":"date"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function ShipmentPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -73,6 +77,7 @@ export function ShipmentPage() {
     resolver: zodResolver(zShipmentInput as never),
     defaultValues: { docDate: todayIst(), buyerId: '', invoiceIds: [], mode: 'SEA', ...Object.fromEntries(SHIP_TEXT.map((k) => [k, ''])) } as unknown as ShipForm,
   });
+  const voice = useVoiceFill({ form, spec: VOICE_SHIPMENT, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('export.create'), setLabels: (fn) => { const l = Object.values(fn({}))[0]; if (l) setBuyerLabel(l); } });
   useEffect(() => {
     if (!doc) return;
     form.reset({ docDate: doc.docDate, buyerId: doc.buyerId, invoiceIds: doc.status === 'DRAFT' ? doc.draftInvoiceIds : doc.invoices.map((i) => i.id), mode: doc.mode, ...Object.fromEntries(SHIP_TEXT.map((k) => [k, doc[k] ?? ''])) } as ShipForm);
@@ -101,6 +106,7 @@ export function ShipmentPage() {
   const shown: { id: string; docNo: string | null; docDate: string | null; totalPcs: number; fobValue: string; currency: string; portOfDischarge: string }[] = editable ? (cands.data?.data ?? []) : (doc?.invoices ?? []);
   return (
     <DocumentForm
+      voice={voice}
       title="Shipment"
       docNo={doc?.docNo}
       status={status}
@@ -268,6 +274,8 @@ interface RcForm {
   remarks: string;
 }
 
+const VOICE_BUYER_RECEIPT: VoiceFormSpec = {"title":"Buyer receipt","fields":[{"name":"docDate","label":"Date received","type":"date"},{"name":"buyerId","label":"Buyer","type":"buyer"},{"name":"currency","label":"Currency code like USD or EUR","type":"text"},{"name":"amountFc","label":"Amount received in foreign currency","type":"number"},{"name":"bankChargesFc","label":"Bank charges in foreign currency","type":"number"},{"name":"exchangeRate","label":"Exchange rate in rupees","type":"number"},{"name":"bankReference","label":"Bank reference","type":"text"},{"name":"firaNo","label":"FIRA / e-BRC no.","type":"text"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function BuyerReceiptPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -281,6 +289,7 @@ export function BuyerReceiptPage() {
     resolver: zodResolver(zBuyerReceiptInput as never),
     defaultValues: { docDate: todayIst(), buyerId: '', currency: 'USD', amountFc: '', bankChargesFc: '0', exchangeRate: '', bankReference: '', firaNo: '', remarks: '' },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_BUYER_RECEIPT, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('export.create'), setLabels: (fn) => { const l = Object.values(fn({}))[0]; if (l) setBuyerLabel(l); } });
   useEffect(() => {
     if (!doc) return;
     form.reset({ docDate: doc.docDate, buyerId: doc.buyerId, currency: doc.currency, amountFc: doc.amountFc, bankChargesFc: doc.bankChargesFc, exchangeRate: doc.exchangeRate, bankReference: doc.bankReference ?? '', firaNo: doc.firaNo ?? '', remarks: doc.remarks ?? '' });
@@ -327,6 +336,7 @@ export function BuyerReceiptPage() {
   const e = form.formState.errors;
   return (
     <DocumentForm
+      voice={voice}
       title="Buyer receipt"
       docNo={doc?.docNo}
       status={status}

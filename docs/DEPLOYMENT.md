@@ -51,6 +51,8 @@ Every name is in `.env.example`; values are never committed. Production values t
 | `API_DOCS` | empty (off in production) or `true` on staging |
 | `OCR_LANG_PATH` | folder holding `eng.traineddata` (offline OCR; download once) |
 | `SCAN_AI_PROVIDER` / `ANTHROPIC_API_KEY` | empty unless Wewin approves AI extraction (Q-046) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | mail server for the accounts feed emails (Q-064); empty = in-app only |
+| `APP_URL` | public address of the web app, used in email links (e.g. `https://erp.<domain>`) |
 | `SEED_OWNER_PASSWORD` | set only for the first seed, then removed |
 
 Secrets never reach the browser: the web build contains no environment values; it calls `/api` on its own origin.

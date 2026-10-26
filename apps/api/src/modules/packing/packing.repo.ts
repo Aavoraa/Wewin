@@ -69,6 +69,11 @@ export const packingRepo = {
     const r = await tx.carton.aggregate({ where: { orderId }, _max: { cartonSeq: true } });
     return (r._max.cartonSeq ?? 0) + 1;
   },
+  /** Pieces in posted cartons of an order, per colour × size. */
+  async packedByCell(orderId: string, db: Db = prisma) {
+    const rows = await db.cartonLine.groupBy({ by: ['colour', 'size'], where: { carton: { orderId, status: 'POSTED' } }, _sum: { pcs: true } });
+    return new Map(rows.map((r) => [`${r.colour}|${r.size}`, r._sum.pcs ?? 0]));
+  },
   cartonsByIds(ids: string[], db: Db = prisma) {
     return db.carton.findMany({ where: { id: { in: ids } }, include: { lines: true } });
   },

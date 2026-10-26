@@ -14,6 +14,7 @@ const SeriesPage = lazy(() => import('@/features/settings/SeriesPage').then((m) 
 const OpeningImportPage = lazy(() => import('@/features/settings/OpeningImportPage').then((m) => ({ default: m.OpeningImportPage })));
 const AuditPage = lazy(() => import('@/features/settings/AuditPage').then((m) => ({ default: m.AuditPage })));
 const StockBalancesPage = lazy(() => import('@/features/stock/StockBalancesPage').then((m) => ({ default: m.StockBalancesPage })));
+const ItemLocatorPage = lazy(() => import('@/features/stock/ItemLocatorPage').then((m) => ({ default: m.ItemLocatorPage })));
 const StockMovementsPage = lazy(() => import('@/features/stock/StockMovementsPage').then((m) => ({ default: m.StockMovementsPage })));
 const VendorsPage = lazy(() => import('@/features/masters/VendorsPage').then((m) => ({ default: m.VendorsPage })));
 const BuyersPage = lazy(() => import('@/features/masters/SimpleMastersPages').then((m) => ({ default: m.BuyersPage })));
@@ -72,6 +73,15 @@ const BuyerReceiptsPage = lazy(() => import('@/features/export/ShipmentReceiptPa
 const ExportReceivablesPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.ExportReceivablesPage })));
 const ShipmentPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.ShipmentPage })));
 const ShipmentsPage = lazy(() => import('@/features/export/ShipmentReceiptPages').then((m) => ({ default: m.ShipmentsPage })));
+const MobileHome = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileHome })));
+const MobileApprovals = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileApprovals })));
+const MobileScan = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileScan })));
+const MobileInbox = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileInbox })));
+const MobileMenu = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileMenu })));
+const MobileLayApproval = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileLayApproval })));
+const MobileQcApproval = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileQcApproval })));
+const QcListPage = lazy(() => import('@/features/quality/QcPages').then((m) => ({ default: m.QcListPage })));
+const QcPage = lazy(() => import('@/features/quality/QcPages').then((m) => ({ default: m.QcPage })));
 const ScanReviewPage = lazy(() => import('@/features/scans/ScanReviewPage').then((m) => ({ default: m.ScanReviewPage })));
 const AliasesPage = lazy(() => import('@/features/scans/AliasesPage').then((m) => ({ default: m.AliasesPage })));
 // Print templates (QR / barcode libraries) load only when a print opens.
@@ -92,6 +102,8 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'stock/at-vendors', perm: 'stock.view', element: <AtVendorsPage /> },
   { path: 'cut-lays', perm: 'cutting.view', element: <CutLaysPage /> },
   { path: 'cut-lays/:id', perm: 'cutting.view', element: <CutLayPage /> },
+  { path: 'qc', perm: 'qc.view', element: <QcListPage /> },
+  { path: 'qc/:id', perm: 'qc.view', element: <QcPage /> },
   { path: 'bundles', perm: 'cutting.view', element: <BundlesPage /> },
   { path: 'panel-out', perm: 'panels.view', element: <PanelOutListPage /> },
   { path: 'panel-out/:id', perm: 'panels.view', element: <PanelOutPage /> },
@@ -180,7 +192,16 @@ export function AppRoutes() {
       >
         <Route index element={<Perm perm="dashboard.view"><DashboardPage /></Perm>} />
         <Route path="account/password" element={<ChangePasswordPage />} />
+        {/* Mobile app (/m): phone screens; every other page also works inside the phone shell. */}
+        <Route path="m" element={<Perm perm="dashboard.view"><MobileHome /></Perm>} />
+        <Route path="m/approvals" element={<Perm perm="dashboard.view"><MobileApprovals /></Perm>} />
+        <Route path="m/scan" element={<Perm perm="stock.view"><MobileScan /></Perm>} />
+        <Route path="m/inbox" element={<MobileInbox />} />
+        <Route path="m/menu" element={<MobileMenu />} />
+        <Route path="m/lays/:id" element={<Perm perm="cutting.view"><MobileLayApproval /></Perm>} />
+        <Route path="m/qc/:id" element={<Perm perm="qc.view"><MobileQcApproval /></Perm>} />
         <Route path="stock/balances" element={<Perm perm="stock.view"><StockBalancesPage /></Perm>} />
+        <Route path="stock/locate" element={<Perm perm="stock.view"><ItemLocatorPage /></Perm>} />
         <Route path="stock/movements" element={<Perm perm="stock.view"><StockMovementsPage /></Perm>} />
         <Route path="settings" element={<Perm perm="settings.view"><SettingsPage /></Perm>} />
         <Route path="settings/series" element={<Perm perm="settings.view"><SeriesPage /></Perm>} />

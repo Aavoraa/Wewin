@@ -21,6 +21,8 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { pickers, useOrder } from '../orders/api';
 import { DocRegister, docNoCol, lookupBundle } from './common';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 interface PanelLine {
   id: string;
@@ -130,6 +132,8 @@ interface OutForm {
   lines: OutRow[];
 }
 
+const VOICE_PANEL_OUT: VoiceFormSpec = {"title":"Panel outward D.C.","fields":[{"name":"docDate","label":"Date","type":"date"},{"name":"orderId","label":"Order","type":"order"},{"name":"processId","label":"Process (printing or embroidery)","type":"process"},{"name":"vendorId","label":"Printer / embroiderer","type":"vendor"},{"name":"expectedReturnDate","label":"Expected back on","type":"date"},{"name":"vehicleNo","label":"Vehicle no.","type":"text"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function PanelOutPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -141,6 +145,7 @@ export function PanelOutPage() {
     resolver: zodResolver(zPanelOutInput as never),
     defaultValues: { docDate: todayIst(), orderId: '', processId: '', vendorId: '', expectedReturnDate: '', vehicleNo: '', remarks: '', lines: [] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_PANEL_OUT, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('panels.create'), setLabels });
   const e = form.formState.errors;
   const processId = form.watch('processId');
 
@@ -197,6 +202,7 @@ export function PanelOutPage() {
 
   return (
     <DocumentForm
+      voice={voice}
       title="Panel D.C. (out)"
       docNo={dc?.docNo}
       status={status}
@@ -384,6 +390,8 @@ interface InForm {
   lines: { outLineId: string; goodPcs: string | number; rejectedPcs: string | number }[];
 }
 
+const VOICE_PANEL_IN: VoiceFormSpec = {"title":"Panel inward D.C.","fields":[{"name":"docDate","label":"Date","type":"date"},{"name":"vendorId","label":"Printer / embroiderer","type":"vendor"},{"name":"vendorDcNo","label":"Vendor's D.C. no.","type":"text"},{"name":"vehicleNo","label":"Vehicle no.","type":"text"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function PanelInPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -391,6 +399,7 @@ export function PanelInPage() {
   const dc = d.doc;
   const [labels, setLabels] = useState<Record<string, string>>({});
   const form = useForm<InForm>({ resolver: zodResolver(zPanelInInput as never), defaultValues: { docDate: todayIst(), vendorId: '', vendorDcNo: '', vehicleNo: '', remarks: '', lines: [] } });
+  const voice = useVoiceFill({ form, spec: VOICE_PANEL_IN, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('panels.create'), setLabels });
   const e = form.formState.errors;
   const vendorId = form.watch('vendorId');
   const status = dc?.status ?? 'DRAFT';
@@ -463,6 +472,7 @@ export function PanelInPage() {
 
   return (
     <DocumentForm
+      voice={voice}
       title="Panel inward"
       docNo={dc?.docNo}
       status={status}
@@ -618,6 +628,8 @@ export function RecutListPage() {
 }
 
 type RecutRow = GridRow & { componentCode: string; colour: string; size: string; pcs: string | number };
+const VOICE_RECUT: VoiceFormSpec = {"title":"Recut slip","fields":[{"name":"docDate","label":"Date","type":"date"},{"name":"orderId","label":"Order","type":"order"},{"name":"reason","label":"Reason for the recut","type":"text"}]};
+
 export function RecutPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -628,6 +640,7 @@ export function RecutPage() {
     resolver: zodResolver(zRecutSlipInput as never),
     defaultValues: { docDate: todayIst(), orderId: '', reason: '', lines: [{ _key: newKey(), componentCode: '', colour: '', size: '', pcs: '' }] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_RECUT, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('panels.create'), setLabels });
   const order = useOrder(form.watch('orderId') || undefined);
   useEffect(() => {
     if (!r) return;
@@ -654,6 +667,7 @@ export function RecutPage() {
   const o = order.data;
   return (
     <DocumentForm
+      voice={voice}
       title="Recut slip"
       docNo={r?.docNo}
       status={status}

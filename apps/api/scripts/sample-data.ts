@@ -37,6 +37,8 @@ const post = (url: string, body?: Body) => call('post', url, body);
 /** Create a draft and post it; returns the posted document. */
 async function doc(path: string, body: Body) {
   const d = await post(path, body);
+  // Cutting lays need a manager's approval before posting (Q-062).
+  if (path === '/cut-lays') await post(`/cut-lays/${d.id}/approve`, { note: 'Marker and rolls checked' });
   return post(`${path}/${d.id}/post`);
 }
 async function outward(body: Body) {
@@ -243,6 +245,12 @@ await issue('2026-10-17', 'Line 1', ['2Y', '4Y', '6Y']);
 await issue('2026-10-18', 'Line 2', ['8Y']);
 await doc('/sewing-entries', { docDate: '2026-10-18', orderId: o1.id, sewingLine: 'Line 1', lines: [{ colour: 'NAVY', size: '2Y', pcs: 80 }, { colour: 'NAVY', size: '4Y', pcs: 80 }, { colour: 'NAVY', size: '6Y', pcs: 76 }] });
 await doc('/sewing-entries', { docDate: '2026-10-19', orderId: o1.id, sewingLine: 'Line 2', lines: [{ colour: 'NAVY', size: '8Y', pcs: 70 }] });
+
+step('Fabric roll inspection, inline check and final inspection');
+const qc = async (body: Body, note: string) => post(`/qc/${(await post('/qc', body)).id}/approve`, { note });
+await qc({ kind: 'FABRIC_ROLL', docDate: '2026-10-11', inspector: 'Selvi', lines: dyed.slice(2, 5).map((r: Any, i: number) => ({ rollId: r.id, result: i === 2 ? 'HOLD' : 'PASS', gsm: i === 2 ? 171 : 180, defectPoints: i === 2 ? 46 : 12, defects: i === 2 ? [{ code: 'Shade variation', count: 3 }] : [] })) }, 'Roll held for shade check with the dyer');
+await qc({ kind: 'INLINE', docDate: '2026-10-18', orderId: o1.id, sewingLine: 'Line 1', inspector: 'Meena', lines: [{ operator: 'M-07 overlock', colour: 'NAVY', size: '2Y', checkedPcs: 30, rejectedPcs: 2, defects: [{ code: 'Skip stitch', count: 2 }] }, { operator: 'M-11 flatlock', colour: 'NAVY', size: '4Y', checkedPcs: 30, rejectedPcs: 0 }] }, 'Line 1 morning check');
+await qc({ kind: 'FINAL', docDate: '2026-10-19', orderId: o1.id, inspector: 'Karthik', lines: [['2Y', 80, 0], ['4Y', 80, 0], ['6Y', 42, 2], ['8Y', 41, 1]].map(([size, passed, rejected]) => ({ colour: 'NAVY', size, checkedPcs: Number(passed) + Number(rejected), passedPcs: passed, rejectedPcs: rejected, defects: rejected ? [{ code: 'Open seam', count: rejected }] : [] })) }, 'AQL 2.5 passed');
 
 step('Cartons and packing lists');
 const carton = (size: string, pcs: number) => doc('/cartons', { docDate: '2026-10-19', orderId: o1.id, grossKg: '6.40', netKg: '5.70', lengthCm: '60', widthCm: '40', heightCm: '30', lines: [{ colour: 'NAVY', size, pcs }] });

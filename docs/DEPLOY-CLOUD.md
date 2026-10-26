@@ -27,6 +27,7 @@ touch the database. Nothing secret is committed.
    | `SEED_OWNER_PASSWORD` | first password for `owner` (10+ characters; must be changed at first login) |
    | `ANTHROPIC_API_KEY` | optional — Claude for invoice reading and voice |
    | `SCAN_AI_PROVIDER`, `VOICE_AI_PROVIDER` | `anthropic` (only with the key above) |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `APP_URL` | optional — email the accounts feed (Q-064); `APP_URL` = `https://wewin.vercel.app` |
 
    Set automatically, no action: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BLOB_READ_WRITE_TOKEN`,
    and the defaults applied by the API on Vercel (token key derived from the database credentials unless `JWT_SECRET` is set, time zone IST, secure cookies, CORS for the

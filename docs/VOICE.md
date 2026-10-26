@@ -16,8 +16,10 @@ The panel shows what was heard; it can be corrected (or typed) before sending. W
 request is sent as soon as the speaker pauses.
 
 **Forms that can be filled by voice:** orders (header), yarn receipts, outward D.C.s, inward D.C.s
-(rolls), trims receipts / issues, sewing output, cartons, debit notes, payment vouchers, vendor bills
-(header). Lines that are spoken are added after the lines already entered; on sewing output and
+(rolls), cutting lays (header + bundles), panel outward / inward D.C.s, recut slips, sewing issues and
+output, quality checks (final and inline lines; fabric inspection header), cartons, packing lists,
+trims receipts / issues, export invoices, shipments, buyer receipts (headers), debit notes, payment
+vouchers, vendor bills (header). The microphone is also in the mobile app's top bar (Q-065). Lines that are spoken are added after the lines already entered; on sewing output and
 cartons a spoken colour × size replaces that cell. Fields that need a pick from a short list the
 system builds (the programme process on an outward D.C., the D.C.s a bill or inward covers, rolls
 scanned by QR) are still chosen by hand.

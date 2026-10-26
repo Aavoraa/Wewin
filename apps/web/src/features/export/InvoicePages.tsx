@@ -19,6 +19,8 @@ import { Table, TBody, TD, TFoot, TH, THead, TR } from '@/components/ui/table';
 import { pickers } from '../orders/api';
 import { DocRegister, docNoCol } from '../production/common';
 import { type ExportInvoice, type PlCandidate } from './types';
+import { type VoiceFormSpec } from '@wewin/shared';
+import { useVoiceFill } from '@/lib/voice';
 
 const money = (cur: string, v: string) => `${cur} ${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -67,6 +69,8 @@ interface FormValues {
   remarks: string;
 }
 
+const VOICE_EXPORT_INVOICE: VoiceFormSpec = {"title":"Export invoice","fields":[{"name":"docDate","label":"Invoice date","type":"date"},{"name":"buyerId","label":"Buyer","type":"buyer"},{"name":"exchangeRate","label":"Exchange rate in rupees","type":"number"},{"name":"incoterm","label":"Incoterm","type":"select","options":["FOB","CIF","CFR","EXW","FCA","DAP","DDP"]},{"name":"portOfLoading","label":"Port of loading","type":"text"},{"name":"portOfDischarge","label":"Port of discharge","type":"text"},{"name":"finalDestination","label":"Final destination","type":"text"},{"name":"countryOfDestination","label":"Country of destination","type":"text"},{"name":"paymentTerms","label":"Payment terms","type":"text"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function ExportInvoicePage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -79,6 +83,7 @@ export function ExportInvoicePage() {
     resolver: zodResolver(zExportInvoiceInput as never),
     defaultValues: { docDate: todayIst(), buyerId: '', packingListIds: [], exchangeRate: '', incoterm: 'FOB', portOfLoading: '', portOfDischarge: '', finalDestination: '', countryOfDestination: '', paymentTerms: '', underLut: true, lutNumber: '', igstRatePct: '', remarks: '' },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_EXPORT_INVOICE, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('export.create'), setLabels: (fn) => { const l = Object.values(fn({}))[0]; if (l) setBuyerLabel(l); } });
   useEffect(() => {
     if (!doc) return;
     form.reset({
@@ -145,6 +150,7 @@ export function ExportInvoicePage() {
 
   return (
     <DocumentForm
+      voice={voice}
       title="Export invoice"
       docNo={doc?.docNo}
       status={status}

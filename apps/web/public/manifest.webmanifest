@@ -1,0 +1,14 @@
+{
+  "name": "Wewin ERP",
+  "short_name": "Wewin",
+  "description": "Wewin Knit Fashions ERP — approvals, quality checks, scanning and voice on the phone.",
+  "start_url": "/m",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#ea580c",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

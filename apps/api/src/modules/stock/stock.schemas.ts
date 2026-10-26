@@ -11,6 +11,8 @@ export const zBalanceQuery = zListQuery.extend({
   live: zBoolString.optional(),
 });
 
+export const zLocateQuery = z.object({ q: z.string().trim().min(2, 'Type at least 2 characters').max(60) });
+
 export const zMovementQuery = zListQuery.extend({
   itemId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma, withTx } from '../../core/db';
 import { ledger } from '../../core/ledger/ledger.service';
-import { type Client, asUser, assertLedgerInvariants, locationId, uid } from '../../../test/helpers';
+import { type Client, asUser, assertLedgerInvariants, locationId, passFinalQc, uid } from '../../../test/helpers';
 import { type Masters, createOrder, masters, orderBody } from '../../../test/fixtures';
 
 let owner: Client;
@@ -26,6 +26,7 @@ async function finished(orderId: string, itemId: string, cells: { colour: string
 }
 
 async function carton(orderId: string, lines: { colour: string; size: string; pcs: number }[]) {
+  await passFinalQc(owner, orderId, lines); // only inspected pieces can be packed (Q-063)
   const c = await owner.post('/api/v1/cartons', { docDate: '2026-10-16', orderId, grossKg: '8.5', netKg: '7.9', lines });
   ok(c, 201);
   const p = await owner.post(`/api/v1/cartons/${c.body.data.id}/post`);

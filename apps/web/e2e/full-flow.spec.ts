@@ -175,7 +175,7 @@ test.describe.serial('full order workflow', () => {
     await expect(page.getByText('Final loss')).toBeVisible();
   });
 
-  test('cutting lay: scan rolls, generate bundles, post', async () => {
+  test('cutting lay: scan rolls, generate bundles, approve, post', async () => {
     await page.goto('/cut-lays/new');
     await pick(page, 'Order *', orderNo);
     await (await field(page, /^Colour/)).selectOption('NAVY');
@@ -190,6 +190,9 @@ test.describe.serial('full order workflow', () => {
     await page.getByRole('button', { name: 'Generate bundles' }).click();
     await expect(page.getByText('8 bundles · 80 pieces')).toBeVisible();
     await saveDraft(page);
+    await expect(page.getByText('Awaiting approval').first()).toBeVisible();
+    await withReason(page, /^Approve$/, 'Approve', 'Marker and rolls checked');
+    await expect(page.getByText(/Approved by /).first()).toBeVisible();
     await primary(page);
     await expectStatus(page, 'POSTED');
     const api = await apiClient();
@@ -247,6 +250,17 @@ test.describe.serial('full order workflow', () => {
     await saveDraft(page);
     await primary(page);
     await expectStatus(page, 'POSTED');
+
+    // Only pieces passed in an approved final inspection can be packed (Q-063).
+    await page.goto('/qc/new?kind=FINAL');
+    await pick(page, 'Order *', orderNo);
+    await page.getByLabel('Colour *').selectOption('NAVY');
+    await page.getByLabel('Size *').selectOption('S');
+    await page.getByLabel('Checked *').fill('9');
+    await expect(page.getByLabel('Passed')).toHaveValue('9');
+    await saveDraft(page);
+    await withReason(page, /^Approve$/, 'Approve', 'Final inspection passed');
+    await expectStatus(page, 'APPROVED');
 
     await page.goto('/cartons/new');
     await pick(page, 'Order *', orderNo);

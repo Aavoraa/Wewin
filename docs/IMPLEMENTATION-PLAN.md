@@ -107,6 +107,20 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-10-26 — Item locator (change request 3)
+- Stores › Item locator (`/stock/locate`, `stock.view`) and the mobile Locate tab: search or scan a roll, bundle or carton number, a lot, an item code / name, or an order / buyer PO / style; shows quantities at every own store, floor location and job worker, live from the ledger; a single roll / bundle / carton also shows where it went (consumed, shipped) and its movement history with links to the documents. No new data entry (Wewin chose "where is it now" over rack / bin positions).
+- Test: bundle on the line and consumed with its trail, a fully cut roll, an order's material, validation and permission. Browser: roll and order searches.
+- Fix: the /m preview frame now borrows the outer page's session (two documents rotating the same refresh cookie logged one of them out). E2E: login helper and dashboard test updated for the redesigned dashboard; new mobile preview / phone shell test.
+
+### 2026-10-26 — Change request 2: mobile app, accounts feed, lay approval, quality checks (Q-062 … Q-065)
+- Migration `lay_approval_qc`: cut-lay approval columns; `qc_inspections` + `qc_inspection_lines` (QC series, audit trigger, number-by-status and order-required checks). Permissions `cutting.approve`, `qc.view/create/approve/cancel`; new permissions now reach their default roles on existing databases at start-up.
+- Cutting lays need approval before posting (setting on by default); approvers notified; edit clears approval. Rolls on hold / rejected in fabric QC cannot be cut.
+- Quality checks: fabric roll inspection (pass / hold / reject, GSM, points), inline sewing checks (per operator / bundle), final inspection (passed + rejected = checked, ≤ pieces in finishing); cartons limited to passed pieces not yet packed; defect list in settings.
+- Accounts feed: every post / approve / close / confirm / cancel notifies the accounts roles with what moved and amounts; email channel (SMTP, off until configured) with honest delivery status.
+- Mobile web app: phone shell (Home, Approvals, Scan, Inbox, Menu, voice), `/m` preview in a device frame with QR, lay and QC approval screens, camera scanning in every scan field, web app manifest; Vercel frame header now SAMEORIGIN.
+- Voice fill added to cutting lays, sewing issues, packing lists, panel D.C.s, recut slips, QC checks, export invoices, shipments and buyer receipts (19 forms in all).
+- Tests: shared 106, API 233 (13 new for approval / QC / packing gate / feed, 2 email); existing production / export tests now approve lays and pass final QC. Browser: `/m` preview, lay approved on the phone, inbox, QC register and form, lay register with approval column.
+
 ### 2026-10-21 — Voice commands (change request 1, Q-060)
 - Top-bar microphone (Alt+V) for questions and opening screens; Fill by voice on 10 document forms (orders header, yarn receipts, outward / inward D.C.s, trims, sewing output, cartons, debit notes, payments, vendor bills header). Speech recognised in the browser; understanding by Claude when VOICE_AI_PROVIDER=anthropic; without it, open-screen commands and dictation into a field.
 - Safety: read-only endpoint (rate-limited), answers only from reports the user may run, screens only from the user's navigation, master names resolved or offered as choices, every value validated; nothing saved or posted by voice.

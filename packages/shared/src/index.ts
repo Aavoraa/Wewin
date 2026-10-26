@@ -22,3 +22,4 @@ export * from './export';
 export * from './attachments';
 export * from './opening';
 export * from './voice';
+export * from './quality';

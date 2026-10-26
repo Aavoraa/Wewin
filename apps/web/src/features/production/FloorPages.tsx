@@ -90,6 +90,8 @@ export function SewingIssuesPage() {
 }
 
 type IssueRow = { bundleId: string; bundleNo: string; info: string; pcs: number };
+const VOICE_SEWING_ISSUE: VoiceFormSpec = {"title":"Sewing issue","fields":[{"name":"docDate","label":"Date","type":"date"},{"name":"orderId","label":"Order","type":"order"},{"name":"sewingLine","label":"Sewing line, written as Line 1, Line 2","type":"text"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function SewingIssuePage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -100,6 +102,7 @@ export function SewingIssuePage() {
     resolver: zodResolver(zSewingIssueInput as never),
     defaultValues: { docDate: todayIst(), orderId: '', sewingLine: 'Line 1', remarks: '', lines: [] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_SEWING_ISSUE, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('sewing.create'), setLabels });
   useEffect(() => {
     if (!doc) return;
     form.reset({ docDate: doc.docDate, orderId: doc.orderId, sewingLine: doc.sewingLine, remarks: doc.remarks ?? '', lines: doc.lines.map((l) => ({ bundleId: l.bundleId, bundleNo: l.bundle.bundleNo ?? '', info: `${l.bundle.componentCode} · ${l.bundle.colour} / ${l.bundle.size}`, pcs: l.pcs })) });
@@ -130,6 +133,7 @@ export function SewingIssuePage() {
 
   return (
     <DocumentForm
+      voice={voice}
       title="Sewing issue"
       docNo={doc?.docNo}
       status={status}
@@ -567,6 +571,8 @@ export function PackingListsPage() {
   );
 }
 
+const VOICE_PACKING_LIST: VoiceFormSpec = {"title":"Packing list","fields":[{"name":"docDate","label":"Date","type":"date"},{"name":"orderId","label":"Order","type":"order"},{"name":"remarks","label":"Remarks","type":"text"}]};
+
 export function PackingListPage() {
   const { id } = useParams();
   const { can } = useAuth();
@@ -577,6 +583,7 @@ export function PackingListPage() {
     resolver: zodResolver(zPackingListInput as never),
     defaultValues: { docDate: todayIst(), orderId: '', remarks: '', cartonIds: [] },
   });
+  const voice = useVoiceFill({ form, spec: VOICE_PACKING_LIST, enabled: (d.doc?.status ?? 'DRAFT') === 'DRAFT' && can('packing.create'), setLabels });
   const orderId = form.watch('orderId');
   const status = doc?.status ?? 'DRAFT';
   const editable = status === 'DRAFT' && can('packing.create');
@@ -596,6 +603,7 @@ export function PackingListPage() {
   const rows = [...(doc?.cartons ?? []), ...((available.data?.data ?? []).filter((c) => !doc?.cartons.some((x) => x.id === c.id)) as unknown as PackingList['cartons'])];
   return (
     <DocumentForm
+      voice={voice}
       title="Packing list"
       docNo={doc?.docNo}
       status={status}
