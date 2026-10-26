@@ -183,7 +183,7 @@ function ResultView({ result, onClose }: { result: VoiceResult; onClose(): void 
       <div className="grid gap-2 rounded-md bg-muted p-3 text-sm">
         <p className="font-medium">{result.message}</p>
         {result.problems.length ? (
-          <ul className="list-inside list-disc text-amber-700 dark:text-amber-400">
+          <ul className="list-inside list-disc text-sky-700 dark:text-sky-400">
             {result.problems.map((p) => (
               <li key={p}>{p}</li>
             ))}

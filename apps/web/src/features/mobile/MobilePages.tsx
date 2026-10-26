@@ -83,23 +83,23 @@ interface Overview {
 
 const STATUS_PILL: Record<string, string> = {
   ATTENTION: 'bg-red-50 text-red-700 ring-red-200',
-  PENDING: 'bg-amber-50 text-amber-800 ring-amber-200',
+  PENDING: 'bg-sky-50 text-sky-800 ring-sky-200',
   IN_PROGRESS: 'bg-sky-50 text-sky-800 ring-sky-200',
-  ON_TRACK: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  ON_TRACK: 'bg-blue-50 text-blue-800 ring-blue-200',
 };
-const TONE_DOT: Record<string, string> = { green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500', blue: 'bg-sky-500' };
+const TONE_DOT: Record<string, string> = { green: 'bg-blue-500', amber: 'bg-sky-500', red: 'bg-red-500', blue: 'bg-sky-500' };
 
 const ACTIONS: { label: string; to: string; perm: PermissionKey; icon: typeof Box; tone: string }[] = [
-  { label: 'Final QC', to: '/qc/new?kind=FINAL', perm: 'qc.create', icon: BadgeCheck, tone: 'text-emerald-600 bg-emerald-50' },
-  { label: 'Inline QC', to: '/qc/new?kind=INLINE', perm: 'qc.create', icon: ClipboardCheck, tone: 'text-teal-600 bg-teal-50' },
-  { label: 'Fabric QC', to: '/qc/new?kind=FABRIC_ROLL', perm: 'qc.create', icon: Layers, tone: 'text-indigo-600 bg-indigo-50' },
-  { label: 'Cutting lay', to: '/cut-lays/new', perm: 'cutting.create', icon: Scissors, tone: 'text-orange-600 bg-orange-50' },
-  { label: 'Sewing output', to: '/sewing-entries/new', perm: 'sewing.create', icon: Shirt, tone: 'text-violet-600 bg-violet-50' },
-  { label: 'Carton', to: '/cartons/new', perm: 'packing.create', icon: Box, tone: 'text-amber-600 bg-amber-50' },
+  { label: 'Final QC', to: '/qc/new?kind=FINAL', perm: 'qc.create', icon: BadgeCheck, tone: 'text-blue-600 bg-blue-50' },
+  { label: 'Inline QC', to: '/qc/new?kind=INLINE', perm: 'qc.create', icon: ClipboardCheck, tone: 'text-sky-600 bg-sky-50' },
+  { label: 'Fabric QC', to: '/qc/new?kind=FABRIC_ROLL', perm: 'qc.create', icon: Layers, tone: 'text-blue-600 bg-blue-50' },
+  { label: 'Cutting lay', to: '/cut-lays/new', perm: 'cutting.create', icon: Scissors, tone: 'text-blue-600 bg-blue-50' },
+  { label: 'Sewing output', to: '/sewing-entries/new', perm: 'sewing.create', icon: Shirt, tone: 'text-blue-600 bg-blue-50' },
+  { label: 'Carton', to: '/cartons/new', perm: 'packing.create', icon: Box, tone: 'text-blue-600 bg-blue-50' },
   { label: 'Yarn receipt', to: '/yarn-receipts/new', perm: 'yarn.create', icon: PackageOpen, tone: 'text-blue-600 bg-blue-50' },
   { label: 'Outward D.C.', to: '/outward-dcs/new', perm: 'jobwork.create', icon: Truck, tone: 'text-sky-600 bg-sky-50' },
-  { label: 'Scan invoice', to: '/scans', perm: 'scans.upload', icon: FileUp, tone: 'text-rose-600 bg-rose-50' },
-  { label: 'Locate item', to: '/m/scan', perm: 'stock.view', icon: MapPinned, tone: 'text-cyan-700 bg-cyan-50' },
+  { label: 'Scan invoice', to: '/scans', perm: 'scans.upload', icon: FileUp, tone: 'text-red-600 bg-red-50' },
+  { label: 'Locate item', to: '/m/scan', perm: 'stock.view', icon: MapPinned, tone: 'text-sky-700 bg-sky-50' },
   { label: 'Reports', to: '/reports', perm: 'reports.view', icon: BarChart3, tone: 'text-slate-600 bg-slate-100' },
 ];
 
@@ -123,7 +123,7 @@ export function MobileHome() {
       </div>
 
       {approvals.length ? (
-        <Link to="/m/approvals" className="mb-4 flex items-center gap-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 p-3 text-white shadow">
+        <Link to="/m/approvals" className="mb-4 flex items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-600 p-3 text-white shadow">
           <ShieldCheck className="size-8 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="text-base font-semibold">{approvals.length} waiting for your approval</div>
@@ -161,10 +161,10 @@ export function MobileHome() {
         <Tile className="mb-4" to="/reports?report=order-progress&run=1">
           <div className="mb-1 flex items-center justify-between text-sm">
             <span className="font-medium text-slate-800">Production progress</span>
-            <span className="font-semibold text-emerald-700">{o.progress.pct}%</span>
+            <span className="font-semibold text-blue-700">{o.progress.pct}%</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${o.progress.pct}%` }} />
+            <div className="h-full rounded-full bg-blue-500" style={{ width: `${o.progress.pct}%` }} />
           </div>
           <div className="mt-1 text-[11px] text-slate-500">
             {formatQty(o.progress.packedPcs)} of {formatQty(o.progress.orderedPcs)} ordered pieces packed
@@ -196,7 +196,7 @@ export function MobileHome() {
       </Section>
 
       {o.headsUp ? (
-        <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="mb-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
           <div className="mb-1 font-semibold">Heads up!</div>
           {o.headsUp.text}{' '}
           <Link to={o.headsUp.link} className="font-medium underline">
@@ -401,14 +401,14 @@ export function MobileLayApproval() {
 
       {l.approvalStatus === 'APPROVED' ? (
         <div className="mb-3 rounded-xl border bg-white p-3 text-xs shadow-sm">
-          <div className="flex items-center gap-1 font-medium text-emerald-800">
+          <div className="flex items-center gap-1 font-medium text-blue-800">
             <ShieldCheck className="size-4" /> Approved by {l.approvedBy?.fullName ?? '—'} · {formatDateTimeIst(l.approvedAt)}
           </div>
           {l.approvalNote ? <div className="mt-1 text-slate-700">{l.approvalNote}</div> : null}
         </div>
       ) : null}
 
-      <Link to={`/cut-lays/${l.id}`} className="mb-3 block text-center text-sm font-medium text-orange-700">
+      <Link to={`/cut-lays/${l.id}`} className="mb-3 block text-center text-sm font-medium text-blue-700">
         Open the full lay
       </Link>
 
@@ -540,7 +540,7 @@ export function MobileQcApproval() {
           ))}
         </div>
       </Section>
-      <Link to={`/qc/${d.id}`} className="mb-3 block text-center text-sm font-medium text-orange-700">
+      <Link to={`/qc/${d.id}`} className="mb-3 block text-center text-sm font-medium text-blue-700">
         {d.status === 'DRAFT' && can('qc.create') ? 'Open to edit' : 'Open the full check'}
       </Link>
       {canApprove ? (
@@ -650,7 +650,7 @@ export function MobileInbox() {
           </button>
         ))}
         <button
-          className="ml-auto shrink-0 text-xs font-medium text-orange-700"
+          className="ml-auto shrink-0 text-xs font-medium text-blue-700"
           onClick={async () => {
             await api.post('/notifications/read-all');
             refresh();
@@ -665,7 +665,7 @@ export function MobileInbox() {
             const email = n.deliveries.find((d) => d.channel === 'EMAIL');
             return (
               <button key={n.id} onClick={() => void open(n)} className="flex w-full gap-2 p-3 text-left active:bg-slate-50">
-                <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', n.readAt ? 'bg-transparent' : 'bg-orange-500')} />
+                <span className={cn('mt-1.5 size-2 shrink-0 rounded-full', n.readAt ? 'bg-transparent' : 'bg-blue-500')} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className={cn('text-sm', n.readAt ? 'text-slate-700' : 'font-semibold text-slate-900')}>{n.title}</span>

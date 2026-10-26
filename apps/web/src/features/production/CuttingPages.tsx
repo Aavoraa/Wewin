@@ -439,7 +439,7 @@ export function LayApprovalPanel({ lay, canApprove }: { lay: Pick<CutLay, 'appro
     return (
       <Card>
         <CardContent className="grid gap-1 text-xs">
-          <div className="flex items-center gap-1 font-medium text-emerald-800">
+          <div className="flex items-center gap-1 font-medium text-blue-800">
             <ShieldCheck className="size-4" /> Approved by {lay.approvedBy?.fullName ?? '—'}
           </div>
           <div className="text-muted-foreground">{formatDateTimeIst(lay.approvedAt)}</div>
@@ -450,7 +450,7 @@ export function LayApprovalPanel({ lay, canApprove }: { lay: Pick<CutLay, 'appro
   }
   if (lay.approvalStatus !== 'PENDING') return null;
   return (
-    <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+    <div className="rounded border border-sky-300 bg-sky-50 p-2 text-xs text-sky-900">
       <div className="font-medium">Awaiting approval</div>
       {canApprove ? 'Check the rolls and bundles, then click Approve. It can be posted once approved.' : 'It can be posted once a manager approves it.'}
     </div>

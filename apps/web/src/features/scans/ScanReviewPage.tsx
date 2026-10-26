@@ -79,11 +79,11 @@ const SOURCE_TONE: Record<ScanField['source'], { label: string; cls: string }> =
   EXTRACTED: { label: 'Read', cls: 'bg-sky-50 text-sky-800 ring-sky-200 dark:bg-sky-950 dark:text-sky-200' },
   DERIVED: {
     label: 'Derived',
-    cls: 'bg-violet-50 text-violet-800 ring-violet-200 dark:bg-violet-950 dark:text-violet-200',
+    cls: 'bg-blue-50 text-blue-800 ring-blue-200 dark:bg-blue-950 dark:text-blue-200',
   },
   EDITED: {
     label: 'Edited',
-    cls: 'bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-200',
+    cls: 'bg-blue-50 text-blue-800 ring-blue-200 dark:bg-blue-950 dark:text-blue-200',
   },
   MASTER: { label: 'Master', cls: 'bg-slate-100 text-slate-700 ring-slate-300' },
   MISSING: { label: 'Not found', cls: 'bg-slate-50 text-slate-500 ring-slate-200' },
@@ -100,7 +100,7 @@ function SourceChip({ f, min }: { f: ScanField; min: number }) {
           title={f.corrected ? 'OCR correction applied' : 'Read confidence'}
           className={cn(
             'text-[10px] tabular-nums',
-            low ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+            low ? 'font-semibold text-sky-700 dark:text-sky-300' : 'text-muted-foreground',
           )}
         >
           {Math.round(f.confidence * 100)}%{f.corrected ? '*' : ''}
@@ -290,7 +290,7 @@ export function ScanReviewPage() {
             id={`h-${k}`}
             value={value}
             disabled={!editable}
-            className={cn('h-8', uncertain && !confirmed.has(fk) && 'border-amber-400')}
+            className={cn('h-8', uncertain && !confirmed.has(fk) && 'border-sky-400')}
             onFocus={() => focusField(f)}
             onChange={(e) => setEdits((x) => ({ ...x, header: { ...x.header, [k]: e.target.value } }))}
           />
@@ -302,7 +302,7 @@ export function ScanReviewPage() {
               title="I checked this against the document"
               onClick={() => toggleConfirm(fk)}
             >
-              <Check className={confirmed.has(fk) ? 'text-emerald-600' : ''} />
+              <Check className={confirmed.has(fk) ? 'text-blue-600' : ''} />
             </Button>
           ) : null}
         </div>
@@ -400,7 +400,7 @@ export function ScanReviewPage() {
                 <Card>
                   <CardContent className="grid gap-1 text-sm">
                     {scan.extraction.warnings.map((w) => (
-                      <div key={w} className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
+                      <div key={w} className="flex items-start gap-2 text-sky-800 dark:text-sky-300">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {w}
                       </div>
                     ))}
@@ -1015,7 +1015,7 @@ function LinesBox({
                               title="I checked this value"
                               className={cn(
                                 'rounded p-0.5',
-                                confirmed.has(fk) ? 'text-emerald-600' : 'text-amber-600',
+                                confirmed.has(fk) ? 'text-blue-600' : 'text-sky-600',
                               )}
                               onClick={() => toggleConfirm(fk)}
                             >
@@ -1081,8 +1081,8 @@ function CellInput({
       onChange={(e) => onChange(e.target.value)}
       className={cn(
         'h-8 w-full rounded border border-input bg-background px-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-70',
-        low && 'border-amber-400 bg-amber-50 dark:bg-amber-950/40',
-        f.source === 'EDITED' && 'border-emerald-400',
+        low && 'border-sky-400 bg-sky-50 dark:bg-sky-950/40',
+        f.source === 'EDITED' && 'border-blue-400',
         className?.includes('text-right') && 'text-right tabular-nums',
       )}
     />
@@ -1351,7 +1351,7 @@ function OutwardLinksBox({
             key={i.code + i.message}
             className={cn(
               'flex items-start gap-2 text-xs',
-              i.level === 'ERROR' ? 'text-red-700 dark:text-red-400' : 'text-amber-800 dark:text-amber-300',
+              i.level === 'ERROR' ? 'text-red-700 dark:text-red-400' : 'text-sky-800 dark:text-sky-300',
             )}
           >
             <CircleAlert className="mt-0.5 size-3.5 shrink-0" /> {i.message}
@@ -1405,7 +1405,7 @@ function Reconciliation({ r }: { r: NonNullable<ScanDetail['validation']>['recon
         <div
           className={cn(
             'flex justify-between font-semibold',
-            diff === 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400',
+            diff === 0 ? 'text-blue-700 dark:text-blue-400' : 'text-red-700 dark:text-red-400',
           )}
         >
           <span>Difference</span>
@@ -1428,7 +1428,7 @@ function IssuesBox({
   if (!issues.length)
     return (
       <Card>
-        <CardContent className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+        <CardContent className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-400">
           <CheckCircle2 className="size-4" /> No problems found
         </CardContent>
       </Card>
@@ -1450,7 +1450,7 @@ function IssuesBox({
               {i.level === 'ERROR' ? (
                 <CircleAlert className="mt-0.5 size-4 shrink-0 text-red-600" />
               ) : i.level === 'WARNING' ? (
-                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-sky-600" />
               ) : (
                 <Info className="mt-0.5 size-4 shrink-0 text-sky-600" />
               )}

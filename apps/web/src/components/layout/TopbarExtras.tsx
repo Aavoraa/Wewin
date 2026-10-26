@@ -88,14 +88,14 @@ function OrderSearch() {
   );
 }
 
-/** The WEWIN mark: an orange W. */
+/** The WEWIN mark: a blue W. */
 export function WewinMark({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 40 28" aria-hidden>
       <defs>
         <linearGradient id="wewin-w" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f97316" />
-          <stop offset="1" stopColor="#dc2626" />
+          <stop offset="0" stopColor="#3b82f6" />
+          <stop offset="1" stopColor="#1e40af" />
         </linearGradient>
       </defs>
       <path d="M1 2h7.2l4.6 14.6L17.6 2h4.8l4.8 14.6L31.8 2H39l-8.6 24h-6.2L20 13.4 15.8 26H9.6z" fill="url(#wewin-w)" />

@@ -34,7 +34,7 @@ export function OutwardDcPrint({ id }: { id: string }) {
                 <div className="mt-1 font-mono text-sm">{o.docNo ?? 'DRAFT'}</div>
                 <div>Date: {formatDate(o.docDate)}</div>
                 {o.status === 'CANCELLED' ? <div className="font-bold text-red-700">CANCELLED</div> : null}
-                {o.approvalStatus === 'PENDING' ? <div className="font-bold text-amber-700">NOT APPROVED</div> : null}
+                {o.approvalStatus === 'PENDING' ? <div className="font-bold text-sky-700">NOT APPROVED</div> : null}
               </div>
             </div>
             <div className="my-2 grid grid-cols-2 gap-3 border-b border-black pb-2">

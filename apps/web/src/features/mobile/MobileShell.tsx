@@ -71,7 +71,7 @@ export function MobileShell() {
       </main>
       <nav className="no-print grid shrink-0 grid-cols-5 border-t bg-white pb-[env(safe-area-inset-bottom)]">
         {TABS.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => cn('relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium', isActive ? 'text-orange-600' : 'text-slate-500')}>
+          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => cn('relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium', isActive ? 'text-blue-600' : 'text-slate-500')}>
             <t.icon className="size-5" />
             {t.label}
             {t.badge && counts[t.badge] ? (
@@ -103,7 +103,7 @@ export function MobilePreview() {
       </div>
       <div className="hidden max-w-sm flex-col gap-4 lg:flex">
         <div className="flex items-center gap-2 text-slate-900">
-          <Smartphone className="size-6 text-orange-600" />
+          <Smartphone className="size-6 text-blue-600" />
           <h1 className="text-xl font-semibold">Wewin mobile app</h1>
         </div>
         <p className="text-sm text-slate-600">
@@ -117,7 +117,7 @@ export function MobilePreview() {
             <div className="mt-2">On the phone, use the browser menu › Add to Home screen to install it like an app.</div>
           </div>
         </div>
-        <a href="/" className="text-sm font-medium text-orange-700 hover:underline">
+        <a href="/" className="text-sm font-medium text-blue-700 hover:underline">
           ← Back to the desktop software
         </a>
       </div>

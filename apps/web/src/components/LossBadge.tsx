@@ -2,8 +2,8 @@ import { type LossBand, formatPct } from '@wewin/shared';
 import { cn } from '@/lib/utils';
 
 const STYLE: Record<LossBand, string> = {
-  OK: 'bg-emerald-50 text-emerald-800 ring-emerald-300',
-  NEAR: 'bg-amber-50 text-amber-800 ring-amber-300',
+  OK: 'bg-blue-50 text-blue-800 ring-blue-300',
+  NEAR: 'bg-sky-50 text-sky-800 ring-sky-300',
   OVER: 'bg-red-50 text-red-700 ring-red-300',
 };
 const LABEL: Record<LossBand, string> = { OK: 'within limit', NEAR: 'near limit', OVER: 'over limit' };

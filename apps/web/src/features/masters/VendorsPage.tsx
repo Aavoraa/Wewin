@@ -109,8 +109,8 @@ export function VendorsPage() {
               )}
             />
           </div>
-          <div className="rounded-md border border-amber-200 bg-amber-50/50 p-3 sm:col-span-2">
-            <div className="mb-2 text-xs text-amber-800">
+          <div className="rounded-md border border-sky-200 bg-sky-50/50 p-3 sm:col-span-2">
+            <div className="mb-2 text-xs text-sky-800">
               Tax treatment is configured per vendor and must be confirmed with Wewin&apos;s auditor (Q-008). Nothing is applied unless ticked.
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

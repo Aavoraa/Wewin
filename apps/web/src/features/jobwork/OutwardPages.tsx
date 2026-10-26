@@ -491,7 +491,7 @@ function ApprovalPanel({ o, canApprove }: { o: OutwardDc; canApprove: boolean })
     return (
       <Card>
         <CardContent className="grid gap-1 text-xs">
-          <div className="flex items-center gap-1 font-medium text-emerald-800">
+          <div className="flex items-center gap-1 font-medium text-blue-800">
             <ShieldCheck className="size-4" /> Approved by {o.approvedBy?.fullName ?? '—'}
           </div>
           <div className="text-muted-foreground">{formatDateTimeIst(o.approvedAt)}</div>
@@ -502,7 +502,7 @@ function ApprovalPanel({ o, canApprove }: { o: OutwardDc; canApprove: boolean })
   }
   if (o.approvalStatus !== 'PENDING') return null;
   return (
-    <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+    <div className="rounded border border-sky-300 bg-sky-50 p-2 text-xs text-sky-900">
       <div className="font-medium">Awaiting management approval</div>
       {canApprove ? 'Review the D.C. and click Approve. It can be posted once approved.' : 'It can be posted once management approves it.'}
     </div>

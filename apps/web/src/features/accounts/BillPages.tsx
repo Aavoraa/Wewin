@@ -133,7 +133,7 @@ function MatchCard({ match, approval, figures }: { match: MatchResult | null | u
         <Row
           label="Variance"
           value={
-            <span className={cn('font-semibold', D(match.variance).isZero() ? '' : D(match.variance).greaterThan(0) ? 'text-red-700' : 'text-emerald-700')}>
+            <span className={cn('font-semibold', D(match.variance).isZero() ? '' : D(match.variance).greaterThan(0) ? 'text-red-700' : 'text-blue-700')}>
               {formatInr(match.variance, { symbol: true })}
               {match.variancePct ? ` (${D(match.variancePct).toFixed(2)}%)` : ''}
             </span>

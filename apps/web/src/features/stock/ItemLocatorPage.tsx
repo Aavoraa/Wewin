@@ -27,12 +27,12 @@ interface LocateResult {
 }
 
 const KIND: Record<Kind, { label: string; icon: typeof Box; tone: string }> = {
-  ROLL: { label: 'Roll', icon: Layers, tone: 'bg-indigo-50 text-indigo-700' },
-  BUNDLE: { label: 'Bundle', icon: Package, tone: 'bg-orange-50 text-orange-700' },
-  CARTON: { label: 'Carton', icon: Box, tone: 'bg-amber-50 text-amber-700' },
+  ROLL: { label: 'Roll', icon: Layers, tone: 'bg-blue-50 text-blue-700' },
+  BUNDLE: { label: 'Bundle', icon: Package, tone: 'bg-sky-50 text-sky-700' },
+  CARTON: { label: 'Carton', icon: Box, tone: 'bg-sky-50 text-sky-700' },
   LOT: { label: 'Lot', icon: Warehouse, tone: 'bg-blue-50 text-blue-700' },
-  ITEM: { label: 'Item', icon: ShoppingBag, tone: 'bg-emerald-50 text-emerald-700' },
-  ORDER: { label: 'Order', icon: MapPin, tone: 'bg-violet-50 text-violet-700' },
+  ITEM: { label: 'Item', icon: ShoppingBag, tone: 'bg-blue-50 text-blue-700' },
+  ORDER: { label: 'Order', icon: MapPin, tone: 'bg-blue-50 text-blue-700' },
 };
 
 /** Screens of the documents that move stock (for the trail). */
@@ -132,7 +132,7 @@ export function LocatorResults({ q, compact }: { q: string; compact?: boolean })
           <ol className="relative ml-2 border-l pl-4">
             {d.trail.rows.map((t) => (
               <li key={t.id} className="mb-2.5 last:mb-0">
-                <span className={cn('absolute -left-[5px] mt-1.5 size-2.5 rounded-full', t.isReversal ? 'bg-red-400' : 'bg-orange-500')} />
+                <span className={cn('absolute -left-[5px] mt-1.5 size-2.5 rounded-full', t.isReversal ? 'bg-red-400' : 'bg-blue-500')} />
                 <div className="text-sm">
                   {t.from} → <span className="font-medium">{t.to}</span> · {qty(t.qty, t.unit)}
                   {t.detail ? <span className="text-muted-foreground"> · {t.detail}</span> : null}

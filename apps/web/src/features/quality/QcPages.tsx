@@ -449,7 +449,7 @@ export function QcPage() {
                 ) : (
                   <>
                     <div className="text-xs text-muted-foreground">Defect rate</div>
-                    <div className={cn('text-2xl font-semibold', Number(totals.defectPct) > 5 ? 'text-red-600' : Number(totals.defectPct) > 2 ? 'text-amber-600' : 'text-emerald-700')}>{totals.defectPct}%</div>
+                    <div className={cn('text-2xl font-semibold', Number(totals.defectPct) > 5 ? 'text-red-600' : Number(totals.defectPct) > 2 ? 'text-sky-600' : 'text-blue-700')}>{totals.defectPct}%</div>
                     <div className="text-xs text-muted-foreground">
                       {totals.checked} checked · {totals.passed} passed · {totals.rejected} {kind === 'FINAL' ? 'rejected' : 'defective'}
                     </div>
@@ -462,7 +462,7 @@ export function QcPage() {
             {qc?.status === 'POSTED' ? (
               <Card>
                 <CardContent className="grid gap-1 text-xs">
-                  <div className="flex items-center gap-1 font-medium text-emerald-800">
+                  <div className="flex items-center gap-1 font-medium text-blue-800">
                     <ShieldCheck className="size-4" /> Approved {formatDateTimeIst(qc.postedAt)}
                   </div>
                   {qc.approvalNote ? <div>{qc.approvalNote}</div> : null}
@@ -566,7 +566,7 @@ function QcLineCard({
                     onClick={() => set('result', r)}
                     className={cn(
                       'h-9 rounded-md border text-xs font-semibold',
-                      l.result === r ? (r === 'PASS' ? 'border-emerald-600 bg-emerald-600 text-white' : r === 'HOLD' ? 'border-amber-500 bg-amber-500 text-white' : 'border-red-600 bg-red-600 text-white') : 'bg-background',
+                      l.result === r ? (r === 'PASS' ? 'border-blue-600 bg-blue-600 text-white' : r === 'HOLD' ? 'border-sky-500 bg-sky-500 text-white' : 'border-red-600 bg-red-600 text-white') : 'bg-background',
                     )}
                   >
                     {r === 'PASS' ? 'Pass' : r === 'HOLD' ? 'Hold' : 'Reject'}

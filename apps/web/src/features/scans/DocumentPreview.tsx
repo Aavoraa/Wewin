@@ -135,7 +135,7 @@ export function DocumentPreview({ fileUrl, mime, highlight, pageCount }: { fileU
           {showBox ? (
             <div
               aria-hidden
-              className="pointer-events-none absolute rounded-sm border-2 border-amber-500 bg-amber-300/25 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]"
+              className="pointer-events-none absolute rounded-sm border-2 border-sky-500 bg-sky-300/25 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]"
               style={{
                 left: highlight.box[0] * size.w - 3,
                 top: highlight.box[1] * size.h - 3,

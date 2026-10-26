@@ -59,10 +59,10 @@ type Icon = ComponentType<{ className?: string }>;
 /** Colour theme per pipeline stage (border, icon tile, item icon chip). */
 const STAGE_THEME: Record<string, { icon: Icon; border: string; tile: string; chip: string; wash: string }> = {
   orders: { icon: FileText, border: 'border-blue-300', tile: 'bg-blue-600', chip: 'bg-blue-50 text-blue-600', wash: 'from-blue-50/80' },
-  materials: { icon: Boxes, border: 'border-emerald-300', tile: 'bg-emerald-600', chip: 'bg-emerald-50 text-emerald-600', wash: 'from-emerald-50/80' },
-  production: { icon: Factory, border: 'border-orange-300', tile: 'bg-orange-500', chip: 'bg-orange-50 text-orange-600', wash: 'from-orange-50/80' },
-  dispatch: { icon: Truck, border: 'border-violet-300', tile: 'bg-violet-500', chip: 'bg-violet-50 text-violet-600', wash: 'from-violet-50/80' },
-  finance: { icon: Wallet, border: 'border-teal-300', tile: 'bg-teal-600', chip: 'bg-teal-50 text-teal-600', wash: 'from-teal-50/80' },
+  materials: { icon: Boxes, border: 'border-blue-300', tile: 'bg-blue-600', chip: 'bg-blue-50 text-blue-600', wash: 'from-blue-50/80' },
+  production: { icon: Factory, border: 'border-sky-300', tile: 'bg-sky-600', chip: 'bg-sky-50 text-sky-600', wash: 'from-sky-50/80' },
+  dispatch: { icon: Truck, border: 'border-blue-300', tile: 'bg-blue-500', chip: 'bg-blue-50 text-blue-600', wash: 'from-blue-50/80' },
+  finance: { icon: Wallet, border: 'border-sky-300', tile: 'bg-sky-600', chip: 'bg-sky-50 text-sky-600', wash: 'from-sky-50/80' },
 };
 const ITEM_ICON: Record<string, Icon> = {
   orders: FileText,
@@ -88,22 +88,22 @@ const ITEM_ICON: Record<string, Icon> = {
   payments: Wallet,
   ageing: BarChart3,
 };
-const DOT: Record<Tone, string> = { green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500', blue: 'bg-sky-500' };
+const DOT: Record<Tone, string> = { green: 'bg-blue-500', amber: 'bg-sky-500', red: 'bg-red-500', blue: 'bg-sky-500' };
 const STATUS: Record<Overview['stages'][number]['status'], [string, string]> = {
-  ON_TRACK: ['On Track', 'bg-emerald-100 text-emerald-700'],
-  IN_PROGRESS: ['In Progress', 'bg-orange-100 text-orange-700'],
-  PENDING: ['Pending', 'bg-violet-100 text-violet-700'],
+  ON_TRACK: ['On Track', 'bg-blue-100 text-blue-700'],
+  IN_PROGRESS: ['In Progress', 'bg-sky-100 text-sky-700'],
+  PENDING: ['Pending', 'bg-blue-100 text-blue-700'],
   ATTENTION: ['Needs Attention', 'bg-red-100 text-red-700'],
 };
 const KPI: Record<string, { icon: Icon; chip: string }> = {
   activeOrders: { icon: FileText, chip: 'bg-blue-50 text-blue-600' },
-  inProduction: { icon: Factory, chip: 'bg-emerald-50 text-emerald-600' },
-  pendingReceipts: { icon: Package, chip: 'bg-orange-50 text-orange-600' },
-  invoicesReview: { icon: FileCheck2, chip: 'bg-violet-50 text-violet-600' },
+  inProduction: { icon: Factory, chip: 'bg-blue-50 text-blue-600' },
+  pendingReceipts: { icon: Package, chip: 'bg-sky-50 text-sky-600' },
+  invoicesReview: { icon: FileCheck2, chip: 'bg-blue-50 text-blue-600' },
   overdue: { icon: AlertTriangle, chip: 'bg-red-50 text-red-600' },
 };
-const PRIORITY: Record<string, string> = { High: 'bg-red-50 text-red-600 ring-red-200', Medium: 'bg-amber-50 text-amber-700 ring-amber-200', Low: 'bg-emerald-50 text-emerald-700 ring-emerald-200' };
-const TASK_STATUS: Record<string, string> = { Pending: 'bg-amber-50 text-amber-700 ring-amber-200', Overdue: 'bg-red-50 text-red-600 ring-red-200', Due: 'bg-amber-50 text-amber-700 ring-amber-200' };
+const PRIORITY: Record<string, string> = { High: 'bg-red-50 text-red-600 ring-red-200', Medium: 'bg-sky-50 text-sky-700 ring-sky-200', Low: 'bg-blue-50 text-blue-700 ring-blue-200' };
+const TASK_STATUS: Record<string, string> = { Pending: 'bg-sky-50 text-sky-700 ring-sky-200', Overdue: 'bg-red-50 text-red-600 ring-red-200', Due: 'bg-sky-50 text-sky-700 ring-sky-200' };
 
 const longDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -125,7 +125,7 @@ export function DashboardPage() {
   const o = q.data;
 
   return (
-    <div className="-m-3 min-h-full bg-gradient-to-b from-orange-50/60 via-background to-background p-3 sm:-m-5 sm:p-6">
+    <div className="-m-3 min-h-full bg-gradient-to-b from-blue-50/60 via-background to-background p-3 sm:-m-5 sm:p-6">
       <div className="mx-auto grid max-w-[1500px] grid-cols-[minmax(0,1fr)] gap-6">
         <Header o={o} canCreate={!!user && user.permissions.includes('orders.create')} />
         <Pipeline stages={o.stages} />
@@ -202,8 +202,8 @@ function Pipeline({ stages }: { stages: Overview['stages'] }) {
           </div>
         ))}
         <span className="absolute right-0 top-24 hidden items-center xl:flex" aria-hidden>
-          <span className="h-px w-3 bg-teal-500" />
-          <span className="size-2.5 rounded-full border-2 border-teal-500 bg-teal-100" />
+          <span className="h-px w-3 bg-sky-500" />
+          <span className="size-2.5 rounded-full border-2 border-sky-500 bg-sky-100" />
         </span>
       </div>
     </div>
@@ -345,7 +345,7 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
   );
 }
 
-const ACTIVITY_DOT: Record<string, string> = { PAYMENT_DUE: 'bg-red-500', DC_OVERDUE: 'bg-orange-500', GST_DEADLINE: 'bg-amber-500', EXCESS_LOSS: 'bg-red-500', REPORT_READY: 'bg-teal-500' };
+const ACTIVITY_DOT: Record<string, string> = { PAYMENT_DUE: 'bg-red-500', DC_OVERDUE: 'bg-red-400', GST_DEADLINE: 'bg-sky-500', EXCESS_LOSS: 'bg-red-500', REPORT_READY: 'bg-sky-500' };
 
 function RecentActivity({ rows }: { rows: Overview['activity'] }) {
   return (
@@ -420,11 +420,11 @@ function SidePanel({ o }: { o: Overview }) {
           Higher performance.
         </h2>
         <p className="mt-2 text-[13px] text-muted-foreground">From order to dispatch, everything you need, in one place.</p>
-        <div className="mt-3 h-0.5 w-8 rounded bg-orange-400" />
+        <div className="mt-3 h-0.5 w-8 rounded bg-blue-500" />
       </div>
       {o.progress ? (
         <Link to="/reports?report=order-progress&run=1" className="mx-4 flex items-center gap-4 rounded-xl border bg-white p-4 shadow-sm hover:shadow">
-          <span className="grid size-11 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+          <span className="grid size-11 place-items-center rounded-full bg-blue-50 text-blue-600">
             <Network className="size-5" />
           </span>
           <span className="min-w-0 flex-1">
@@ -432,7 +432,7 @@ function SidePanel({ o }: { o: Overview }) {
               Production Progress <span className="text-sm font-semibold">{o.progress.pct}%</span>
             </span>
             <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <span className="block h-full rounded-full bg-emerald-600" style={{ width: `${o.progress.pct}%` }} />
+              <span className="block h-full rounded-full bg-blue-600" style={{ width: `${o.progress.pct}%` }} />
             </span>
             <span className="mt-1.5 block text-[11px] text-muted-foreground">
               {o.progress.packedPcs.toLocaleString('en-IN')} of {o.progress.orderedPcs.toLocaleString('en-IN')} ordered pieces packed
@@ -441,9 +441,9 @@ function SidePanel({ o }: { o: Overview }) {
         </Link>
       ) : null}
       {o.headsUp ? (
-        <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+        <div className="mx-4 mb-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
           <div className="flex items-start gap-3">
-            <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-500" />
+            <Lightbulb className="mt-0.5 size-5 shrink-0 text-blue-500" />
             <div>
               <div className="text-sm font-semibold text-slate-900">Heads up!</div>
               <p className="mt-1 text-[13px] text-slate-600">{o.headsUp.text}</p>
