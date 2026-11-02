@@ -149,9 +149,7 @@ function Header({ o, canCreate }: { o: Overview; canCreate: boolean }) {
     <div className="flex flex-wrap items-start justify-between gap-5 min-[1440px]:flex-nowrap">
       <div className="min-w-0 min-[1440px]:max-w-[320px]">
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Wewin ERP</div>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Operations Overview</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Your complete manufacturing and supply chain workflow at a glance.</p>
-      </div>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Operations Overview</h1>      </div>
       <div className="flex flex-wrap items-center justify-end gap-2.5 min-[1440px]:flex-nowrap">
         <span className="mr-1 flex items-center gap-2 whitespace-nowrap text-[13px] text-slate-600">
           <Calendar className="size-4" /> {longDate(o.asOf)}

@@ -27,11 +27,9 @@ const app = createApp();
 type Body = Record<string, unknown>;
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const password = process.env.SEED_OWNER_PASSWORD;
-if (!password) throw new Error('SEED_OWNER_PASSWORD is not set in .env');
-const login = await request(app).post('/api/v1/auth/login').send({ username: 'owner', password });
-if (login.status !== 200) throw new Error(`Owner login failed (${login.status}). Is SEED_OWNER_PASSWORD still the owner's password?`);
-const token = login.body.data.accessToken as string;
+// Local: owner login; live (Neon) only with SAMPLE_DATA_LIVE=yes, acting for the owner in-process.
+const { ownerToken } = await import('./sample-session');
+const token = await ownerToken(app, request);
 
 async function call(method: 'get' | 'post' | 'patch' | 'put', url: string, body?: Body): Promise<Any> {
   const r = await request(app)[method](`/api/v1${url}`).set('authorization', `Bearer ${token}`).send(body ?? {});
@@ -69,7 +67,9 @@ if ((await get(`/cut-lays?orderId=${o2.id}&status=POSTED`)).length) {
 let teamPassword = process.env.SAMPLE_USERS_PASSWORD;
 if (!teamPassword) {
   teamPassword = `Wewin-${randomBytes(6).toString('hex')}9`;
-  appendFileSync(path.resolve(import.meta.dirname, '../../../.env'), `\n# Password of the sample team users (pnpm sample-data:more). Local only.\nSAMPLE_USERS_PASSWORD=${teamPassword}\n`);
+  // Kept with the connection it belongs to: .env locally, .env.live.local for the live database (both git-ignored).
+  const file = process.env.SAMPLE_DATA_LIVE === 'yes' ? '../../../.env.live.local' : '../../../.env';
+  appendFileSync(path.resolve(import.meta.dirname, file), `\n# Password of the sample team users (pnpm sample-data:more).\nSAMPLE_USERS_PASSWORD=${teamPassword}\n`);
 }
 step('Team users: accounts, stores, production, merchandiser, exports (password: SAMPLE_USERS_PASSWORD in .env)');
 const roles = new Map<string, string>((await get('/roles')).map((r: Any) => [r.code, r.id]));
