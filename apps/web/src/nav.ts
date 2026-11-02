@@ -91,10 +91,10 @@ export const NAV: NavGroup[] = [
     label: 'Production',
     items: [
       { label: 'Cutting lays', to: '/cut-lays', icon: Scissors, perm: 'cutting.view' },
+      { label: 'Recut slips', to: '/recut-slips', icon: ClipboardCheck, perm: 'panels.view' },
       { label: 'Bundles', to: '/bundles', icon: Layers, perm: 'cutting.view' },
       { label: 'Panels out (print / emb.)', to: '/panel-out', icon: Brush, perm: 'panels.view' },
       { label: 'Panels received', to: '/panel-in', icon: Undo2, perm: 'panels.view' },
-      { label: 'Recut slips', to: '/recut-slips', icon: ClipboardCheck, perm: 'panels.view' },
       { label: 'Sewing issues', to: '/sewing-issues', icon: Shirt, perm: 'sewing.view' },
       { label: 'Sewing output', to: '/sewing-entries', icon: Shirt, perm: 'sewing.view' },
       { label: 'Quality checks', to: '/qc', icon: BadgeCheck, perm: 'qc.view' },

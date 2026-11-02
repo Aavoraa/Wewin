@@ -21,11 +21,9 @@ const app = createApp();
 type Body = Record<string, unknown>;
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const password = process.env.SEED_OWNER_PASSWORD;
-if (!password) throw new Error('SEED_OWNER_PASSWORD is not set in .env');
-const login = await request(app).post('/api/v1/auth/login').send({ username: 'owner', password });
-if (login.status !== 200) throw new Error(`Owner login failed (${login.status}). Is SEED_OWNER_PASSWORD still the owner's password?`);
-const token = login.body.data.accessToken as string;
+// Local: owner login; live (Neon) only with SAMPLE_DATA_LIVE=yes, acting for the owner in-process.
+const { ownerToken } = await import('./sample-session');
+const token = await ownerToken(app, request);
 
 async function call(method: 'get' | 'post' | 'patch' | 'put', url: string, body?: Body): Promise<Any> {
   const r = await request(app)[method](`/api/v1${url}`).set('authorization', `Bearer ${token}`).send(body ?? {});

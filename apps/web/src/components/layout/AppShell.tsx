@@ -35,8 +35,34 @@ function readCollapsed(): boolean {
   }
 }
 
-function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+const NAV_OPEN_KEY = 'wewin.navOpen';
+
+function readNavOpen(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(NAV_OPEN_KEY) ?? '{}') as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+const inGroup = (pathname: string, to: string) => (to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`));
+
+function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   const { can } = useAuth();
+  const { pathname } = useLocation();
+  // Each section is a dropdown: the user's choice is remembered; untouched sections open only
+  // when they hold the current page.
+  const [navOpen, setNavOpen] = useState(readNavOpen);
+  const toggleGroup = (label: string, open: boolean) =>
+    setNavOpen((o) => {
+      const next = { ...o, [label]: !open };
+      try {
+        localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(next));
+      } catch {
+        // storage unavailable — the choice lasts for this visit
+      }
+      return next;
+    });
   return (
     <nav
       className={cn(
@@ -44,26 +70,51 @@ function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
         collapsed ? 'px-1.5' : 'px-2',
       )}
     >
-      <div className={cn('mb-4 flex items-center gap-2', collapsed ? 'justify-center' : 'px-2')}>
+      <div className={cn('mb-4 flex items-center gap-2', collapsed ? 'flex-col' : 'pl-2')}>
         <img src="/favicon.svg" alt="" className="size-7 shrink-0" />
         {collapsed ? null : (
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-white">Wewin ERP</div>
-            <div className="text-[11px] text-slate-400">Wewin Knit Fashions</div>
+            <div className="truncate text-[11px] text-slate-400">Wewin Knit Fashions</div>
           </div>
         )}
+        {onToggle ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="grid size-8 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-sidebar-active hover:text-white"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          </button>
+        ) : null}
       </div>
       {NAV.map((g) => {
         const items = g.items.filter((i) => can(i.perm));
         if (!items.length) return null;
+        const hasActive = items.some((i) => inGroup(pathname, i.to));
+        const open = collapsed || (navOpen[g.label] ?? hasActive);
         return (
-          <div key={g.label} className="mb-3">
+          <div key={g.label} className={collapsed ? 'mb-3' : 'mb-1'}>
             {collapsed ? (
               <div className="mx-2 mb-1 border-t border-slate-700" />
             ) : (
-              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{g.label}</div>
+              <button
+                type="button"
+                onClick={() => toggleGroup(g.label, open)}
+                aria-expanded={open}
+                className={cn(
+                  'flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover:bg-sidebar-active hover:text-white',
+                  hasActive ? 'text-slate-200' : 'text-slate-500',
+                )}
+              >
+                <span className="flex-1 text-left">{g.label}</span>
+                {!open && hasActive ? <span className="size-1.5 rounded-full bg-blue-400" aria-hidden /> : null}
+                <ChevronDown className={cn('size-3.5 transition-transform', !open && '-rotate-90')} />
+              </button>
             )}
-            {items.map((i) => (
+            {open ? items.map((i) => (
               <NavLink
                 key={i.to}
                 to={i.to}
@@ -82,7 +133,7 @@ function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
                 <i.icon className="size-4 shrink-0" />
                 {collapsed ? null : i.label}
               </NavLink>
-            ))}
+            )) : null}
           </div>
         );
       })}
@@ -177,7 +228,7 @@ export function AppShell() {
     <div className="flex h-full">
       <aside className={cn('no-print hidden shrink-0 transition-[width] lg:block', collapsed ? 'w-14' : 'w-60')}>
         <div className={cn('fixed inset-y-0 transition-[width]', collapsed ? 'w-14' : 'w-60')}>
-          <Sidebar collapsed={collapsed} />
+          <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
         </div>
       </aside>
       {mobileOpen ? (
@@ -196,16 +247,6 @@ export function AppShell() {
         <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card px-3 sm:px-4">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden lg:inline-flex"
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
           </Button>
           <TopbarExtras />
           <div className="ml-auto flex items-center gap-1.5">

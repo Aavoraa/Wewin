@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "sample-data": "tsx --env-file=../../.env scripts/sample-data.ts",
     "sample-docs": "tsx --env-file=../../.env scripts/make-sample-po-dcs.ts",
-    "sample-data:more": "tsx --env-file=../../.env scripts/sample-data-more.ts"
+    "sample-data:more": "tsx --env-file=../../.env scripts/sample-data-more.ts",
+    "sample-data:live": "tsx --env-file=../../.env --env-file=../../.env.live.local scripts/seed-demo-masters.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data-more.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.130.0",

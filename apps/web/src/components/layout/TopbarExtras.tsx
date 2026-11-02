@@ -103,7 +103,7 @@ export function WewinMark({ className }: { className?: string }) {
   );
 }
 
-/** Logo and the company this ERP belongs to (from Settings › Company when the user may see it). */
+/** The company this ERP belongs to (from Settings › Company when the user may see it). */
 function Brand() {
   const { can } = useAuth();
   const company = useQuery({
@@ -116,11 +116,6 @@ function Brand() {
   const name = raw && !/placeholder/i.test(raw) ? raw : 'Wewin Knit Fashions';
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <Link to="/" className="flex items-center gap-2" aria-label="Wewin dashboard">
-        <WewinMark className="h-6 w-8" />
-        <span className="hidden text-lg font-bold tracking-[0.08em] text-slate-900 md:inline">WEWIN</span>
-      </Link>
-      <span className="hidden h-7 w-px bg-border md:block" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="hidden min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-slate-800 hover:bg-accent md:flex">
