@@ -16,6 +16,29 @@ import { notifyRouter } from './core/notify/notify.routes';
 import { moduleRouters } from './modules';
 import { docsRouter } from './core/docs.routes';
 import { CRON_JOBS, runJobNow } from './jobs/queue';
+import { storageDriver } from './core/storage';
+
+/** Which database and file store this server uses, with no secrets: a short fingerprint only. */
+export function dbFingerprint(url: string | undefined): string | null {
+  try {
+    const u = new URL(url ?? '');
+    return crypto.createHash('sha256').update(`${u.hostname.replace('-pooler.', '.')}/${u.pathname.replace(/^\//, '')}`).digest('hex').slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+async function setupStatus() {
+  const [m] = await prisma.$queryRaw<{ count: bigint; latest: string | null }[]>`SELECT count(*) AS count, max(migration_name) AS latest FROM _prisma_migrations WHERE finished_at IS NOT NULL`;
+  const [t] = await prisma.$queryRaw<{ scans: boolean }[]>`SELECT to_regclass('public.invoice_scans') IS NOT NULL AS scans`;
+  return {
+    database: dbFingerprint(process.env.DATABASE_URL),
+    migrations: Number(m?.count ?? 0),
+    latestMigration: m?.latest ?? null,
+    scansTable: !!t?.scans,
+    fileStorage: storageDriver(),
+    blobConnected: !!process.env.BLOB_READ_WRITE_TOKEN,
+  };
+}
 
 export function createApp() {
   const app = express();
@@ -51,7 +74,7 @@ export function createApp() {
   });
   app.get('/api/health/ready', async (_req, res) => {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, db: 'up' });
+    res.json({ ok: true, db: 'up', setup: await setupStatus() });
   });
 
   // Vercel Cron: scheduled jobs when pg-boss workers are not running. Vercel sends the CRON_SECRET.

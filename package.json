@@ -22,6 +22,7 @@
     "db:reset": "pnpm --filter @wewin/db exec prisma migrate reset --force",
     "sample-data": "pnpm --filter @wewin/api sample-data",
     "sample-data:more": "pnpm --filter @wewin/api sample-data:more",
+    "sample-data:orders": "pnpm --filter @wewin/api sample-data:orders",
     "sample-data:live": "pnpm --filter @wewin/api sample-data:live"
   },
   "devDependencies": {
