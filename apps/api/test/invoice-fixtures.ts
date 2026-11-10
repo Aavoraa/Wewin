@@ -368,3 +368,21 @@ export async function buyerPoPdf(po: FixturePo): Promise<Buffer> {
   d('Delivery: FOB Chennai. Please confirm within 3 days.', 40, y, { size: 9 });
   return Buffer.from(await pdf.save());
 }
+
+/** A text PDF laid out like the desktop Programme Entry screen (Q-068); its labels are what recognition needs. */
+export async function programmeScreenPdf(orderRef: string, colour = 'NAVY'): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([842, 595]);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const rows = [
+    'Programme Entry',
+    `Order Ref   ${orderRef}      Color / Combo   ${colour}      Order Qty   1600`,
+    'Portion      Fab.Colour      Print.Colour      Fab.Details      Yarn Details      Grammage      Loss Details',
+    `BODY + SLV   ${colour}`,
+    `NECK RIB     ${colour}`,
+    'Fabric Description   1*1 LYC RIB      Yarn Counts   Yarn Colour   Cons.%      Prs.Template   GREY PUR + DYEING (KGS)',
+    'Knit.Dia   32   32   32      Finish.Dia   33   33   33',
+  ];
+  rows.forEach((t, i) => page.drawText(t, { x: 30, y: 550 - i * 26, size: 11, font }));
+  return Buffer.from(await pdf.save());
+}

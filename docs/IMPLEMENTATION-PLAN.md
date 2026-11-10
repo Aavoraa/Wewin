@@ -107,6 +107,26 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-10 — Programme Entry screenshots → fabric programmes (Q-068)
+- Scan target `PROGRAM` / class `PROGRAMME_SCREEN`; migrations `programme_scans` (`fabric_programs.source_scan_id`, process GREY_PURCHASE) and `programme_scan_target` (scan target check).
+- AI: programme screens are read with a separate schema (the combined invoice + programme grammar was refused as too large); used directly when the screen labels are in the OCR text, else after the invoice read reports a programme screen. Verified on the user's own screenshot: every value read, NECK RIB marked selected, 8 sizes.
+- Review screen: Programme panel (order suggestion to confirm, portions with Create, everything read); "Create programme" → programme form pre-filled with a guidance panel; saving marks the scan used. Fix: the colour dropdown keeps a colour set before the order's colours load.
+- Tests: 2 shared (order-ref matching), 2 API (recognition, suggestion, confirmation, draft mapping incl. remembered items / process matching / zeros, programme creation marks the scan, one per scan, permission), 1 E2E (upload → confirm → create → saved → scan used).
+
+### 2026-11-10 — Programme entry fields (change request 4, phase 3; Q-067)
+- Migration `programme_entry_fields`: portion, print colour, fabric description / type, grey GSM, GG, LL, UOM, mtr-to-kg, collar/cuff, measurement mode + unit, tub/single, process template, `yarn_mix` and `size_specs` (JSON, array-checked) on `fabric_programs`.
+- Shared: `zYarnMixLine`, `zSizeSpec`, yarn mix must total 100%, one column per size, `programFinishedKg` (Calculate).
+- Web: programme page laid out like the desktop Programme Entry — portions of the order + colour with order qty and Next portion, yarn details with live total, size-wise measurement grid (with / without measurement, CM / inch), Calculate fills required finished kg. Fix: the portions / programme lists refresh after saving.
+- Tests: 3 shared, 2 API (save / edit all fields, yarn mix ≠ 100% refused), 1 E2E (NECK RIB 1*1 LYC RIB, 30s 96% + lycra 4%, 6 g pieces → Calculate 8.100 kg for 1,350 pcs, saved and reloaded).
+
+### 2026-11-10 — Purchase orders (change request 4, phase 1a; Q-066)
+- From the desktop screenshots (19 screens): gap list agreed; phases chosen — purchase orders first, copying the desktop behaviour.
+- Migration `purchase_orders`: `purchase_orders` + `purchase_order_lines` (YP / FP / ACPO series, audit triggers, numbered-unless-draft and non-negative checks). Permissions `purchase.view/create/approve/cancel`; setting `purchase.roundNetToRupee`.
+- API `/purchase-orders`: create / edit draft / delete never-approved draft / approve (numbers it) / revert approval (keeps the number) / close / cancel; approvers notified; accounts feed. Tax maths in `@wewin/shared` (`poTotals`, `rupeesInWords`) reproduces the printed yarn and accessories POs and the desktop tax popup exactly.
+- Web: Purchase › Purchase orders register (type chips, status filter, Excel), PO form with per-type line columns, tax panel with live CGST/SGST or IGST, TCS and rounding, approve / revert / close / cancel, voice fill; A4 print laid out like the desktop PO with amount in words.
+- Tests: 8 shared (maths against the printed POs), 4 API (lifecycle, permission denied, double approve, revert keeps number, IGST + TCS + per-100 rate, wrong item type, missing order, delete rules), 1 E2E (create → approve → revert → re-approve → print). E2E web port now overridable with `E2E_WEB_PORT`.
+- Next (phase 1b): GRN against a PO (yarn / trims receipts linked to PO lines, pending quantity), purchase return, replacement inward.
+
 ### 2026-10-26 — Item locator (change request 3)
 - Stores › Item locator (`/stock/locate`, `stock.view`) and the mobile Locate tab: search or scan a roll, bundle or carton number, a lot, an item code / name, or an order / buyer PO / style; shows quantities at every own store, floor location and job worker, live from the ledger; a single roll / bundle / carton also shows where it went (consumed, shipped) and its movement history with links to the documents. No new data entry (Wewin chose "where is it now" over rack / bin positions).
 - Test: bundle on the line and consumed with its trail, a fully cut roll, an order's material, validation and permission. Browser: roll and order searches.

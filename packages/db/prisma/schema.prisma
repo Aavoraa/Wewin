@@ -295,6 +295,7 @@ model Item {
   yarnReceiptLines YarnReceiptLine[]      @relation("yarnReceiptItem")
   outwardLines     OutwardDcLine[]        @relation("outwardLineItem")
   inwardLines      InwardDcLine[]         @relation("inwardLineItem")
+  poLines          PurchaseOrderLine[]    @relation("poLineItem")
   rolls            FabricRoll[]           @relation("rollItem")
   bundles          CutBundle[]            @relation("bundlePanel")
   panelDcLines     PanelDcLine[]          @relation("panelDcItem")
@@ -508,6 +509,7 @@ model Vendor {
   bills                  VendorBill[]     @relation("billVendor")
   debitNotes             DebitNote[]      @relation("dnVendor")
   payments               PaymentVoucher[] @relation("payVendor")
+  purchaseOrders         PurchaseOrder[]  @relation("poVendor")
 
   @@index([name])
   @@map("vendors")
@@ -566,50 +568,52 @@ enum ProgramStatus {
 
 /// Buyer order (PO) for one style; quantities per colour × size in order_lines.
 model Order {
-  id            String              @id @default(uuid()) @db.Uuid
-  orderNo       String              @unique @map("order_no")
-  buyerId       String              @map("buyer_id") @db.Uuid
-  buyerPoNo     String              @map("buyer_po_no")
-  poDate        DateTime            @map("po_date") @db.Date
-  shipDate      DateTime?           @map("ship_date") @db.Date
-  styleNo       String              @map("style_no")
-  styleName     String?             @map("style_name")
-  description   String?
-  garmentItemId String              @map("garment_item_id") @db.Uuid
-  currency      String              @default("USD")
-  colours       String[]            @default([])
-  sizes         String[]            @default([])
-  status        OrderStatus         @default(DRAFT)
-  remarks       String?
+  id                 String              @id @default(uuid()) @db.Uuid
+  orderNo            String              @unique @map("order_no")
+  buyerId            String              @map("buyer_id") @db.Uuid
+  buyerPoNo          String              @map("buyer_po_no")
+  poDate             DateTime            @map("po_date") @db.Date
+  shipDate           DateTime?           @map("ship_date") @db.Date
+  styleNo            String              @map("style_no")
+  styleName          String?             @map("style_name")
+  description        String?
+  garmentItemId      String              @map("garment_item_id") @db.Uuid
+  currency           String              @default("USD")
+  colours            String[]            @default([])
+  sizes              String[]            @default([])
+  status             OrderStatus         @default(DRAFT)
+  remarks            String?
   /// Set when the order was created from a scanned buyer PO (one order per scan).
-  sourceScanId  String?             @unique @map("source_scan_id") @db.Uuid
-  version       Int                 @default(1)
-  confirmedAt   DateTime?           @map("confirmed_at") @db.Timestamptz(3)
-  confirmedById String?             @map("confirmed_by_id") @db.Uuid
-  closedAt      DateTime?           @map("closed_at") @db.Timestamptz(3)
-  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-  buyer         Buyer               @relation(fields: [buyerId], references: [id], onDelete: Restrict)
-  garmentItem   Item                @relation("garmentItem", fields: [garmentItemId], references: [id], onDelete: Restrict)
-  lines         OrderLine[]
-  components    OrderComponent[]
-  costing       OrderCosting?
-  programs      FabricProgram[]
-  trimsBom      TrimsBomLine[]
-  yarnReceipts  YarnReceipt[]
-  outwardDcs    OutwardDc[]         @relation("outwardOrder")
-  cutLays       CutLay[]            @relation("cutOrder")
-  panelDcs      PanelDc[]           @relation("panelOrder")
-  recutSlips    RecutSlip[]         @relation("recutOrder")
-  sewingIssues  SewingIssue[]       @relation("sewIssueOrder")
-  sewingEntries SewingEntry[]       @relation("sewEntryOrder")
-  cartons       Carton[]            @relation("cartonOrder")
-  packingLists  PackingList[]       @relation("packingOrder")
-  trimsDocs     TrimsDoc[]          @relation("trimsOrder")
-  rateContracts RateContract[]      @relation("rateOrder")
-  bills         VendorBill[]        @relation("billOrder")
-  exportLines   ExportInvoiceLine[] @relation("exportLineOrder")
-  qcInspections QcInspection[]      @relation("qcOrder")
+  sourceScanId       String?             @unique @map("source_scan_id") @db.Uuid
+  version            Int                 @default(1)
+  confirmedAt        DateTime?           @map("confirmed_at") @db.Timestamptz(3)
+  confirmedById      String?             @map("confirmed_by_id") @db.Uuid
+  closedAt           DateTime?           @map("closed_at") @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  buyer              Buyer               @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  garmentItem        Item                @relation("garmentItem", fields: [garmentItemId], references: [id], onDelete: Restrict)
+  lines              OrderLine[]
+  components         OrderComponent[]
+  costing            OrderCosting?
+  programs           FabricProgram[]
+  trimsBom           TrimsBomLine[]
+  yarnReceipts       YarnReceipt[]
+  outwardDcs         OutwardDc[]         @relation("outwardOrder")
+  cutLays            CutLay[]            @relation("cutOrder")
+  panelDcs           PanelDc[]           @relation("panelOrder")
+  recutSlips         RecutSlip[]         @relation("recutOrder")
+  sewingIssues       SewingIssue[]       @relation("sewIssueOrder")
+  sewingEntries      SewingEntry[]       @relation("sewEntryOrder")
+  cartons            Carton[]            @relation("cartonOrder")
+  packingLists       PackingList[]       @relation("packingOrder")
+  trimsDocs          TrimsDoc[]          @relation("trimsOrder")
+  rateContracts      RateContract[]      @relation("rateOrder")
+  bills              VendorBill[]        @relation("billOrder")
+  exportLines        ExportInvoiceLine[] @relation("exportLineOrder")
+  qcInspections      QcInspection[]      @relation("qcOrder")
+  purchaseOrders     PurchaseOrder[]     @relation("poOrder")
+  purchaseOrderLines PurchaseOrderLine[] @relation("poLineOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -676,24 +680,43 @@ model OrderCostingLine {
 
 /// Fabric program: route from yarn to finished fabric with allowed loss % per process (A§7.1).
 model FabricProgram {
-  id           String                 @id @default(uuid()) @db.Uuid
-  programNo    String                 @unique @map("program_no")
-  orderId      String                 @map("order_id") @db.Uuid
-  fabricItemId String                 @map("fabric_item_id") @db.Uuid
-  colour       String?
-  requiredKg   Decimal                @map("required_kg") @db.Decimal(12, 3)
-  gsm          Int?
-  dia          String?
-  status       ProgramStatus          @default(DRAFT)
-  remarks      String?
-  version      Int                    @default(1)
-  approvedAt   DateTime?              @map("approved_at") @db.Timestamptz(3)
-  approvedById String?                @map("approved_by_id") @db.Uuid
-  createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  order        Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  fabricItem   Item                   @relation("programFabric", fields: [fabricItemId], references: [id], onDelete: Restrict)
-  processes    FabricProgramProcess[]
+  id                String                 @id @default(uuid()) @db.Uuid
+  programNo         String                 @unique @map("program_no")
+  orderId           String                 @map("order_id") @db.Uuid
+  fabricItemId      String                 @map("fabric_item_id") @db.Uuid
+  colour            String?
+  requiredKg        Decimal                @map("required_kg") @db.Decimal(12, 3)
+  gsm               Int?
+  dia               String?
+  /// Programme entry fields (Q-067): portion, fabric details, yarn mix, size-wise measurements.
+  portion           String?                @map("portion")
+  printColour       String?                @map("print_colour")
+  fabricDescription String?                @map("fabric_description")
+  fabricType        String?                @map("fabric_type")
+  greyGsm           Int?                   @map("grey_gsm")
+  gauge             String?
+  loopLength        String?                @map("loop_length")
+  uom               String                 @default("Kgs")
+  mtrToKg           Decimal?               @map("mtr_to_kg") @db.Decimal(12, 4)
+  collarCuffReqd    Int?                   @map("collar_cuff_reqd")
+  withMeasurement   Boolean                @default(false) @map("with_measurement")
+  measureUnit       String                 @default("CM") @map("measure_unit")
+  tubSingle         String?                @map("tub_single")
+  processTemplate   String?                @map("process_template")
+  yarnMix           Json                   @default("[]") @map("yarn_mix")
+  sizeSpecs         Json                   @default("[]") @map("size_specs")
+  /// The Programme Entry screenshot this programme was created from (Q-068).
+  sourceScanId      String?                @unique @map("source_scan_id") @db.Uuid
+  status            ProgramStatus          @default(DRAFT)
+  remarks           String?
+  version           Int                    @default(1)
+  approvedAt        DateTime?              @map("approved_at") @db.Timestamptz(3)
+  approvedById      String?                @map("approved_by_id") @db.Uuid
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order             Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  fabricItem        Item                   @relation("programFabric", fields: [fabricItemId], references: [id], onDelete: Restrict)
+  processes         FabricProgramProcess[]
 
   @@index([orderId])
   @@map("fabric_programs")
@@ -1936,4 +1959,107 @@ model QcInspectionLine {
   @@index([rollId])
   @@index([bundleId])
   @@map("qc_inspection_lines")
+}
+
+// ───────────────────────────── Purchase orders (Q-066) ─────────────────────────────
+
+enum PoKind {
+  YARN
+  FABRIC
+  ACCESSORY
+}
+
+enum PoPurpose {
+  ORDER
+  GENERAL
+}
+
+/// Yarn / fabric / accessories PO to a supplier. DRAFT → POSTED (= approved, numbered) → CLOSED or
+/// CANCELLED; an approval can be reverted to DRAFT (the number is kept). Moves no stock.
+model PurchaseOrder {
+  id                String              @id @default(uuid()) @db.Uuid
+  docNo             String?             @unique @map("doc_no")
+  docDate           DateTime            @map("doc_date") @db.Date
+  kind              PoKind
+  purpose           PoPurpose           @default(ORDER)
+  vendorId          String              @map("vendor_id") @db.Uuid
+  orderId           String?             @map("order_id") @db.Uuid
+  reqNo             String?             @map("req_no")
+  accessoryType     String?             @map("accessory_type")
+  deliveryDate      DateTime?           @map("delivery_date") @db.Date
+  deliveryAt        String?             @map("delivery_at")
+  paymentTerms      String?             @map("payment_terms")
+  currency          String              @default("INR")
+  freightPaidBy     String?             @map("freight_paid_by")
+  taxInclusive      Boolean             @default(false) @map("tax_inclusive")
+  interState        Boolean             @default(false) @map("inter_state")
+  packingForwarding Decimal             @default(0) @map("packing_forwarding") @db.Decimal(14, 2)
+  dutyPct           Decimal             @default(0) @map("duty_pct") @db.Decimal(7, 4)
+  taxPct            Decimal             @default(0) @map("tax_pct") @db.Decimal(7, 4)
+  tcsPct            Decimal             @default(0) @map("tcs_pct") @db.Decimal(7, 4)
+  grossAmount       Decimal             @default(0) @map("gross_amount") @db.Decimal(14, 2)
+  dutyAmount        Decimal             @default(0) @map("duty_amount") @db.Decimal(14, 2)
+  cgstAmount        Decimal             @default(0) @map("cgst_amount") @db.Decimal(14, 2)
+  sgstAmount        Decimal             @default(0) @map("sgst_amount") @db.Decimal(14, 2)
+  igstAmount        Decimal             @default(0) @map("igst_amount") @db.Decimal(14, 2)
+  tcsAmount         Decimal             @default(0) @map("tcs_amount") @db.Decimal(14, 2)
+  roundOff          Decimal             @default(0) @map("round_off") @db.Decimal(14, 2)
+  netAmount         Decimal             @default(0) @map("net_amount") @db.Decimal(14, 2)
+  remarks           String?
+  status            DocStatus           @default(DRAFT)
+  version           Int                 @default(1)
+  approvalNote      String?             @map("approval_note")
+  postedAt          DateTime?           @map("posted_at") @db.Timestamptz(3)
+  postedById        String?             @map("posted_by_id") @db.Uuid
+  closedAt          DateTime?           @map("closed_at") @db.Timestamptz(3)
+  closedById        String?             @map("closed_by_id") @db.Uuid
+  closeReason       String?             @map("close_reason")
+  cancelledAt       DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById     String?             @map("cancelled_by_id") @db.Uuid
+  cancelReason      String?             @map("cancel_reason")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById       String?             @map("created_by_id") @db.Uuid
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor            Vendor              @relation("poVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  order             Order?              @relation("poOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  lines             PurchaseOrderLine[]
+
+  @@index([kind, status, docDate])
+  @@index([vendorId])
+  @@index([orderId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id          String        @id @default(uuid()) @db.Uuid
+  poId        String        @map("po_id") @db.Uuid
+  lineNo      Int           @map("line_no")
+  itemId      String        @map("item_id") @db.Uuid
+  orderId     String?       @map("order_id") @db.Uuid
+  colour      String?
+  size        String?
+  millName    String?       @map("mill_name")
+  bags        Int?
+  counts      String?
+  gsm         Int?
+  gauge       String?
+  loopLength  String?       @map("loop_length")
+  dia         String?
+  design      String?
+  description String?
+  qty         Decimal       @db.Decimal(14, 3)
+  unit        String
+  altQty      Decimal?      @map("alt_qty") @db.Decimal(14, 3)
+  rate        Decimal       @db.Decimal(14, 4)
+  per         Decimal       @default(1) @db.Decimal(14, 3)
+  amount      Decimal       @db.Decimal(14, 2)
+  remarks     String?
+  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  item        Item          @relation("poLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  order       Order?        @relation("poLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([poId])
+  @@index([itemId])
+  @@index([orderId])
+  @@map("purchase_order_lines")
 }

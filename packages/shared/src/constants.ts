@@ -64,6 +64,9 @@ export const DOCUMENT_SERIES = {
   BUYER_RECEIPT: { prefix: 'BRC', name: 'Buyer receipt' },
   OPENING: { prefix: 'OPN', name: 'Opening-data import' },
   QC_INSPECTION: { prefix: 'QC', name: 'Quality check' },
+  PO_YARN: { prefix: 'YP', name: 'Yarn purchase order' },
+  PO_FABRIC: { prefix: 'FP', name: 'Fabric purchase order' },
+  PO_ACCESSORY: { prefix: 'ACPO', name: 'Accessories purchase order' },
 } as const;
 export type SeriesCode = keyof typeof DOCUMENT_SERIES;
 

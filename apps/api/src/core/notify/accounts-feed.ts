@@ -19,6 +19,7 @@ const DOCS: Record<string, { label: string; path: string; ledger?: string[] }> =
   SEWING_ISSUE: { label: 'Sewing issue', path: '/sewing-issues' },
   SEWING_ENTRY: { label: 'Sewing output', path: '/sewing-entries' },
   QC_INSPECTION: { label: 'Quality check', path: '/qc' },
+  PURCHASE_ORDER: { label: 'Purchase order', path: '/purchase-orders' },
   CARTON: { label: 'Carton', path: '/cartons' },
   PACKING_LIST: { label: 'Packing list', path: '/packing-lists' },
   TRIMS_RECEIPT: { label: 'Trims receipt', path: '/trims-docs' },
@@ -32,7 +33,7 @@ const DOCS: Record<string, { label: string; path: string; ledger?: string[] }> =
   OPENING_IMPORT: { label: 'Opening-data import', path: '/settings/opening' },
 };
 
-const VERBS: Record<string, string> = { POST: 'posted', CANCEL: 'cancelled', CLOSE: 'closed', APPROVE: 'approved', REJECT: 'rejected', CONFIRM: 'confirmed' };
+const VERBS: Record<string, string> = { POST: 'posted', CANCEL: 'cancelled', CLOSE: 'closed', APPROVE: 'approved', REJECT: 'rejected', CONFIRM: 'confirmed', REOPEN: 'approval reverted' };
 
 /** Money / count fields that callers already put in the audit data, shown as-is with a label. */
 const MONEY: Record<string, string> = { amount: 'Amount', total: 'Total', tds: 'TDS', expected: 'Expected', variance: 'Variance' };
@@ -67,7 +68,7 @@ export const accountsFeed = {
     const userId = getContext()?.userId;
     const by = userId ? ((await repo.userName(tx, userId))?.fullName ?? null) : null;
     const types = e.action === 'CLOSE' ? [`${e.docType}_CLOSE`] : [e.docType];
-    const moved = e.action === 'APPROVE' || e.action === 'CONFIRM' ? [] : await repo.movementSummary(tx, types, e.recordId, e.action === 'CANCEL');
+    const moved = e.action === 'APPROVE' || e.action === 'CONFIRM' || e.action === 'REOPEN' ? [] : await repo.movementSummary(tx, types, e.recordId, e.action === 'CANCEL');
     const orders = [...new Set(moved.flatMap((m) => (m.orders ? m.orders.split(', ') : [])))];
     const lines = [
       ...(by ? [`By ${by}`] : []),

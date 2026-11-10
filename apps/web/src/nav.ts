@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  ShoppingCart,
   Box,
   Brush,
   ClipboardCheck,
@@ -78,6 +79,10 @@ export const NAV: NavGroup[] = [
       { label: 'Orders', to: '/orders', icon: ClipboardSignature, perm: 'orders.view' },
       { label: 'Fabric programs', to: '/programs', icon: Route, perm: 'programs.view' },
     ],
+  },
+  {
+    label: 'Purchase',
+    items: [{ label: 'Purchase orders', to: '/purchase-orders', icon: ShoppingCart, perm: 'purchase.view' }],
   },
   {
     label: 'Job work',

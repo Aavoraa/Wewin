@@ -28,6 +28,26 @@ export interface ProcessRowData {
   plannedVendorId: string | null;
 }
 
+/** Programme entry fields (Q-067), stored as given. */
+export interface ProgramSpecData {
+  portion: string | null;
+  printColour: string | null;
+  fabricDescription: string | null;
+  fabricType: string | null;
+  greyGsm: number | null;
+  gauge: string | null;
+  loopLength: string | null;
+  uom: string;
+  mtrToKg: string | null;
+  collarCuffReqd: number | null;
+  withMeasurement: boolean;
+  measureUnit: string;
+  tubSingle: string | null;
+  processTemplate: string | null;
+  yarnMix: Prisma.InputJsonValue;
+  sizeSpecs: Prisma.InputJsonValue;
+}
+
 const dec = (v: string | null) => (v === null ? null : new Prisma.Decimal(v));
 
 export const programsRepo = {
@@ -49,13 +69,14 @@ export const programsRepo = {
   },
   create(
     tx: Tx,
-    data: { programNo: string; orderId: string; fabricItemId: string; colour: string | null; requiredKg: string; gsm: number | null; dia: string | null; remarks: string | null },
+    data: { programNo: string; orderId: string; fabricItemId: string; colour: string | null; requiredKg: string; gsm: number | null; dia: string | null; remarks: string | null; sourceScanId: string | null } & ProgramSpecData,
     processes: ProcessRowData[],
   ) {
     return tx.fabricProgram.create({
       data: {
         ...data,
         requiredKg: new Prisma.Decimal(data.requiredKg),
+        mtrToKg: dec(data.mtrToKg),
         processes: {
           create: processes.map((p) => ({ ...p, allowedLossPct: new Prisma.Decimal(p.allowedLossPct), materialCostPerKg: dec(p.materialCostPerKg) })),
         },
@@ -66,12 +87,12 @@ export const programsRepo = {
     tx: Tx,
     id: string,
     version: number,
-    data: { fabricItemId: string; colour: string | null; requiredKg: string; gsm: number | null; dia: string | null; remarks: string | null },
+    data: { fabricItemId: string; colour: string | null; requiredKg: string; gsm: number | null; dia: string | null; remarks: string | null } & ProgramSpecData,
     processes: ProcessRowData[],
   ) {
     const r = await tx.fabricProgram.updateMany({
       where: { id, version },
-      data: { ...data, requiredKg: new Prisma.Decimal(data.requiredKg), version: { increment: 1 } },
+      data: { ...data, requiredKg: new Prisma.Decimal(data.requiredKg), mtrToKg: dec(data.mtrToKg), version: { increment: 1 } },
     });
     if (r.count === 0) return false;
     await tx.fabricProgramProcess.deleteMany({ where: { programId: id } });
@@ -101,6 +122,32 @@ export const programsRepo = {
   },
   itemsByIds(ids: string[], db: Db = prisma) {
     return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, type: true, code: true } });
+  },
+  /** Programme created from a scan (one per scan). */
+  bySourceScan(scanId: string) {
+    return prisma.fabricProgram.findUnique({ where: { sourceScanId: scanId }, select: { id: true, programNo: true, status: true } });
+  },
+  /** The fabric item last used on a programme with this fabric description (Q-068: "it remembers"). */
+  async fabricForDescription(description: string) {
+    const r = await prisma.fabricProgram.findFirst({
+      where: { fabricDescription: { equals: description, mode: 'insensitive' }, status: { not: 'CANCELLED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { fabricItemId: true },
+    });
+    return r?.fabricItemId ?? null;
+  },
+  /** Yarn items last used for these counts in programme yarn mixes. */
+  async yarnsForCounts(counts: string[]) {
+    if (!counts.length) return new Map<string, string>();
+    const rows = await prisma.$queryRaw<{ counts: string; item_id: string }[]>`
+      SELECT DISTINCT ON (lower(m->>'counts')) lower(m->>'counts') AS counts, m->>'yarnItemId' AS item_id
+      FROM fabric_programs p CROSS JOIN LATERAL jsonb_array_elements(p.yarn_mix) m
+      WHERE p.status <> 'CANCELLED' AND m->>'yarnItemId' IS NOT NULL AND lower(m->>'counts') = ANY(${counts.map((c) => c.toLowerCase())}::text[])
+      ORDER BY lower(m->>'counts'), p.created_at DESC`;
+    return new Map(rows.map((r) => [r.counts, r.item_id]));
+  },
+  activeKgProcesses() {
+    return prisma.process.findMany({ where: { isActive: true, stage: 'KG' }, select: { id: true, code: true, name: true } });
   },
   processesByIds(ids: string[], db: Db = prisma) {
     return db.process.findMany({ where: { id: { in: ids } }, select: { id: true, stage: true, code: true, isActive: true } });

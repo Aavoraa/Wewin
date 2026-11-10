@@ -8,6 +8,8 @@ import { defineConfig, devices } from '@playwright/test';
 const root = path.resolve(import.meta.dirname, '../..');
 export const E2E_DB = process.env.E2E_DATABASE_URL ?? 'postgresql://wewin:wewin@localhost:5432/wewin_erp_e2e';
 export const E2E_OWNER_PASSWORD = 'E2E-owner-pass-2026';
+/** Web port; set E2E_WEB_PORT when 5174 is taken by another app. */
+const WEB_PORT = process.env.E2E_WEB_PORT ?? '5174';
 
 export default defineConfig({
   testDir: './e2e',
@@ -17,7 +19,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:5174',
+    baseURL: `http://localhost:${WEB_PORT}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     viewport: { width: 1366, height: 860 },
@@ -38,7 +40,7 @@ export default defineConfig({
         SEED_DEMO: 'true',
         PORT: '4100',
         JWT_SECRET: 'e2e-only-secret-not-used-anywhere-else-0123456789',
-        CORS_ORIGIN: 'http://localhost:5174',
+        CORS_ORIGIN: `http://localhost:${WEB_PORT}`,
         TZ: 'Asia/Kolkata',
         FY_START_MONTH: '4',
         NODE_ENV: 'test',
@@ -49,10 +51,10 @@ export default defineConfig({
     {
       command: 'pnpm --filter @wewin/web exec vite',
       cwd: root,
-      url: 'http://localhost:5174',
+      url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { API_PROXY_TARGET: 'http://localhost:4100', WEB_PORT: '5174' },
+      env: { API_PROXY_TARGET: 'http://localhost:4100', WEB_PORT },
     },
   ],
 });

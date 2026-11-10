@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HEADER_FIELDS, LINE_FIELDS, type Review, type ReviewLine, type ScanField, emptyField } from './scan';
 import { gstinCheckChar, isValidGstin, normalizeDate, normalizeGstin, normalizeNumber, normalizeUnit, parseAttributes } from './scan-normalize';
-import { matchItem, matchVendor } from './scan-match';
+import { matchItem, matchOrderRef, matchVendor } from './scan-match';
 import { type ValidationContext, buildPayload, linkAllocation, reconcile, validateReview } from './scan-mapping';
 
 const base = '33ABCDE1234F1Z';
@@ -296,5 +296,23 @@ describe('buyer PO', () => {
         { colour: 'NAVY', size: '4Y', qty: 450, unitPrice: '3.25' },
       ],
     });
+  });
+});
+
+describe('programme screenshot → order (Q-068)', () => {
+  const orders = [
+    { id: 'a', orderNo: 'WW-2627-001', styleNo: 'KT-101', buyerPoNo: 'NKA-PO-45821', buyerName: 'Nordic Kids' },
+    { id: 'b', orderNo: 'WW-2627-009', styleNo: '67048,9 F/1 111 12847 PA', buyerPoNo: 'VB-5512', buyerName: 'Vertbaudet' },
+    { id: 'c', orderNo: 'WW-2627-010', styleNo: 'JK-12847', buyerPoNo: 'X-1', buyerName: 'Other' },
+  ];
+  it('suggests the order whose style is inside the desktop order ref, never auto-confirms', () => {
+    const m = matchOrderRef('O/0001/WKF/25/67048,9 F/1 111 12847 PA', orders);
+    expect(m.state).toBe('SUGGESTED');
+    expect(m.id).toBe('b');
+    expect(m.candidates.map((c) => c.id)).toEqual(['b', 'c']); // c shares the number 12847
+  });
+  it('nothing in common → no suggestion', () => {
+    expect(matchOrderRef('O/0002/WKF/25/55555', orders).state).toBe('NONE');
+    expect(matchOrderRef('', orders).state).toBe('NONE');
   });
 });

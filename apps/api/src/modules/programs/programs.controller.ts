@@ -18,7 +18,7 @@ export const programsController = {
   },
   get: ({ params }: In<{ params: typeof zIdParam }>) => svc.get(params.id),
   processes: async ({ params }: In<{ params: typeof zIdParam }>) => (await svc.get(params.id)).processes,
-  create: ({ body }: In<{ body: typeof zProgramInput }>) => svc.create(body),
+  create: ({ body, user }: In<{ body: typeof zProgramInput }>) => svc.create(body, user),
   update: ({ params, body }: In<{ params: typeof zIdParam; body: typeof zProgramUpdate }>) => svc.update(params.id, body),
   approve: ({ params, user }: In<{ params: typeof zIdParam }>) => svc.approve(params.id, user),
   cancel: ({ params, body }: In<{ params: typeof zIdParam; body: typeof zReason }>) => svc.cancel(params.id, body.reason),

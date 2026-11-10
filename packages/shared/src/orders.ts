@@ -98,6 +98,32 @@ export const zProgramProcess = z.object({
   materialCostPerKg: zOptional(zRate()),
   plannedVendorId: zOptional(zRef()),
 });
+/** Programme entry (Q-067): yarn mix of the portion — counts, colour and share of the fabric weight. */
+export const zYarnMixLine = z.object({
+  yarnItemId: zOptional(zRef()),
+  counts: z.string().trim().min(1, 'Give the yarn counts').max(60),
+  colour: zOptional(z.string().trim().max(30)),
+  consPct: zPct({ positive: true }),
+});
+export type YarnMixLine = z.input<typeof zYarnMixLine>;
+const zMeasure = zOptional(zDecimal({ scale: 3, max: '100000' }));
+/** Size-wise measurements: length / width with allowances, piece weight (g), actual dia, actual piece weight (g), knit and finish dia. */
+export const zSizeSpec = z.object({
+  size: z.string().trim().min(1).max(30),
+  length: zMeasure,
+  lengthAllowance: zMeasure,
+  width: zMeasure,
+  widthAllowance: zMeasure,
+  pcsWeight: zMeasure,
+  actDia: zMeasure,
+  actPcsWeight: zMeasure,
+  knitDia: zMeasure,
+  finishDia: zMeasure,
+});
+export type SizeSpec = z.input<typeof zSizeSpec>;
+export const FABRIC_TYPES = ['Knits', 'Woven'] as const;
+export const PROGRAM_UOMS = ['Kgs', 'Mtrs'] as const;
+
 const programShape = z.object({
   orderId: zRef(),
   fabricItemId: zRef(),
@@ -106,11 +132,33 @@ const programShape = z.object({
   gsm: zOptional(z.coerce.number().int().min(1).max(2000)),
   dia: zOptional(z.string().trim().max(30)),
   remarks: zOptional(z.string().trim().max(500)),
+  portion: zOptional(z.string().trim().max(40)),
+  printColour: zOptional(z.string().trim().max(40)),
+  fabricDescription: zOptional(z.string().trim().max(100)),
+  fabricType: zOptional(z.enum(FABRIC_TYPES)),
+  greyGsm: zOptional(z.coerce.number().int().min(1).max(2000)),
+  gauge: zOptional(z.string().trim().max(20)),
+  loopLength: zOptional(z.string().trim().max(20)),
+  uom: z.enum(PROGRAM_UOMS).default('Kgs'),
+  mtrToKg: zOptional(zDecimal({ scale: 4, max: '10000' })),
+  collarCuffReqd: zOptional(z.coerce.number().int().min(0).max(10_000_000)),
+  withMeasurement: z.boolean().default(false),
+  measureUnit: z.enum(['CM', 'INCH']).default('CM'),
+  tubSingle: zOptional(z.string().trim().max(20)),
+  processTemplate: zOptional(z.string().trim().max(60)),
+  yarnMix: z.array(zYarnMixLine).max(10).default([]),
+  sizeSpecs: z.array(zSizeSpec).max(40).default([]),
+  /** Created from a Programme Entry screenshot in Scan invoices (Q-068). */
+  sourceScanId: zOptional(zRef()),
   processes: z.array(zProgramProcess).min(1, 'Add at least one process'),
 });
-function programRules(v: { processes: { sequence: number }[] }, ctx: z.RefinementCtx) {
+function programRules(v: { processes: { sequence: number }[]; yarnMix?: { consPct: string }[]; sizeSpecs?: { size: string }[] }, ctx: z.RefinementCtx) {
   const seqs = v.processes.map((p) => p.sequence);
   if (new Set(seqs).size !== seqs.length) ctx.addIssue({ code: 'custom', path: ['processes'], message: 'Process sequence numbers must be unique' });
+  const mix = v.yarnMix ?? [];
+  if (mix.length && !mix.reduce((a, l) => a.plus(D(l.consPct)), D(0)).equals(100)) ctx.addIssue({ code: 'custom', path: ['yarnMix'], message: 'Yarn consumption % must add up to 100' });
+  const sizes = (v.sizeSpecs ?? []).map((x) => x.size);
+  if (new Set(sizes).size !== sizes.length) ctx.addIssue({ code: 'custom', path: ['sizeSpecs'], message: 'Each size once in the measurements' });
 }
 export const zProgramInput = programShape.superRefine(programRules);
 export const zProgramUpdate = programShape.omit({ orderId: true }).extend({ version: z.number().int().min(1) }).superRefine(programRules);
@@ -183,4 +231,23 @@ export function programPlan(requiredKg: DecimalLike, processes: { sequence: numb
     out = input;
   }
   return plan;
+}
+
+/**
+ * Programme Calculate (Q-067): finished kg of a portion = Σ over sizes (pieces of the colour in that
+ * size × actual piece weight in grams) ÷ 1000. The process losses are then added by programPlan.
+ * Sizes without an actual piece weight are skipped and reported.
+ */
+export function programFinishedKg(qtyBySize: Record<string, number>, specs: { size: string; actPcsWeight?: DecimalLike | null }[]) {
+  let kg = D(0);
+  const missing: string[] = [];
+  for (const [size, qty] of Object.entries(qtyBySize)) {
+    const w = specs.find((x) => x.size === size)?.actPcsWeight;
+    if (w === undefined || w === null || w === '' || D(w).isZero()) {
+      if (qty > 0) missing.push(size);
+      continue;
+    }
+    kg = kg.plus(D(qty).times(D(w)).div(1000));
+  }
+  return { kg: kg.toDecimalPlaces(3).toFixed(3), missing };
 }

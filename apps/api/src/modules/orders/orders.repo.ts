@@ -55,6 +55,10 @@ export const ordersRepo = {
   bySourceScan(sourceScanId: string) {
     return prisma.order.findUnique({ where: { sourceScanId }, select: { id: true, orderNo: true, status: true } });
   },
+  /** Open orders, for matching a scanned document's order reference. */
+  openForMatching() {
+    return prisma.order.findMany({ where: { status: { in: ['DRAFT', 'CONFIRMED'] } }, select: { id: true, orderNo: true, styleNo: true, buyerPoNo: true, buyer: { select: { name: true } } } });
+  },
   byBuyerPo(buyerId: string, buyerPoNo: string) {
     return prisma.order.findMany({
       where: { buyerId, buyerPoNo: { equals: buyerPoNo, mode: 'insensitive' }, status: { not: 'CANCELLED' } },

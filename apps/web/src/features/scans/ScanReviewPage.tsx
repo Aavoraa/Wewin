@@ -47,6 +47,7 @@ import { pickers } from '../orders/api';
 import { DocumentPreview, type Highlight } from './DocumentPreview';
 import { ScanStatusBadge } from './ScansPage';
 import { type ScanDetail, type ScanEvent, TARGET_LABEL } from './types';
+import { ProgrammeScanBox } from './ProgrammeScanBox';
 
 interface LineEdit {
   include?: boolean;
@@ -434,105 +435,123 @@ export function ScanReviewPage() {
                       {Math.round(scan.extraction.classification.confidence * 100)}%)
                     </span>
                   </div>
-                  <VendorBox
-                    scan={scan}
-                    edits={edits}
-                    setEdits={setEdits}
-                    editable={editable}
-                    confirmed={confirmed}
-                    toggleConfirm={toggleConfirm}
-                    label={po ? 'Buyer *' : dc ? 'Job worker *' : 'Vendor *'}
-                    buyer={po}
-                  />
+                  {target !== 'PROGRAM' ? (
+                    <VendorBox
+                      scan={scan}
+                      edits={edits}
+                      setEdits={setEdits}
+                      editable={editable}
+                      confirmed={confirmed}
+                      toggleConfirm={toggleConfirm}
+                      label={po ? 'Buyer *' : dc ? 'Job worker *' : 'Vendor *'}
+                      buyer={po}
+                    />
+                  ) : null}
                 </CardContent>
               </Card>
 
-              {target === 'OUTWARD_DC' ? (
-                <ProgramProcessBox
-                  scan={scan}
-                  editable={editable && edits.vendorId === undefined}
-                  save={save}
-                />
+              {target === 'PROGRAM' ? (
+                <ProgrammeScanBox scan={scan} editable={editable && edits.target === undefined} save={save} />
               ) : null}
 
-              <Section title={po ? 'Buyer PO' : dc ? 'Delivery challan' : 'Invoice'}>
-                <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {(po ? PO_IDENTITY : dc ? DC_IDENTITY : IDENTITY).map(headerInput)}
-                </div>
-                {po ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Order no., style item and garment components are not on a buyer PO — you add them on the
-                    order form after “Create order”.
-                  </p>
-                ) : null}
-              </Section>
-              <Section title="Parties" collapsed>
-                <div className="grid gap-1 sm:grid-cols-2">{PARTY.map(headerInput)}</div>
-              </Section>
+              {target !== 'PROGRAM' ? (
+                <>
+                  {target === 'OUTWARD_DC' ? (
+                    <ProgramProcessBox
+                      scan={scan}
+                      editable={editable && edits.vendorId === undefined}
+                      save={save}
+                    />
+                  ) : null}
 
-              {target === 'VENDOR_BILL' ? (
-                <SourcesBox scan={scan} editable={editable} save={save} />
-              ) : (
-                <LinesBox
-                  scan={scan}
-                  edits={edits}
-                  setEdits={setEdits}
-                  editable={editable}
-                  confirmed={confirmed}
-                  toggleConfirm={toggleConfirm}
-                  focusField={focusField}
-                  save={save}
-                />
-              )}
-              {target === 'INWARD_DC' ? (
-                <OutwardLinksBox scan={scan} editable={editable && !dirty} save={save} />
-              ) : null}
+                  <Section title={po ? 'Buyer PO' : dc ? 'Delivery challan' : 'Invoice'}>
+                    <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {(po ? PO_IDENTITY : dc ? DC_IDENTITY : IDENTITY).map(headerInput)}
+                    </div>
+                    {po ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Order no., style item and garment components are not on a buyer PO — you add them on
+                        the order form after “Create order”.
+                      </p>
+                    ) : null}
+                  </Section>
+                  <Section title="Parties" collapsed>
+                    <div className="grid gap-1 sm:grid-cols-2">{PARTY.map(headerInput)}</div>
+                  </Section>
 
-              {!dc && !po ? (
-                <Section title="Amounts and taxes">
-                  <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
-                    {AMOUNTS.filter(
-                      (k) =>
-                        review.header[k].value ||
-                        k in edits.header ||
-                        ['taxableAmount', 'totalAmount', 'cgstAmount', 'sgstAmount', 'igstAmount'].includes(
-                          k,
-                        ),
-                    ).map(headerInput)}
-                  </div>
-                  {scan.validation ? <Reconciliation r={scan.validation.reconciliation} /> : null}
-                </Section>
-              ) : null}
+                  {target === 'VENDOR_BILL' ? (
+                    <SourcesBox scan={scan} editable={editable} save={save} />
+                  ) : (
+                    <LinesBox
+                      scan={scan}
+                      edits={edits}
+                      setEdits={setEdits}
+                      editable={editable}
+                      confirmed={confirmed}
+                      toggleConfirm={toggleConfirm}
+                      focusField={focusField}
+                      save={save}
+                    />
+                  )}
+                  {target === 'INWARD_DC' ? (
+                    <OutwardLinksBox scan={scan} editable={editable && !dirty} save={save} />
+                  ) : null}
 
-              {scan.validation?.duplicates.length && target !== 'VENDOR_BILL' && !dc && !po && editable ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Already entered</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-2 text-sm">
-                    {scan.validation.duplicates.map((d) => (
-                      <div key={d.id} className="flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          {d.docType.replace('_', ' ').toLowerCase()}{' '}
-                          <span className="font-mono">{d.docNo ?? 'draft'}</span> ({d.status?.toLowerCase()})
-                        </span>
-                        {review.existingDocId === d.id ? (
-                          <Badge variant="success">Reconciling against this</Badge>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void save({ existingDocId: d.id }).catch(() => undefined)}
-                          >
-                            Reconcile against this instead of creating a new one
-                          </Button>
-                        )}
+                  {!dc && !po ? (
+                    <Section title="Amounts and taxes">
+                      <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
+                        {AMOUNTS.filter(
+                          (k) =>
+                            review.header[k].value ||
+                            k in edits.header ||
+                            [
+                              'taxableAmount',
+                              'totalAmount',
+                              'cgstAmount',
+                              'sgstAmount',
+                              'igstAmount',
+                            ].includes(k),
+                        ).map(headerInput)}
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              ) : null}
+                      {scan.validation ? <Reconciliation r={scan.validation.reconciliation} /> : null}
+                    </Section>
+                  ) : null}
 
+                  {scan.validation?.duplicates.length &&
+                  target !== 'VENDOR_BILL' &&
+                  !dc &&
+                  !po &&
+                  editable ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Already entered</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid gap-2 text-sm">
+                        {scan.validation.duplicates.map((d) => (
+                          <div key={d.id} className="flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                              {d.docType.replace('_', ' ').toLowerCase()}{' '}
+                              <span className="font-mono">{d.docNo ?? 'draft'}</span> (
+                              {d.status?.toLowerCase()})
+                            </span>
+                            {review.existingDocId === d.id ? (
+                              <Badge variant="success">Reconciling against this</Badge>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void save({ existingDocId: d.id }).catch(() => undefined)}
+                              >
+                                Reconcile against this instead of creating a new one
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </>
+              ) : null}
               <IssuesBox
                 issues={issues}
                 editable={editable}
@@ -607,7 +626,16 @@ export function ScanReviewPage() {
               <CheckCircle2 /> Create order
             </Button>
           ) : null}
-          {!po && editable && can('scans.apply') && spec && can(spec.createPermission) ? (
+          {target === 'PROGRAM' && editable && can('scans.apply') && can('programs.edit') ? (
+            <Button
+              disabled={dirty || scan.status !== 'READY'}
+              title={dirty ? 'Save your changes first' : scan.status !== 'READY' ? 'Confirm the order first' : 'Opens the programme form filled from this screenshot'}
+              onClick={() => navigate(`/programs/new?fromScan=${scan.id}`)}
+            >
+              <CheckCircle2 /> Create programme
+            </Button>
+          ) : null}
+          {!po && target !== 'PROGRAM' && editable && can('scans.apply') && spec && can(spec.createPermission) ? (
             <Button
               disabled={dirty || scan.status !== 'READY'}
               loading={applying}

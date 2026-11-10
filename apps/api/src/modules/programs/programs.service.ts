@@ -14,13 +14,23 @@ import { orderBy, paging } from '../../core/list';
 import { audit } from '../../core/audit/audit.service';
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { ordersService } from '../orders/orders.service';
-import { type ProgramDetail, type ProcessRowData, programsRepo as repo } from './programs.repo';
+import { type ProgramDetail, type ProcessRowData, type ProgramSpecData, programsRepo as repo } from './programs.repo';
 
 const RC = { isolation: 'ReadCommitted' } as const;
 type ProcessInput = z.output<typeof zProgramInput>['processes'][number];
 
 /** Hook set by the job-work module: counts D.C.s that reference a program (dependency check). */
 let dcReferenceCounter: ((programId: string, tx: Tx) => Promise<number>) | null = null;
+/**
+ * Scan invoices registers this (Q-068): a programme created from a Programme Entry screenshot marks
+ * that scan as used, in the programme's transaction.
+ */
+type FromScanHook = (tx: Tx, programId: string, scanId: string, user: CurrentUser) => Promise<void>;
+let fromScanHook: FromScanHook | null = null;
+export function onProgramCreatedFromScan(h: FromScanHook) {
+  fromScanHook = h;
+}
+
 export function registerProgramDependencyCounter(fn: (programId: string, tx: Tx) => Promise<number>) {
   dcReferenceCounter = fn;
 }
@@ -33,6 +43,7 @@ function shape(p: ProgramDetail) {
   return {
     ...p,
     requiredKg: p.requiredKg.toFixed(3),
+    mtrToKg: p.mtrToKg?.toString() ?? null,
     processes: p.processes.map((x) => ({
       ...x,
       allowedLossPct: x.allowedLossPct.toString(),
@@ -59,6 +70,28 @@ async function validateRows(fabricItemId: string, processes: ProcessInput[]) {
     if (!pr) throw new AppError('VALIDATION_ERROR', `Process ${p.sequence}: unknown process`, 400);
     if (pr.stage !== 'KG') throw new AppError('VALIDATION_ERROR', `Process ${pr.code} is a piece-stage process; fabric programs use kilo-stage processes`, 400);
   }
+}
+
+/** Programme entry fields (Q-067) from the input, blanks as null. */
+function spec(input: Omit<z.output<typeof zProgramUpdate>, 'version'>): ProgramSpecData {
+  return {
+    portion: input.portion ?? null,
+    printColour: input.printColour ?? null,
+    fabricDescription: input.fabricDescription ?? null,
+    fabricType: input.fabricType ?? null,
+    greyGsm: input.greyGsm ?? null,
+    gauge: input.gauge ?? null,
+    loopLength: input.loopLength ?? null,
+    uom: input.uom,
+    mtrToKg: input.mtrToKg ?? null,
+    collarCuffReqd: input.collarCuffReqd ?? null,
+    withMeasurement: input.withMeasurement,
+    measureUnit: input.measureUnit,
+    tubSingle: input.tubSingle ?? null,
+    processTemplate: input.processTemplate ?? null,
+    yarnMix: input.yarnMix.map((l) => ({ yarnItemId: l.yarnItemId ?? null, counts: l.counts, colour: l.colour ?? null, consPct: l.consPct })),
+    sizeSpecs: input.sizeSpecs.map((x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v ?? null]))),
+  };
 }
 
 const rows = (ps: ProcessInput[]): ProcessRowData[] =>
@@ -102,7 +135,7 @@ export const programsService = {
     return shape(p);
   },
 
-  async create(input: z.output<typeof zProgramInput>) {
+  async create(input: z.output<typeof zProgramInput>, user?: CurrentUser) {
     await validateRows(input.fabricItemId, input.processes);
     return withTx(async (tx) => {
       const order = await ordersService.requireOpen(input.orderId, tx);
@@ -118,9 +151,15 @@ export const programsService = {
           gsm: input.gsm,
           dia: input.dia,
           remarks: input.remarks,
+          sourceScanId: input.sourceScanId ?? null,
+          ...spec(input),
         },
         rows(input.processes),
       );
+      if (input.sourceScanId) {
+        if (!fromScanHook || !user) throw new AppError('VALIDATION_ERROR', 'Scanned programmes cannot be created here', 400);
+        await fromScanHook(tx, created.id, input.sourceScanId, user);
+      }
       return shape((await repo.get(created.id, tx))!);
     });
   },
@@ -135,7 +174,7 @@ export const programsService = {
         tx,
         id,
         input.version,
-        { fabricItemId: input.fabricItemId, colour: input.colour, requiredKg: input.requiredKg, gsm: input.gsm, dia: input.dia, remarks: input.remarks },
+        { fabricItemId: input.fabricItemId, colour: input.colour, requiredKg: input.requiredKg, gsm: input.gsm, dia: input.dia, remarks: input.remarks, ...spec(input) },
         rows(input.processes),
       );
       if (!ok) throw versionConflict();
@@ -185,6 +224,14 @@ export const programsService = {
   /** Program processes an outward D.C. for this order + process could go under (approved programs only). */
   approvedProcessesFor(orderId: string, processId: string, db: Tx | typeof prisma = prisma) {
     return repo.approvedProcesses(orderId, processId, db);
+  },
+
+  bySourceScan: (scanId: string) => repo.bySourceScan(scanId),
+
+  /** What a Programme Entry screenshot can be matched to: items used before for the same description / counts, and kilo-stage processes. */
+  async scanMemory(fabricDescription: string, counts: string[]) {
+    const [fabricItemId, yarns, processes] = await Promise.all([fabricDescription ? repo.fabricForDescription(fabricDescription) : null, repo.yarnsForCounts(counts), repo.activeKgProcesses()]);
+    return { fabricItemId, yarns, processes };
   },
 
   async processForDc(programProcessId: string, db: Tx | typeof prisma = prisma) {
