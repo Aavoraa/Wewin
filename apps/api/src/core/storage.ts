@@ -16,6 +16,10 @@ export type StorageArea = 'attachments' | 'scans' | 'exports';
 export const storageDriver = (): 'disk' | 'blob' => (env.STORAGE_DRIVER === 'blob' || (env.STORAGE_DRIVER === '' && !!process.env.BLOB_READ_WRITE_TOKEN && !!process.env.VERCEL) ? 'blob' : 'disk');
 
 function diskPath(area: StorageArea, key: string) {
+  // Vercel functions have no writable disk: without a Blob store, say so instead of failing with EROFS.
+  if (process.env.VERCEL) {
+    throw new AppError('SERVER_NOT_CONFIGURED', 'File storage is not set up on this server. Connect a Vercel Blob store (Storage → Blob, private) to the project and redeploy.', 503);
+  }
   const root = path.resolve(env.STORAGE_DIR, area);
   const p = path.resolve(root, key);
   if (!p.startsWith(root + path.sep)) throw new AppError('VALIDATION_ERROR', 'Invalid file key', 400);

@@ -21,9 +21,19 @@ fi
 if [ "${VERCEL_ENV:-}" = "production" ] && [ -z "${DATABASE_URL:-}" ]; then
   echo "[build] WARNING: no database connected (Storage tab → Neon). The site deploys; the API answers 'not set up' until one is connected." >&2
 elif [ "${VERCEL_ENV:-}" = "production" ]; then
-  # Migrations need a direct connection, not the pooled one.
-  export DATABASE_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}"
-  echo "[build] applying database migrations"
+  # The site runs on DATABASE_URL. Migrations need a direct connection (not Neon's pooler); when
+  # DATABASE_URL_UNPOOLED names a different database than DATABASE_URL, migrate both so the running
+  # site never meets a database without the latest tables.
+  db_id() { node -e 'try{const u=new URL(process.argv[1]);console.log(u.hostname.replace("-pooler.",".")+"/"+u.pathname.slice(1))}catch{console.log("")}' "$1"; }
+  RUNTIME_URL="$DATABASE_URL"
+  RUNTIME_DIRECT="${RUNTIME_URL/-pooler./.}"
+  if [ -n "${DATABASE_URL_UNPOOLED:-}" ] && [ "$(db_id "$DATABASE_URL_UNPOOLED")" != "$(db_id "$RUNTIME_URL")" ]; then
+    echo "[build] WARNING: DATABASE_URL and DATABASE_URL_UNPOOLED point to different databases; the site uses DATABASE_URL. Migrating both — remove the one you do not want." >&2
+    echo "[build] applying database migrations (DATABASE_URL_UNPOOLED)"
+    (cd packages/db && DATABASE_URL="$DATABASE_URL_UNPOOLED" pnpm exec prisma migrate deploy)
+  fi
+  export DATABASE_URL="$RUNTIME_DIRECT"
+  echo "[build] applying database migrations (the site's database)"
   (cd packages/db && pnpm exec prisma migrate deploy)
   if [ -n "${SEED_OWNER_PASSWORD:-}" ]; then
     echo "[build] loading foundation data (owner login, roles, locations, series)"

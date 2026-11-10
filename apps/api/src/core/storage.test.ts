@@ -34,3 +34,16 @@ describe('file storage on Vercel Blob', () => {
     await expect(fileStore.get('scans', '2026/10/x.pdf')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
+
+describe('file storage on Vercel without a Blob store', () => {
+  it('refuses with a setup message instead of writing to the read-only disk', async () => {
+    vi.stubEnv('VERCEL', '1');
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', '');
+    try {
+      expect(storageDriver()).toBe('disk');
+      await expect(fileStore.put('scans', '2026/10/x.pdf', Buffer.from('%PDF-1.4'), 'application/pdf')).rejects.toMatchObject({ code: 'SERVER_NOT_CONFIGURED', httpStatus: 503 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
