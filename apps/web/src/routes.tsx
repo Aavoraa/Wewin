@@ -82,6 +82,8 @@ const MobileLayApproval = lazy(() => import('@/features/mobile/MobilePages').the
 const MobileQcApproval = lazy(() => import('@/features/mobile/MobilePages').then((m) => ({ default: m.MobileQcApproval })));
 const QcListPage = lazy(() => import('@/features/quality/QcPages').then((m) => ({ default: m.QcListPage })));
 const QcPage = lazy(() => import('@/features/quality/QcPages').then((m) => ({ default: m.QcPage })));
+const PurchaseOrderListPage = lazy(() => import('@/features/purchase/PurchasePages').then((m) => ({ default: m.PurchaseOrderListPage })));
+const PurchaseOrderPage = lazy(() => import('@/features/purchase/PurchasePages').then((m) => ({ default: m.PurchaseOrderPage })));
 const ScanReviewPage = lazy(() => import('@/features/scans/ScanReviewPage').then((m) => ({ default: m.ScanReviewPage })));
 const AliasesPage = lazy(() => import('@/features/scans/AliasesPage').then((m) => ({ default: m.AliasesPage })));
 // Print templates (QR / barcode libraries) load only when a print opens.
@@ -103,6 +105,8 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'cut-lays', perm: 'cutting.view', element: <CutLaysPage /> },
   { path: 'cut-lays/:id', perm: 'cutting.view', element: <CutLayPage /> },
   { path: 'qc', perm: 'qc.view', element: <QcListPage /> },
+  { path: 'purchase-orders', perm: 'purchase.view', element: <PurchaseOrderListPage /> },
+  { path: 'purchase-orders/:id', perm: 'purchase.view', element: <PurchaseOrderPage /> },
   { path: 'qc/:id', perm: 'qc.view', element: <QcPage /> },
   { path: 'bundles', perm: 'cutting.view', element: <BundlesPage /> },
   { path: 'panel-out', perm: 'panels.view', element: <PanelOutListPage /> },

@@ -18,6 +18,7 @@ import {
   type ScanHeader,
   type ScanLine,
   emptyField,
+  emptyProgrammeScan,
   normalizeDate,
   normalizeGstin,
   normalizeNumber,
@@ -466,6 +467,21 @@ export function classify(text: string): Extraction['classification'] {
   return { class: best as ScanClass, confidence: Math.round((top / total) * 100) / 100, reasons: reasons.slice(0, 6) };
 }
 
+/** The desktop Programme Entry screen (Q-068): its labels, not an invoice's. */
+export function isProgrammeScreen(text: string): boolean {
+  const hits = [/programme\s*entry/i, /\bportion\b/i, /fab\.?\s*colou?r/i, /knit\.?\s*dia/i, /finish\.?\s*dia/i, /prs\.?\s*template/i, /yarn\s*counts/i].filter((re) => re.test(text)).length;
+  return hits >= 3;
+}
+
+/** "Order Ref  O/0001/…   Color / Combo  WHITE" → the values after the labels, as far as the text layer allows. */
+function programmeFromText(text: string) {
+  const p = emptyProgrammeScan();
+  p.orderRef = /order\s*ref\.?\s*[:-]?\s*(.+?)(?=\s{2,}|\s+colou?r\s*\/|\n|$)/i.exec(text)?.[1]?.trim() ?? '';
+  p.colour = /colou?r\s*\/\s*combo\s*[:-]?\s*([A-Za-z][A-Za-z ]{0,29}?)(?=\s{2,}|\s+order\s*qty|\n|$)/i.exec(text)?.[1]?.trim() ?? '';
+  p.orderQty = /order\s*qty\s*[:-]?\s*(\d[\d,]*)/i.exec(text)?.[1] ?? '';
+  return p;
+}
+
 // ───────── Main ─────────
 export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrder; companyGstin: string | null; textSource: Extraction['textSource'] }): Extraction {
   const lines = buildLines(pages);
@@ -631,6 +647,22 @@ export function extractHeuristic(pages: PageLayout[], opts: { dateOrder: DateOrd
   const detectedRows = grid ? grid.detected : table.detected;
   if (!scanLines.length) warnings.push(isBuyerPo ? 'No colour × size quantities were recognised — add them by hand or reprocess with AI extraction' : 'No line-item table was recognised — add the lines by hand or reprocess with AI extraction');
   if (!grid && table.detected > scanLines.length) warnings.push(`${table.detected} table rows were seen but ${scanLines.length} could be read — compare with the document`);
+
+  if (isProgrammeScreen(allText)) {
+    const programme = programmeFromText(allText);
+    if (programme.orderRef) header.poNumber = { ...emptyField(), value: programme.orderRef, raw: programme.orderRef, confidence: 0.6, source: 'EXTRACTED' };
+    return {
+      extractor: 'wewin-layout@1',
+      textSource: opts.textSource,
+      pages: pages.map((p) => ({ width: p.width, height: p.height, ocr: p.ocr, meanConfidence: null })),
+      classification: { class: 'PROGRAMME_SCREEN', confidence: 0.8, reasons: ['Programme Entry screen labels (Portion, Fab. Colour, Knit Dia…)'] },
+      header,
+      lines: [],
+      detectedRows: 0,
+      warnings: ['Local reading recognises the Programme Entry screen but cannot read its grids — reprocess with AI extraction, or fill the programme form by hand'],
+      programme,
+    };
+  }
 
   return {
     extractor: 'wewin-layout@1',

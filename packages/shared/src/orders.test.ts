@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orderTotals, programPlan, trimsRequirement, zOrderInput } from './orders';
+import { orderTotals, programFinishedKg, programPlan, trimsRequirement, zOrderInput, zProgramInput } from './orders';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const base = {
@@ -87,5 +87,42 @@ describe('programPlan', () => {
   it('handles zero loss and 100% loss safely', () => {
     expect(programPlan('10', [{ sequence: 1, allowedLossPct: '0' }])[1]).toEqual({ outputKg: '10.000', inputKg: '10.000' });
     expect(programPlan('10', [{ sequence: 1, allowedLossPct: '100' }])[1]!.inputKg).toBe('10.000');
+  });
+});
+
+describe('programme entry fields (Q-067)', () => {
+  const base = {
+    orderId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427',
+    fabricItemId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427',
+    requiredKg: '100',
+    processes: [{ sequence: 1, processId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', inputItemId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', outputItemId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', allowedLossPct: '5' }],
+  };
+
+  it('accepts the desktop programme: 1*1 LYC RIB, 30s 96% + lycra 4%, size-wise dia', () => {
+    const r = zProgramInput.safeParse({
+      ...base,
+      portion: 'NECK RIB',
+      fabricDescription: '1*1 LYC RIB',
+      fabricType: 'Knits',
+      greyGsm: 260,
+      gsm: 260,
+      yarnMix: [{ counts: '30s 100% COMBED', consPct: '96' }, { counts: 'LYCRA', consPct: '4' }],
+      sizeSpecs: [{ size: '3A', actPcsWeight: '6', knitDia: '32', finishDia: '33' }],
+    });
+    expect(r.success, JSON.stringify(r.error?.issues)).toBe(true);
+    expect(r.data?.uom).toBe('Kgs');
+  });
+
+  it('needs the yarn mix to add up to 100% and each size once', () => {
+    expect(zProgramInput.safeParse({ ...base, yarnMix: [{ counts: '30s', consPct: '90' }] }).success).toBe(false);
+    expect(zProgramInput.safeParse({ ...base, sizeSpecs: [{ size: '3A' }, { size: '3A' }] }).success).toBe(false);
+  });
+
+  it('Calculate: pieces × actual piece weight (g) ÷ 1000, reporting sizes without a weight', () => {
+    const r = programFinishedKg({ '3A': 1500, '4A': 1500, '5A': 0, '6A': 100 }, [
+      { size: '3A', actPcsWeight: '6' },
+      { size: '4A', actPcsWeight: '6.5' },
+    ]);
+    expect(r).toEqual({ kg: '18.750', missing: ['6A'] });
   });
 });

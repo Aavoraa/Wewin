@@ -67,6 +67,7 @@ export const TARGET_LABEL: Record<ScanTarget, string> = {
   OUTWARD_DC: 'Outward D.C.',
   INWARD_DC: 'Inward D.C.',
   ORDER: 'Buyer order',
+  PROGRAM: 'Fabric programme',
 };
 
 export const STATUS_LABEL: Record<ScanStatus, string> = {

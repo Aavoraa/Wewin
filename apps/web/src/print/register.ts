@@ -4,6 +4,7 @@ import { InwardDcPrint, OutwardDcPrint, RollLabelsPrint } from './JobworkPrints'
 import { DebitNotePrint, PaymentVoucherPrint } from './AccountsPrints';
 import { ExportInvoicePrint, ExportPackingListPrint } from './ExportPrints';
 import { BundleTicketsPrint, CartonLabelPrint, PackingListPrint, PanelDcPrint } from './ProductionPrints';
+import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 
 /** Print templates by document type (A§11). */
 PRINT_TEMPLATES['yarn-receipt'] = YarnReceiptPrint;
@@ -18,3 +19,4 @@ PRINT_TEMPLATES['debit-note'] = DebitNotePrint;
 PRINT_TEMPLATES['payment'] = PaymentVoucherPrint;
 PRINT_TEMPLATES['export-invoice'] = ExportInvoicePrint;
 PRINT_TEMPLATES['export-packing-list'] = ExportPackingListPrint;
+PRINT_TEMPLATES['purchase-order'] = PurchaseOrderPrint;

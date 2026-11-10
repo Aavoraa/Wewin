@@ -20,6 +20,7 @@ import { attachmentsRouter } from './attachments/attachments.routes';
 import { openingRouter } from './opening/opening.routes';
 import { voiceRouter } from './voice/voice.routes';
 import { qualityRouter } from './quality/quality.routes';
+import { purchaseRouter } from './purchase/purchase.routes';
 
 /** Business module routers, mounted under /api/v1 after authentication. */
-export const moduleRouters: Router[] = [stockRouter, mastersRouter, ordersRouter, programsRouter, yarnRouter, jobworkRouter, cuttingRouter, panelsRouter, sewingRouter, packingRouter, trimsRouter, wipRouter, accountsRouter, alertsRouter, scansRouter, exportRouter, reportsRouter, attachmentsRouter, openingRouter, voiceRouter, qualityRouter];
+export const moduleRouters: Router[] = [stockRouter, mastersRouter, ordersRouter, programsRouter, yarnRouter, jobworkRouter, cuttingRouter, panelsRouter, sewingRouter, packingRouter, trimsRouter, wipRouter, accountsRouter, alertsRouter, scansRouter, exportRouter, reportsRouter, attachmentsRouter, openingRouter, voiceRouter, qualityRouter, purchaseRouter];

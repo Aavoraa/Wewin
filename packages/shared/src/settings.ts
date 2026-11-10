@@ -36,6 +36,11 @@ export const SETTINGS_SCHEMA = {
     default: ['Hole', 'Stain / oil mark', 'Shade variation', 'Slub / yarn fault', 'Broken stitch', 'Skip stitch', 'Open seam', 'Puckering', 'Measurement out', 'Uncut thread', 'Print / embroidery fault', 'Label / trim missing'],
     description: 'Defect names offered on quality checks (Q-063).',
   },
+  'purchase.roundNetToRupee': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Round the net amount of purchase orders to the nearest rupee, as the desktop software does (Q-066).',
+  },
   'accounts.feedEnabled': {
     schema: z.boolean(),
     default: true,

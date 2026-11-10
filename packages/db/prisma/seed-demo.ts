@@ -18,6 +18,7 @@ export async function seedDemo(prisma: PrismaClient): Promise<void> {
   const processes = [
     { code: 'KNITTING', name: 'Knitting', stage: 'KG' as const, defaultReturnDays: 15 },
     { code: 'DYEING', name: 'Dyeing', stage: 'KG' as const, defaultReturnDays: 20 },
+    { code: 'GREY_PURCHASE', name: 'Grey fabric purchase', stage: 'KG' as const, defaultReturnDays: 15 },
     { code: 'COMPACTING', name: 'Compacting', stage: 'KG' as const, defaultReturnDays: 7 },
     { code: 'PRINTING', name: 'Printing', stage: 'PCS' as const, defaultReturnDays: 10 },
     { code: 'EMBROIDERY', name: 'Embroidery', stage: 'PCS' as const, defaultReturnDays: 10 },

@@ -143,3 +143,43 @@ export function matchItem(line: { description: string | null; vendorItemCode: st
   const auto = !!top && top.score >= ITEM_AUTO_SCORE && (!second || top.score - second.score >= ITEM_AUTO_MARGIN);
   return { id: auto ? top.id : null, state: auto ? 'AUTO' : list.length ? 'SUGGESTED' : 'NONE', score: top?.score ?? null, candidates: list };
 }
+
+export interface OrderMaster {
+  id: string;
+  orderNo: string;
+  styleNo: string;
+  buyerPoNo: string;
+  buyerName: string;
+}
+const alnum = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/**
+ * Programme Entry screenshot (Q-068): the desktop order ref ("O/0001/WKF/25/67048,9 F/1 111 12847 PA")
+ * → Wewin orders. The Wewin order no., style no. or buyer PO appearing inside the ref scores highest;
+ * otherwise shared number groups (4+ digits). Only ever a suggestion — the reviewer confirms.
+ */
+export function matchOrderRef(ref: string | null, orders: OrderMaster[]): Match {
+  const none: Match = { id: null, state: 'NONE', score: null, candidates: [] };
+  const r = alnum(ref ?? '');
+  if (!r) return none;
+  const refNums = new Set((ref ?? '').match(/\d{4,}/g) ?? []);
+  const scored = orders
+    .map((o) => {
+      const fields: [string, string][] = [
+        ['order no.', o.orderNo],
+        ['style', o.styleNo],
+        ['buyer PO', o.buyerPoNo],
+      ];
+      const whole = fields.find(([, v]) => alnum(v).length >= 4 && r.includes(alnum(v)));
+      if (whole) return { o, score: 0.95, reason: `${whole[0]} ${whole[1]} in the order ref` };
+      const nums = fields.flatMap(([k, v]) => (v.match(/\d{4,}/g) ?? []).filter((n) => refNums.has(n)).map((n) => [k, n] as const));
+      if (nums.length) return { o, score: 0.75, reason: `${nums[0]![0]} number ${nums[0]![1]} in the order ref` };
+      return { o, score: 0, reason: '' };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+  if (!scored.length) return none;
+  const candidates = scored.map((x) => ({ id: x.o.id, code: x.o.orderNo, name: `${x.o.styleNo} · ${x.o.buyerName}`, score: x.score, reason: x.reason }));
+  return { id: candidates[0]!.id, state: 'SUGGESTED', score: candidates[0]!.score, candidates };
+}

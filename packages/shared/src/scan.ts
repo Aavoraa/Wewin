@@ -7,13 +7,13 @@ import { zListQuery, zRef } from './api';
 
 // ───────── What the ERP can receive from a scanned document ─────────
 /** Existing Wewin documents a scan can fill. No new transaction types are introduced. */
-export const SCAN_TARGETS = ['YARN_RECEIPT', 'TRIMS_RECEIPT', 'VENDOR_BILL', 'OUTWARD_DC', 'INWARD_DC', 'ORDER'] as const;
+export const SCAN_TARGETS = ['YARN_RECEIPT', 'TRIMS_RECEIPT', 'VENDOR_BILL', 'OUTWARD_DC', 'INWARD_DC', 'ORDER', 'PROGRAM'] as const;
 export type ScanTarget = (typeof SCAN_TARGETS)[number];
 /** Delivery challans: no tax or totals; they move material, so they are matched to stock / outward D.C.s instead. */
 export const DC_TARGETS: readonly ScanTarget[] = ['OUTWARD_DC', 'INWARD_DC'];
 export const isDcTarget = (t: ScanTarget | null | undefined) => !!t && DC_TARGETS.includes(t);
 
-export const SCAN_CLASSES = ['YARN_PURCHASE', 'TRIMS_PURCHASE', 'JOBWORK_BILL', 'DELIVERY_CHALLAN', 'BUYER_PO', 'OTHER'] as const;
+export const SCAN_CLASSES = ['YARN_PURCHASE', 'TRIMS_PURCHASE', 'JOBWORK_BILL', 'DELIVERY_CHALLAN', 'BUYER_PO', 'PROGRAMME_SCREEN', 'OTHER'] as const;
 export type ScanClass = (typeof SCAN_CLASSES)[number];
 /** DELIVERY_CHALLAN → outward or inward is decided by who issued it (Wewin or the job worker). */
 export const CLASS_TARGET: Record<ScanClass, ScanTarget | null> = {
@@ -22,6 +22,7 @@ export const CLASS_TARGET: Record<ScanClass, ScanTarget | null> = {
   JOBWORK_BILL: 'VENDOR_BILL',
   DELIVERY_CHALLAN: null,
   BUYER_PO: 'ORDER',
+  PROGRAMME_SCREEN: 'PROGRAM',
   OTHER: null,
 };
 
@@ -94,6 +95,39 @@ export const zScanLine = z.object({
 });
 export type ScanLine = z.infer<typeof zScanLine>;
 
+/**
+ * A screenshot of the desktop Programme Entry screen (Q-068), read as printed (plain text, "" = blank).
+ * The portion grid lists every portion; the details below it belong to the selected portion only.
+ */
+const t = z.string();
+export const zProgrammeScan = z.object({
+  orderRef: t,
+  colour: t,
+  orderQty: t,
+  portions: z.array(z.object({ portion: t, fabColour: t, printColour: t, selected: z.boolean() })),
+  fabricDescription: t,
+  fabricType: t,
+  greyGsm: t,
+  finalGsm: t,
+  gauge: t,
+  loopLength: t,
+  uom: t,
+  mtrToKg: t,
+  collarCuffReqd: t,
+  withMeasurement: z.boolean(),
+  measureUnit: t,
+  tubSingle: t,
+  processTemplate: t,
+  yarns: z.array(z.object({ counts: t, colour: t, consPct: t })),
+  processes: z.array(z.object({ name: t, lossPct: t })),
+  sizes: z.array(z.object({ size: t, length: t, lengthAllowance: t, width: t, widthAllowance: t, pcsWeight: t, actDia: t, actPcsWeight: t, knitDia: t, finishDia: t })),
+});
+export type ProgrammeScan = z.infer<typeof zProgrammeScan>;
+export const emptyProgrammeScan = (): ProgrammeScan => ({
+  orderRef: '', colour: '', orderQty: '', portions: [], fabricDescription: '', fabricType: '', greyGsm: '', finalGsm: '', gauge: '', loopLength: '', uom: '', mtrToKg: '',
+  collarCuffReqd: '', withMeasurement: false, measureUnit: '', tubSingle: '', processTemplate: '', yarns: [], processes: [], sizes: [],
+});
+
 export const zExtraction = z.object({
   extractor: z.string(),
   textSource: z.enum(['PDF_TEXT', 'OCR', 'MIXED', 'AI']),
@@ -104,6 +138,8 @@ export const zExtraction = z.object({
   /** Table rows the extractor saw (incl. rows it could not parse) — compare with the document. */
   detectedRows: z.number().int(),
   warnings: z.array(z.string()),
+  /** Programme Entry screenshots only. */
+  programme: zProgrammeScan.nullable().optional(),
 });
 export type Extraction = z.infer<typeof zExtraction>;
 
@@ -160,6 +196,9 @@ export const zReview = z.object({
   existingDocId: z.string().nullable(),
   /** Field keys (header:<key>, line:<n>:<key>, vendor, line:<n>:item) the reviewer confirmed. */
   confirmed: z.array(z.string()),
+  /** Programme Entry screenshot (target PROGRAM): what was read and the Wewin order it belongs to. */
+  programme: zProgrammeScan.nullable().optional(),
+  programmeOrder: zMatch.nullable().optional(),
 });
 export type Review = z.infer<typeof zReview>;
 
@@ -194,6 +233,8 @@ export const zReviewPatch = z.object({
     .optional(),
   programProcessId: zRef().nullable().optional(),
   existingDocId: zRef().nullable().optional(),
+  /** Programme Entry screenshot: the Wewin order (confirmed by the reviewer). */
+  programmeOrderId: zRef().nullable().optional(),
   /** Keys being confirmed by the reviewer in this save. */
   confirm: z.array(z.string().max(80)).max(2000).optional(),
 });

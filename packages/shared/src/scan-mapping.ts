@@ -32,7 +32,7 @@ export interface TargetSpec {
   /** Existing endpoint and screen that receive the draft. */
   endpoint: string;
   route: string;
-  createPermission: 'yarn.create' | 'trims.create' | 'accounts.bill.create' | 'jobwork.create' | 'orders.create';
+  createPermission: 'yarn.create' | 'trims.create' | 'accounts.bill.create' | 'jobwork.create' | 'orders.create' | 'programs.edit';
   /** Item type the lines must resolve to (null for bills, which reference D.C.s instead). */
   itemType: 'YARN' | 'TRIM' | 'FABRIC' | null;
   /** Further item types a line may resolve to (an outward D.C. sends yarn or fabric). */
@@ -44,6 +44,8 @@ export interface TargetSpec {
    * finished on the order form (order no., style item and components are not on a buyer PO).
    */
   po?: boolean;
+  /** Desktop Programme Entry screenshot: finished on the fabric programme form (Q-068). */
+  programme?: boolean;
   fields: FieldMap[];
 }
 
@@ -192,6 +194,26 @@ export const TARGET_SPECS: Record<ScanTarget, TargetSpec> = {
       { source: 'line:qty', target: 'lines[].qty', type: 'int', normalize: 'whole pieces', validate: '≥ 1', mandatory: true, confirm: 'if-uncertain', derivable: null },
       { source: 'line:rate', target: 'lines[].unitPrice', type: 'rate', normalize: 'decimal, 4 places', validate: '—', mandatory: false, confirm: 'never', derivable: null },
       { source: 'form', target: 'orderNo, garmentItemId, components', type: 'ref', normalize: 'not on a buyer PO — entered on the order form', validate: 'existing order rules', mandatory: true, confirm: 'never', derivable: null },
+    ],
+  },
+  PROGRAM: {
+    label: 'Fabric programme',
+    module: 'programs',
+    entity: 'FabricProgram',
+    endpoint: 'POST /api/v1/programs (finished on the programme form)',
+    route: 'programs',
+    createPermission: 'programs.edit',
+    itemType: null,
+    programme: true,
+    fields: [
+      { source: 'programme:orderRef', target: 'orderId', type: 'ref', normalize: 'desktop order ref → Wewin order by style / buyer PO / order no.', validate: 'open order', mandatory: true, confirm: 'always', derivable: null },
+      { source: 'programme:colour', target: 'colour', type: 'text', normalize: 'Color / Combo as printed', validate: 'a colour of the order', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'programme:portions', target: 'portion (one programme per portion)', type: 'text', normalize: 'selected portion gets the details; others open pre-filled forms', validate: '≤ 40 chars', mandatory: true, confirm: 'never', derivable: null },
+      { source: 'programme:fabricDescription', target: 'fabricDescription + fabricItemId', type: 'ref', normalize: 'description → item used before on a programme with the same description', validate: 'FABRIC item', mandatory: true, confirm: 'if-uncertain', derivable: null },
+      { source: 'programme:gsm / GG / LL / uom / mtrToKg / coll-cuff / tub-single', target: 'greyGsm, gsm, gauge, loopLength, uom, mtrToKg, collarCuffReqd, tubSingle', type: 'text', normalize: 'as printed', validate: 'programme rules', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'programme:yarns', target: 'yarnMix[]', type: 'text', normalize: 'counts → yarn item used before with the same counts', validate: 'consumption % totals 100', mandatory: false, confirm: 'never', derivable: null },
+      { source: 'programme:processes', target: 'processes[].processId + allowedLossPct', type: 'ref', normalize: 'process name → process master (Grey fabric purchase is a process)', validate: 'kilo-stage process; input / output items chosen on the form', mandatory: true, confirm: 'never', derivable: null },
+      { source: 'programme:sizes', target: 'sizeSpecs[]', type: 'qty', normalize: 'grid read column by column', validate: 'sizes of the order', mandatory: false, confirm: 'never', derivable: null },
     ],
   },
 };

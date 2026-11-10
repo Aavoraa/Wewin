@@ -38,6 +38,11 @@ import {
   buildPayload,
   type zAliasListQuery,
   type zScanListQuery,
+  type ProgrammeScan,
+  dice,
+  emptyProgrammeScan,
+  matchOrderRef,
+  normName,
 } from '@wewin/shared';
 import { prisma, withTx, afterCommit } from '../../core/db';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
@@ -54,6 +59,7 @@ import { trimsService } from '../trims/trims.service';
 import { billsService } from '../accounts/bills.service';
 import { jobworkService } from '../jobwork/jobwork.service';
 import { onOrderCreatedFromScan, ordersService } from '../orders/orders.service';
+import { onProgramCreatedFromScan, programsService } from '../programs/programs.service';
 import { dateOnly, toDbDate } from '../../core/documents';
 import { scansRepo as repo } from './scans.repo';
 import { readStored, removeStored, storeUpload } from './scans.storage';
@@ -180,6 +186,7 @@ async function autoProgramProcess(vendorId: string | null): Promise<string | nul
 async function buildReview(ex: Extraction, prev: Review | null, uploaded: ScanTarget | null = null): Promise<Review> {
   const company = await companyTax();
   const target = resolveTarget(ex, prev, uploaded, company.names);
+  if (target === 'PROGRAM') return programmeReview(ex.programme ?? null, ex.header.poNumber.value, ex.header, prev);
   // A buyer PO is matched against buyers (by the name at the top); everything else against vendors.
   const vendors = target === 'ORDER' ? await mastersService.buyersForMatching() : await mastersService.vendorsForMatching();
   // On Wewin's own D.C. the name at the top is Wewin's: match the job worker by GSTIN only.
@@ -216,6 +223,42 @@ async function buildReview(ex: Extraction, prev: Review | null, uploaded: ScanTa
   return { target, vendor, header, lines, sources, programProcessId, existingDocId: prev?.existingDocId ?? null, confirmed: prev?.confirmed ?? [] };
 }
 
+const NO_MATCH: Match = { id: null, state: 'NONE', score: null, candidates: [] };
+
+/** Programme Entry screenshot (Q-068): what was read, and the Wewin order suggested from the desktop order ref. */
+async function programmeReview(read: ProgrammeScan | null, orderRefFallback: string | null, header: Review['header'], prev: Review | null): Promise<Review> {
+  const programme = read ?? prev?.programme ?? emptyProgrammeScan();
+  const programmeOrder =
+    prev?.programmeOrder?.state === 'CONFIRMED' ? prev.programmeOrder : matchOrderRef(programme.orderRef || orderRefFallback, await ordersService.openForMatching());
+  return { target: 'PROGRAM', vendor: NO_MATCH, header, lines: [], sources: [], programProcessId: null, existingDocId: null, confirmed: prev?.confirmed ?? [], programme, programmeOrder };
+}
+
+/** Ready when the order is confirmed and something was read; the programme form checks the rest. */
+function checkProgramme(review: Review): Checked {
+  const issues: Issue[] = [];
+  const p = review.programme;
+  if (review.programmeOrder?.state !== 'CONFIRMED') {
+    issues.push({ level: 'ERROR', code: 'ORDER_NOT_CONFIRMED', field: 'programme:order', message: 'Confirm the Wewin order this programme belongs to', ackKey: null, acknowledged: false });
+  }
+  if (!p || !p.portions.length) {
+    issues.push({ level: 'WARNING', code: 'NO_PORTIONS', field: 'programme:portions', message: 'No portions were read — they can be entered on the programme form', ackKey: null, acknowledged: false });
+  }
+  if (p && p.yarns.length) {
+    const total = p.yarns.reduce((a, y) => a.plus(D(normalizeNumber(y.consPct).value ?? '0')), D(0));
+    if (!total.equals(100)) issues.push({ level: 'WARNING', code: 'YARN_MIX', field: 'programme:yarns', message: `Yarn consumption adds up to ${total.toString()}%, not 100%`, ackKey: null, acknowledged: false });
+  }
+  return { issues, duplicates: [], reconciliation: null as never, ready: !issues.some((i) => i.level === 'ERROR'), checkedAt: new Date().toISOString() };
+}
+
+/** "96.00" → "96", "0" / blank → null (the desktop grid shows 0 for empty cells). */
+function readNum(raw: string | null | undefined, zeroIsBlank = false): string | null {
+  const v = normalizeNumber(raw ?? '').value;
+  if (v === null) return null;
+  const d = D(v);
+  if (zeroIsBlank && d.isZero()) return null;
+  return d.toString();
+}
+
 /** The draft a scan created, if any (looked up by its source_scan_id). */
 function bySourceScan(target: ScanTarget, scanId: string) {
   switch (target) {
@@ -231,6 +274,8 @@ function bySourceScan(target: ScanTarget, scanId: string) {
       return jobworkService.inwardBySourceScan(scanId);
     case 'ORDER':
       return ordersService.bySourceScan(scanId);
+    case 'PROGRAM':
+      return programsService.bySourceScan(scanId).then((p) => p && { id: p.id, docNo: p.programNo, status: p.status });
   }
 }
 
@@ -255,6 +300,7 @@ async function existingDocs(target: ScanTarget, vendorId: string, invoiceNo: str
 }
 
 async function check(scan: Scan, review: Review): Promise<Checked> {
+  if (review.target === 'PROGRAM') return checkProgramme(review);
   const st = await scanSettings();
   const company = await companyTax();
   const vendor = await partyOf(review);
@@ -522,6 +568,16 @@ export const scansService = {
       review.target = patch.target;
       review.sources = [];
       review.existingDocId = null;
+      if (patch.target === 'PROGRAM') {
+        const ex = scan.extraction as unknown as Extraction | null;
+        Object.assign(review, await programmeReview(ex?.programme ?? null, review.header.poNumber.value, review.header, null));
+      }
+    }
+    if (patch.programmeOrderId !== undefined) {
+      if (review.target !== 'PROGRAM') throw new AppError('VALIDATION_ERROR', 'Only a programme screenshot has an order to confirm', 400);
+      if (patch.programmeOrderId) await ordersService.requireOpen(patch.programmeOrderId);
+      events.push({ kind: 'MATCH_CONFIRMED', field: 'programme:order', before: review.programmeOrder?.id ?? null, after: patch.programmeOrderId });
+      review.programmeOrder = { ...(review.programmeOrder ?? NO_MATCH), id: patch.programmeOrderId, state: patch.programmeOrderId ? 'CONFIRMED' : 'NONE' };
     }
     if (patch.vendorId !== undefined && patch.vendorId !== review.vendor.id) {
       if (patch.vendorId) await (review.target === 'ORDER' ? mastersService.getBuyer(patch.vendorId) : mastersService.vendorById(patch.vendorId));
@@ -671,6 +727,9 @@ export const scansService = {
     if (review.target === 'ORDER') {
       throw new AppError('VALIDATION_ERROR', 'A buyer PO is finished on the order form (order no., style item and components): use "Create order"', 400);
     }
+    if (review.target === 'PROGRAM') {
+      throw new AppError('VALIDATION_ERROR', 'A programme screenshot is finished on the programme form: use "Create programme"', 400);
+    }
     const spec = TARGET_SPECS[review.target];
     assertPermission(user, spec.createPermission);
     const checked = await check(scan, review);
@@ -771,6 +830,88 @@ export const scansService = {
     return { ...payload, currency: payload.currency ?? buyer?.currency ?? 'USD', sourceScanId: id, buyerName: review.vendor.candidates.find((c) => c.id === review.vendor.id)?.name ?? null };
   },
 
+  /**
+   * Programme Entry screenshot (Q-068): the selected portion as a pre-filled programme form, plus the
+   * other portions (opened as their own pre-filled forms). The fabric item, yarn items and processes
+   * are suggested from programmes entered before and the process master; the user completes the rest.
+   */
+  async programmeDraft(id: string, user: CurrentUser) {
+    assertPermission(user, 'scans.apply');
+    assertPermission(user, 'programs.edit');
+    const scan = await repo.get(id);
+    if (!scan) throw notFound('Scanned document');
+    const review = asReview(scan);
+    if (review?.target !== 'PROGRAM' || !review.programme) throw new AppError('VALIDATION_ERROR', 'This scan is not a programme screenshot', 400);
+    if (scan.status === 'APPLIED') throw new AppError('INVALID_STATE', 'A programme was already created from this screenshot', 409);
+    if (review.programmeOrder?.state !== 'CONFIRMED' || !review.programmeOrder.id) throw new AppError('SCAN_NOT_READY', 'Confirm the order first', 409);
+    const p = review.programme;
+    const order = await ordersService.getDetail(review.programmeOrder.id);
+    const colour = order.colours.find((c) => c.toUpperCase() === p.colour.trim().toUpperCase()) ?? null;
+    const selected = p.portions.find((x) => x.selected) ?? p.portions[0] ?? null;
+    const mem = await programsService.scanMemory(p.fabricDescription.trim(), p.yarns.map((y) => y.counts.trim()).filter(Boolean));
+    const plain = (n: string) => normName(n.replace(/\(.*?\)/g, ' '));
+    const processes = p.processes
+      .filter((x) => x.name.trim())
+      .map((x, i) => {
+        // Exact code, then exact name, then the closest name (an exact match must beat a look-alike).
+        const read = plain(x.name);
+        const score = (pr: { code: string; name: string }) =>
+          plain(pr.code.replace(/_/g, ' ')) === read ? 3 : plain(pr.name) === read ? 2 : Math.max(dice(read, plain(pr.name)), dice(read, plain(pr.code.replace(/_/g, ' '))));
+        const best = mem.processes.map((pr) => ({ pr, score: score(pr) })).sort((a, b) => b.score - a.score)[0];
+        const pr = best && best.score >= 0.6 ? best.pr : null;
+        return { sequence: i + 1, processId: pr?.id ?? '', readName: x.name.trim(), allowedLossPct: readNum(x.lossPct) ?? '0', inputItemId: '', outputItemId: '', materialCostPerKg: null, plannedVendorId: null };
+      });
+    const yarnMix = p.yarns
+      .filter((y) => y.counts.trim())
+      .map((y) => ({ yarnItemId: mem.yarns.get(y.counts.trim().toLowerCase()) ?? null, counts: y.counts.trim(), colour: y.colour.trim() || null, consPct: readNum(y.consPct) ?? '' }));
+    const sizeSpecs = p.sizes
+      .filter((x) => x.size.trim())
+      .map((x) => ({
+        size: x.size.trim(),
+        length: readNum(x.length, true),
+        lengthAllowance: readNum(x.lengthAllowance, true),
+        width: readNum(x.width, true),
+        widthAllowance: readNum(x.widthAllowance, true),
+        pcsWeight: readNum(x.pcsWeight, true),
+        actDia: readNum(x.actDia, true),
+        actPcsWeight: readNum(x.actPcsWeight, true),
+        knitDia: readNum(x.knitDia, true),
+        finishDia: readNum(x.finishDia, true),
+      }));
+    const itemIds = [mem.fabricItemId, ...yarnMix.map((y) => y.yarnItemId)].filter((x): x is string => !!x);
+    const items = itemIds.length ? await mastersService.itemsByIdsBrief(itemIds) : [];
+    const int = (v: string) => (/^\d+$/.test(readNum(v) ?? '') ? Number(readNum(v)) : null);
+    return {
+      sourceScanId: id,
+      orderId: order.id,
+      orderLabel: `${order.orderNo} · ${order.styleNo}`,
+      orderRef: p.orderRef,
+      colour,
+      colourRead: p.colour,
+      portion: selected?.portion.trim() || null,
+      printColour: selected?.printColour.trim() || null,
+      fabricItemId: mem.fabricItemId,
+      fabricDescription: p.fabricDescription.trim() || null,
+      fabricType: /woven/i.test(p.fabricType) ? 'Woven' : /knit/i.test(p.fabricType) ? 'Knits' : null,
+      greyGsm: int(p.greyGsm),
+      gsm: int(p.finalGsm),
+      gauge: readNum(p.gauge, true),
+      loopLength: readNum(p.loopLength, true),
+      uom: /mtr|met/i.test(p.uom) ? 'Mtrs' : 'Kgs',
+      mtrToKg: readNum(p.mtrToKg, true),
+      collarCuffReqd: int(p.collarCuffReqd) || null,
+      withMeasurement: p.withMeasurement,
+      measureUnit: /inch/i.test(p.measureUnit) ? 'INCH' : 'CM',
+      tubSingle: readNum(p.tubSingle, true) ?? (p.tubSingle.trim() && !/^0+$/.test(p.tubSingle.trim()) ? p.tubSingle.trim() : null),
+      processTemplate: p.processTemplate.trim() || null,
+      yarnMix,
+      sizeSpecs,
+      processes,
+      otherPortions: p.portions.filter((x) => x !== selected && x.portion.trim()).map((x) => ({ portion: x.portion.trim(), colour: x.fabColour.trim(), printColour: x.printColour.trim() })),
+      labels: Object.fromEntries(items.map((i) => [i.id, i.name])),
+    };
+  },
+
   /** Outward D.C.s: program processes the scan's vendor can receive material under. */
   async programProcessOptions(id: string) {
     const s = await repo.get(id);
@@ -828,6 +969,19 @@ onOrderCreatedFromScan(async (tx, orderId, scanId, user) => {
   await repo.update(tx, scanId, { status: 'APPLIED', appliedDocType: 'ORDER', appliedDocId: orderId, appliedAt: new Date() });
   await repo.event(tx, { scanId, kind: 'APPLIED', after: json({ docType: 'ORDER', docId: orderId }), userId: user.id });
   await audit.log(tx, { docType: 'INVOICE_SCAN', recordId: scanId, action: 'APPLY', data: { target: 'ORDER', docId: orderId } });
+});
+
+// A programme created with `sourceScanId` marks that Programme Entry screenshot as used (Q-068).
+onProgramCreatedFromScan(async (tx, programId, scanId, user) => {
+  assertPermission(user, 'scans.apply');
+  const s = await repo.lock(tx, scanId);
+  if (!s) throw notFound('Scanned document');
+  if ((s.review as unknown as Review | null)?.target !== 'PROGRAM') throw new AppError('VALIDATION_ERROR', 'That scan is not a programme screenshot', 400);
+  if (s.status === 'APPLIED') throw new AppError('INVALID_STATE', 'A programme was already created from this screenshot', 409);
+  if (s.status !== 'READY') throw new AppError('SCAN_NOT_READY', 'Confirm the order on the scanned programme first', 409);
+  await repo.update(tx, scanId, { status: 'APPLIED', appliedDocType: 'PROGRAM', appliedDocId: programId, appliedAt: new Date() });
+  await repo.event(tx, { scanId, kind: 'APPLIED', after: json({ docType: 'PROGRAM', docId: programId }), userId: user.id });
+  await audit.log(tx, { docType: 'INVOICE_SCAN', recordId: scanId, action: 'APPLY', data: { target: 'PROGRAM', docId: programId } });
 });
 
 registerJob(QUEUES.SCAN_EXTRACT, async (data) => scansService.process(String(data.scanId), (data.mode as Mode) ?? 'auto'));

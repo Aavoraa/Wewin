@@ -175,6 +175,10 @@ export const ordersService = {
     return o ? { id: o.id, docNo: o.orderNo, status: o.status } : null;
   },
   /** Orders already entered for this buyer PO (cancelled ones excluded). */
+  async openForMatching() {
+    return (await repo.openForMatching()).map((o) => ({ id: o.id, orderNo: o.orderNo, styleNo: o.styleNo, buyerPoNo: o.buyerPoNo, buyerName: o.buyer.name }));
+  },
+
   async byBuyerPo(buyerId: string, buyerPoNo: string) {
     return (await repo.byBuyerPo(buyerId, buyerPoNo)).map((o) => ({ id: o.id, docNo: o.orderNo, status: o.status, sourceScanId: o.sourceScanId, lines: [] as { itemId: string; qty: string; rate: string | null }[] }));
   },
