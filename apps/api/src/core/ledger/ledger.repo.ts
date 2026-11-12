@@ -78,6 +78,23 @@ export const ledgerRepo = {
     }));
   },
 
+  /** Balance of one order's stock at a location (order transfers — the plain check cannot see orders). */
+  async orderBalances(tx: Tx, keys: (BalanceKey & { orderId: string | null })[]): Promise<(BalanceKey & { orderId: string | null; qty: string })[]> {
+    if (keys.length === 0) return [];
+    const rows = await tx.$queryRaw<{ item_id: string; location_id: string; order_id: string | null; lot: string; colour: string; size: string; qty: Prisma.Decimal }[]>`
+      SELECT k.item_id, k.location_id, k.order_id, k.lot, k.colour, k.size,
+             COALESCE((SELECT SUM(m.qty) FROM stock_movements m
+                        WHERE m.item_id = k.item_id AND m.to_location_id = k.location_id AND m.order_id IS NOT DISTINCT FROM k.order_id
+                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size), 0)
+           - COALESCE((SELECT SUM(m.qty) FROM stock_movements m
+                        WHERE m.item_id = k.item_id AND m.from_location_id = k.location_id AND m.order_id IS NOT DISTINCT FROM k.order_id
+                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size), 0) AS qty
+      FROM unnest(${keys.map((k) => k.itemId)}::uuid[], ${keys.map((k) => k.locationId)}::uuid[], ${keys.map((k) => k.orderId)}::uuid[],
+                  ${keys.map((k) => k.lot)}::text[], ${keys.map((k) => k.colour)}::text[], ${keys.map((k) => k.size)}::text[])
+           AS k(item_id, location_id, order_id, lot, colour, size)`;
+    return rows.map((r) => ({ itemId: r.item_id, locationId: r.location_id, orderId: r.order_id, lot: r.lot, colour: r.colour, size: r.size, qty: new Prisma.Decimal(r.qty).toFixed(3) }));
+  },
+
   /** Original (non-reversal) movements of a source that have not been reversed yet. */
   movementsToReverse(tx: Tx, sourceType: string, sourceId: string) {
     return tx.$queryRaw<

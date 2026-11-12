@@ -17,6 +17,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState, LoadingState } from '@/components/states';
 import { type OrderDetail, pickers } from './api';
+import { ProgrammeUploads } from '../programs/ProgrammeUploads';
 
 const TABS = ['WIP', 'Costing', 'Fabric programs', 'Trims BOM'] as const;
 
@@ -154,7 +155,10 @@ function ProgramsPanel({ order }: { order: OrderDetail }) {
           <THead>
             <TR>
               <TH>Program</TH>
+              <TH>Portion</TH>
+              <TH>Colour</TH>
               <TH>Fabric</TH>
+              <TH className="text-right">Gsm</TH>
               <TH className="text-right">Required kg</TH>
               <TH>Status</TH>
             </TR>
@@ -167,8 +171,11 @@ function ProgramsPanel({ order }: { order: OrderDetail }) {
                     {p.programNo}
                   </Link>
                 </TD>
-                <TD>{p.fabricItem.name}</TD>
-                <TD className="num">{formatKg(p.requiredKg)}</TD>
+                <TD>{p.portion ?? '—'}</TD>
+                <TD>{p.colour ?? '—'}</TD>
+                <TD>{p.fabricDescription ?? p.fabricItem?.name ?? '—'}</TD>
+                <TD className="num">{p.gsm ?? ''}</TD>
+                <TD className="num">{p.requiredKg ? formatKg(p.requiredKg) : '—'}</TD>
                 <TD>
                   <StatusBadge status={p.status} />
                 </TD>
@@ -188,6 +195,7 @@ function ProgramsPanel({ order }: { order: OrderDetail }) {
           </Button>
         </div>
       ) : null}
+      <ProgrammeUploads orderId={order.id} canCreate={can('programs.edit') && (order.status === 'DRAFT' || order.status === 'CONFIRMED')} />
     </div>
   );
 }

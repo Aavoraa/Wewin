@@ -182,7 +182,7 @@ export const voiceService = {
           else notes.push(`"${said}" ${r.candidates.length ? `could be ${r.candidates.map((c) => c.label).join(' or ')}` : 'was not found'} — showing all`);
         }
       }
-      const run = await reportsService.run(report.key, params, user);
+      const run = await reportsService.runAll(report.key, params, user); // filter before any row limit
       const rows = run.rows.filter((r) => matchesSearch(r as Record<string, unknown>, ai.search_text)) as Record<string, unknown>[];
       const message = [summarise(run.title, run.columns, rows), ...notes].join(' ');
       return { kind: 'answer', message, report: { key: report.key, title: run.title, params: run.params as Record<string, unknown>, labels, search: ai.search_text.trim() }, columns: run.columns, rows: rows.slice(0, ANSWER_ROWS), total: rows.length };

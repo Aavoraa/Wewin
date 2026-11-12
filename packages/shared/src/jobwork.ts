@@ -39,6 +39,8 @@ export const zOutwardDcUpdate = outwardShape.extend({ version: z.number().int().
 export type OutwardDcInput = z.input<typeof zOutwardDcInput>;
 
 export const zOutwardListQuery = zListQuery.extend({
+  /** Direct Delivery Receipt: sent on from one job worker to the next (Q-034 / Q-071). */
+  direct: z.enum(['true']).optional(),
   status: zDocStatus.optional(),
   from: zDate().optional(),
   to: zDate().optional(),
@@ -102,4 +104,8 @@ export const zInwardListQuery = zListQuery.extend({
   to: zDate().optional(),
   vendorId: zRef().optional(),
   billed: z.enum(['true', 'false']).optional(),
+  /** Returns against outward D.C.s of this process (Transaction menu, Q-071). */
+  processId: zRef().optional(),
+  /** Direct Delivery Receipt: received and kept at the job worker (Q-034 / Q-071). */
+  direct: z.enum(['true']).optional(),
 });

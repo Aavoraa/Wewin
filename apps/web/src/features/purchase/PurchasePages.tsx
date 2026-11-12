@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
+import { ListChecks, Plus, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PO_KIND_NAMES, type PoKind, type VoiceFormSpec, isInterState, poLineAmount, poTotals, todayIst, zPoInput } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
@@ -309,6 +309,15 @@ const VOICE_PO = (kind: PoKind): VoiceFormSpec => ({
   },
 });
 
+interface AccessoryBalance {
+  itemId: string;
+  item: { name: string; unit: string };
+  group: string | null;
+  colour: string | null;
+  size: string | null;
+  balance: string;
+}
+
 export function PurchaseOrderPage() {
   const { id } = useParams();
   const [search] = useSearchParams();
@@ -409,12 +418,35 @@ export function PurchaseOrderPage() {
     isBlankLine: (l: LineForm) => !l.itemId && !l.qty,
   });
 
+  // Accessories PO (Q-072): the order's requirement still to be ordered, per item × colour × size.
+  const [balKind, balOrder] = form.watch(['kind', 'orderId']);
+  const balance = useQuery({
+    queryKey: ['accessory-balance', balOrder],
+    queryFn: () => api.get<AccessoryBalance[]>(`/orders/${balOrder}/accessory-balance`),
+    enabled: balKind === 'ACCESSORY' && !!balOrder,
+  });
+
   if (!d.isNew && d.query.isLoading) return <LoadingState />;
   if (!d.isNew && d.query.isError) return <ErrorState error={d.query.error} />;
 
   const status = po?.status ?? 'DRAFT';
   const editable = status === 'DRAFT' && can('purchase.create');
   const v = form.watch();
+  const balanceFor = (l: LineForm) => {
+    if (!balance.data || !l.itemId) return null;
+    const row = balance.data.find((b) => b.itemId === l.itemId && (b.colour ?? '') === l.colour.trim() && (b.size ?? '') === l.size.trim());
+    return row ? String(Number(row.balance)) : null;
+  };
+  const loadRequirement = () => {
+    const rows = (balance.data ?? []).filter((b) => Number(b.balance) > 0);
+    if (!rows.length) return toast.info('Nothing left to order — the requirement is fully on POs (or the order has no Accessories Requirement).');
+    const kept = v.lines.filter((l) => l.itemId);
+    const have = new Set(kept.map((l) => `${l.itemId}|${l.colour.trim()}|${l.size.trim()}`));
+    const add = rows.filter((b) => !have.has(`${b.itemId}|${b.colour ?? ''}|${b.size ?? ''}`));
+    form.setValue('lines', [...kept, ...add.map((b) => ({ ...blank(), itemId: b.itemId, colour: b.colour ?? '', size: b.size ?? '', description: b.group ?? '', qty: String(Number(b.balance)) }))], { shouldDirty: true });
+    setLabels((x) => ({ ...x, ...Object.fromEntries(add.map((b) => [b.itemId, b.item.name])) }));
+    toast.success(`${add.length} line(s) loaded with the balance to order — enter the rates`);
+  };
   const interState = isInterState(cfg.data?.company.stateCode, vendorState?.stateCode, vendorState?.gstin);
   const safe = (x: string, d0 = '0') => (/^\d*\.?\d+$/.test(x.trim()) ? x.trim() : d0);
   const totals = poTotals({
@@ -575,9 +607,16 @@ export function PurchaseOrderPage() {
             <CardHeader className="flex-row items-center justify-between gap-2">
               <CardTitle>{kind === 'YARN' ? 'Yarn PO details' : kind === 'FABRIC' ? 'Fabric PO details' : 'Accessories PO details'}</CardTitle>
               {editable ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => lines.append(blank())}>
-                  <Plus /> Add line
-                </Button>
+                <div className="flex gap-2">
+                  {kind === 'ACCESSORY' && v.orderId ? (
+                    <Button type="button" size="sm" variant="outline" onClick={loadRequirement} title="Lines from the order's Accessories Requirement with a balance still to order">
+                      <ListChecks /> Load BalanceReqQty
+                    </Button>
+                  ) : null}
+                  <Button type="button" size="sm" variant="outline" onClick={() => lines.append(blank())}>
+                    <Plus /> Add line
+                  </Button>
+                </div>
               ) : null}
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -589,7 +628,13 @@ export function PurchaseOrderPage() {
                     {multiOrder ? <th className="min-w-36">Order</th> : null}
                     {cols.map((c) => (
                       <th key={c.k} className={cn(c.num && 'text-right')}>
-                        {c.label}
+                        {c.k === 'qty' && kind === 'ACCESSORY' ? (
+                          <>
+                            <span className="mr-3 inline-block w-20 text-right">BalanceReqQty</span>P.O.Qty
+                          </>
+                        ) : (
+                          c.label
+                        )}
                       </th>
                     ))}
                     <th className="text-right">Rate</th>
@@ -648,7 +693,12 @@ export function PurchaseOrderPage() {
                         ) : null}
                         {cols.map((c) => (
                           <td key={c.k} className="pr-1">
-                            <Input className={cn(c.w, c.num && 'text-right')} inputMode={c.num ? 'decimal' : undefined} disabled={!editable} {...form.register(`lines.${i}.${c.k}` as const)} />
+                            {c.k === 'qty' && kind === 'ACCESSORY' ? (
+                              <span className="mr-3 inline-block w-20 text-right font-mono text-xs text-muted-foreground" title="Requirement + approved SPL − already on POs">
+                                {balanceFor(l) ?? '—'}
+                              </span>
+                            ) : null}
+                            <Input className={cn(c.w, c.num && 'text-right', c.k === 'qty' && kind === 'ACCESSORY' && 'inline-flex')} inputMode={c.num ? 'decimal' : undefined} disabled={!editable} {...form.register(`lines.${i}.${c.k}` as const)} />
                           </td>
                         ))}
                         <td className="pr-1">

@@ -54,6 +54,15 @@ const SewingIssuesPage = lazy(() => import('@/features/production/FloorPages').t
 const TrimsDocPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.TrimsDocPage })));
 const TrimsDocsPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.TrimsDocsPage })));
 const RatesPage = lazy(() => import('@/features/accounts/RatesPage').then((m) => ({ default: m.RatesPage })));
+const TransactionPage = lazy(() => import('@/features/jobwork/TransactionPage').then((m) => ({ default: m.TransactionPage })));
+const AccessoriesListPage = lazy(() => import('@/features/accessories/AccessoriesPages').then((m) => ({ default: m.AccessoriesListPage })));
+const AccessoryDocPage = lazy(() => import('@/features/accessories/AccessoriesPages').then((m) => ({ default: m.AccessoryDocPage })));
+const AccessoryPoStatusPage = lazy(() => import('@/features/accessories/AccessoriesPages').then((m) => ({ default: m.AccessoryPoStatusPage })));
+const SplListPage = lazy(() => import('@/features/accessories/SplPages').then((m) => ({ default: m.SplListPage })));
+const SplPage = lazy(() => import('@/features/accessories/SplPages').then((m) => ({ default: m.SplPage })));
+const StockDocsListPage = lazy(() => import('@/features/stock/StockDocsPages').then((m) => ({ default: m.StockDocsListPage })));
+const StockDocPage = lazy(() => import('@/features/stock/StockDocsPages').then((m) => ({ default: m.StockDocPage })));
+const DirectDeliveryPage = lazy(() => import('@/features/stock/DirectDeliveryPage').then((m) => ({ default: m.DirectDeliveryPage })));
 const VendorBillPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillPage })));
 const VendorBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillsPage })));
 const DebitNotePage = lazy(() => import('@/features/accounts/DebitNotePages').then((m) => ({ default: m.DebitNotePage })));
@@ -98,6 +107,16 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'yarn-receipts', perm: 'yarn.view', element: <YarnReceiptsPage /> },
   { path: 'yarn-receipts/:id', perm: 'yarn.view', element: <YarnReceiptPage /> },
   { path: 'outward-dcs', perm: 'jobwork.view', element: <OutwardDcsPage /> },
+  { path: 'transactions/:code', perm: 'jobwork.view', element: <TransactionPage /> },
+  { path: 'direct-delivery', perm: 'jobwork.view', element: <DirectDeliveryPage /> },
+  { path: 'accessories/po-cancel', perm: 'trims.view', element: <AccessoryPoStatusPage mode="cancel" /> },
+  { path: 'accessories/po-close', perm: 'trims.view', element: <AccessoryPoStatusPage mode="close" /> },
+  { path: 'accessories/:type', perm: 'trims.view', element: <AccessoriesListPage /> },
+  { path: 'accessories/:type/:id', perm: 'trims.view', element: <AccessoryDocPage /> },
+  { path: 'spl-requests', perm: 'trims.view', element: <SplListPage /> },
+  { path: 'spl-requests/:id', perm: 'trims.view', element: <SplPage /> },
+  { path: 'stock-docs/:kind', perm: 'stock.view', element: <StockDocsListPage /> },
+  { path: 'stock-docs/:kind/:id', perm: 'stock.view', element: <StockDocPage /> },
   { path: 'outward-dcs/:id', perm: 'jobwork.view', element: <OutwardDcPage /> },
   { path: 'inward-dcs', perm: 'jobwork.view', element: <InwardDcsPage /> },
   { path: 'inward-dcs/:id', perm: 'jobwork.view', element: <InwardDcPage /> },

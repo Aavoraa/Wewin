@@ -187,7 +187,12 @@ export function DocumentForm(p: DocumentFormProps) {
                 <Printer /> Print
               </Link>
             </Button>
-          ) : null}
+          ) : (
+            // Drafts and documents without a printed format: print the screen as shown.
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer /> Print
+            </Button>
+          )}
           {closeOk && p.canClose && p.onClose ? (
             <Button variant="outline" onClick={() => setConfirm('close')}>
               <CheckCircle2 /> Close

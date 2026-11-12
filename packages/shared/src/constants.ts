@@ -35,6 +35,8 @@ export const VIRTUAL_LOCATIONS = {
   REJECTED: 'Rejected',
   SHIPPED: 'Shipped',
   OPENING: 'Opening balance (go-live import)',
+  OTHERS: 'Others (non-job-work delivery / inward)',
+  ORDER_TRANSFER: 'Order transfer',
 } as const;
 
 export type OwnLocationCode = keyof typeof OWN_LOCATIONS;
@@ -67,6 +69,14 @@ export const DOCUMENT_SERIES = {
   PO_YARN: { prefix: 'YP', name: 'Yarn purchase order' },
   PO_FABRIC: { prefix: 'FP', name: 'Fabric purchase order' },
   PO_ACCESSORY: { prefix: 'ACPO', name: 'Accessories purchase order' },
+  OTHER_DELIVERY: { prefix: 'ODL', name: 'Yarn/fabric delivery to others' },
+  OTHER_INWARD: { prefix: 'OIN', name: 'Yarn/fabric inward from others' },
+  ORDER_TRANSFER: { prefix: 'OTR', name: 'Yarn transfer between orders' },
+  REJECTION: { prefix: 'REJ', name: 'Rejection entry' },
+  TRIMS_RETURN: { prefix: 'APR', name: 'Accessories purchase return' },
+  TRIMS_REPLACEMENT: { prefix: 'ARI', name: 'Accessories purchase replacement inward' },
+  TRIMS_TRANSFER: { prefix: 'ATR', name: 'Accessories transfer between orders' },
+  SPL_REQUEST: { prefix: 'SPR', name: 'Accessories special request' },
 } as const;
 export type SeriesCode = keyof typeof DOCUMENT_SERIES;
 

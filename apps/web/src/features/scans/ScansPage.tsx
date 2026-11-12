@@ -8,6 +8,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { DataTable } from '@/components/DataTable';
+import { DeleteFileButton } from '@/components/DeleteFileButton';
 import { PageHeader } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -158,6 +159,15 @@ export function ScansPage() {
           { key: 'totalAmount', header: 'Total', type: 'money' },
           { key: 'pageCount', header: 'Pages', type: 'int' },
           { key: 'status', header: 'Status', cell: (r) => <ScanStatusBadge status={r.status} /> },
+          {
+            key: 'delete',
+            header: '',
+            noExport: true,
+            cell: (r) =>
+              can('scans.upload') && r.status !== 'APPLIED' && r.status !== 'PROCESSING' ? (
+                <DeleteFileButton endpoint={`/invoice-scans/${r.id}`} name={r.originalName} onDeleted={() => void qc.invalidateQueries({ queryKey: ['invoice-scans'] })} />
+              ) : null,
+          },
         ]}
       />
     </div>

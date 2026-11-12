@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { programmeScreenPdf } from '../../api/test/invoice-fixtures';
-import { cell, gridPick, login, pick, uid } from './helpers';
+import { gridPick, login, pick, uid } from './helpers';
 
 /**
  * A screenshot of the desktop Programme Entry screen uploaded to Scan invoices (Q-068): recognised as a
@@ -29,16 +29,16 @@ test.describe.serial('programme screenshot scanning', () => {
     await page.getByRole('button', { name: /Create programme/ }).click();
     await expect(page).toHaveURL(/\/programs\/new\?fromScan=/);
     await expect(page.getByText('From the scanned Programme Entry screenshot')).toBeVisible();
-    await expect(page.getByLabel(/^Colour/)).toHaveValue('WHITE');
+    await expect(page.getByLabel('Color / Combo')).toHaveValue('WHITE');
 
     // The local reader gets the order and colour only; the rest is entered on the form.
-    await pick(page, /Finished fabric/, 'Dyed Single Jersey');
+    await pick(page, /Finished fabric item/, 'Dyed Single Jersey');
     await page.getByLabel(/Required finished kg/).fill('12');
-    await page.locator('[data-cell="0:1"]').selectOption({ label: 'Grey fabric purchase' });
+    await page.getByLabel('Process 1').selectOption({ label: 'GREY FABRIC PURCHASE' });
     await gridPick(page, '0:2', 'Greige Single Jersey');
     await gridPick(page, '0:3', 'Greige Single Jersey');
-    await cell(page, '0:4', '0');
-    await page.getByRole('button', { name: /Save (draft|changes)/ }).click();
+    await page.getByLabel('Loss % 1').fill('0');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page).toHaveURL(/\/programs\/[0-9a-f-]{36}$/);
 
     await page.goto(scanUrl);

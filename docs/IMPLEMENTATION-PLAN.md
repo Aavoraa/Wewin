@@ -107,6 +107,21 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-11 — Desktop Accessories menu (Q-072) and Print on every page
+- Accessories sidebar group: Purchase Order (accessories POs with **BalanceReqQty** and "Load BalanceReqQty"), Purchase Receipt (GRN against approved PO lines, `TRR`), Purchase Return (`APR`), Purchase Replacement Inward (`ARI`), Purchase Order Cancel / Close, Transfer Between Order (`ATR`), SPL.Request (`SPR`, approval `trims.spl.approve`). Migration `20261111200000_accessories_purchase_chain` (trims doc types RETURN / REPLACEMENT / TRANSFER, PO / return line links, colour / size / reason, D.C. no. / date, spl_requests).
+- Ledger: `assertOrderStock` — order transfers (yarn `OTR` and accessories `ATR`) and cancelling accessories documents now refuse to take an order's own stock below zero (the location-level check let a transfer of stock the from order did not hold through).
+- PO cancel refused once anything is received against an accessories PO (close it instead).
+- Print: a Print button in every page header and the top bar; printed pages hide the menu, buttons and paging and carry company, page and date; documents without a printed format print the screen; new formats Accessories GRN / return / replacement / transfer and SPL request.
+- Verified: API `accessories.test.ts` (9: not-approved PO, receipt permission + double post, over-receipt / wrong supplier / wrong item, PO cancel guard, return reason + balance, replacement limits + return cancel guard, transfer per-order check + receipt cancel guard, close, SPL approve / cancel → BalanceReqQty), stockdocs transfer regression; E2E `accessories.spec.ts` (5, incl. GRN print and list print media). Submenus General Inward/Outward, Consumption Issue, Process Delivery, Bill Passing and Debits wait for Wewin's screenshots.
+
+### 2026-11-11 — Desktop Transaction menu (Q-071)
+- Transaction group: per-process screens (Rate Quotation / Delivery / Inward-Return / Job Close), Direct Delivery Receipt, Yarn/Fabric Other Inw/Del (`ODL` / `OIN`), Yarn Transfer Between Order (`OTR`), Rejection Entry (`REJ`, optional draft debit note). Verified by `stockdocs.test.ts` and E2E `transactions.spec.ts`, `stock-docs.spec.ts`.
+
+### 2026-11-11 — Programme page laid out like the desktop Programme Entry (Q-067); accessories requirement fields (Q-069, API only so far)
+- Programme page rebuilt to the desktop window: Order Ref / Color / Combo / Pending Only / Order Qty / Next Clr; portion grid (Portion, Fab.Colour, Print.Colour, Fab.Details, Yarn Details, Grammage, Loss Details) with the current portion highlighted and editable; fabric block; Yarn Counts / Yarn Colour / Cons.% grid; Prs.Template (picks a template used before and fills Sl / Process / Loss %); size grid with the desktop rows; toolbar AddNew, Delete, Save, Help, Print, Calculate, Exist, Yarn Twisting Define (not built yet). Wewin-only fields (finished fabric item, required kg, process input / output items, input cost) sit in a "Wewin details" strip below. New: `GET /programs/process-templates`, Programme Entry print (A4 landscape).
+- Accessories requirement (Q-069): `items.trim_group`; Country, Gar.Define, Sizewise, ColourWise, Consumption on requirement lines; Qty Details split per size / colour (rounded up); copy from another order (`GET /orders/:id/trims-bom/copy`). Screen not rebuilt yet.
+- Tests: 3 shared + 1 API (requirement); E2E programme entry (incl. template fill), programme scan and the full flow updated to the new screen — all pass.
+
 ### 2026-11-10 — Programme Entry screenshots → fabric programmes (Q-068)
 - Scan target `PROGRAM` / class `PROGRAMME_SCREEN`; migrations `programme_scans` (`fabric_programs.source_scan_id`, process GREY_PURCHASE) and `programme_scan_target` (scan target check).
 - AI: programme screens are read with a separate schema (the combined invoice + programme grammar was refused as too large); used directly when the screen labels are in the OCR text, else after the invoice read reports a programme screen. Verified on the user's own screenshot: every value read, NECK RIB marked selected, 8 sizes.

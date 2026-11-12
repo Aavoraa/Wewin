@@ -12,6 +12,7 @@ import { assertDraft, assertPosted, dateOnly, toDbDate } from '../../core/docume
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { assertPermission } from '../../core/auth/auth.middleware';
 import { mastersService } from '../masters/masters.service';
+import { trimsService } from '../trims/trims.service';
 import { type PoDetail, type PoLineRow, purchaseRepo as repo } from './purchase.repo';
 
 const DOC = 'PURCHASE_ORDER';
@@ -292,6 +293,9 @@ export const purchaseService = {
       const p = await repo.get(id, tx);
       if (!p) throw notFound('Purchase order');
       assertPosted(p, 'cancelled', 'Purchase order');
+      // Q-072: a PO with material received against it is closed (balance written off), not cancelled.
+      if (p.kind === 'ACCESSORY' && (await trimsService.receivedAgainstPo(id, tx)))
+        throw new AppError('DOC_HAS_DEPENDENTS', 'Material has been received against this PO — use Purchase Order Close to stop the balance instead', 409);
       await repo.setState(tx, id, { status: 'CANCELLED', cancelledAt: new Date(), cancelledById: user.id, cancelReason: reason });
       await audit.log(tx, { docType: DOC, recordId: id, action: 'CANCEL', reason, docNo: p.docNo });
     });
@@ -318,4 +322,7 @@ export const purchaseService = {
   },
 
   pendingCount: () => repo.pendingCount(),
+
+  /** Accessories PO lines (with PO header) for the trims module (Q-072). */
+  accessoryLines: (where: Prisma.PurchaseOrderLineWhereInput, db: Tx | typeof prisma = prisma) => repo.accessoryLines(where, db),
 };

@@ -14,7 +14,7 @@ export const zProductionListQuery = zListQuery.extend({
   to: zDate().optional(),
   orderId: zRef().optional(),
   vendorId: zRef().optional(),
-  type: z.enum(['OUT', 'IN', 'RECEIPT', 'ISSUE']).optional(),
+  type: z.enum(['OUT', 'IN', 'RECEIPT', 'ISSUE', 'RETURN', 'REPLACEMENT', 'TRANSFER']).optional(),
   /** Cutting lays: PENDING = drafts awaiting approval (Q-062); APPROVED = approved, any status. */
   approval: z.enum(['PENDING', 'APPROVED']).optional(),
 });
@@ -200,18 +200,79 @@ export const zPackingListInput = z.object({
 });
 export const zPackingListUpdate = zPackingListInput.extend({ version: z.number().int().min(1) });
 
+/** Accessories (trims) documents (Q-072). RECEIPT = Purchase Receipt (GRN), RETURN = Purchase Return, REPLACEMENT = Purchase Replacement Inward, ISSUE = Consumption Issue, TRANSFER = Transfer Between Order. */
+export const TRIMS_DOC_TYPES = ['RECEIPT', 'ISSUE', 'RETURN', 'REPLACEMENT', 'TRANSFER'] as const;
+export type TrimsDocType = (typeof TRIMS_DOC_TYPES)[number];
+export const TRIMS_DOC_NAMES: Record<TrimsDocType, string> = {
+  RECEIPT: 'Purchase Receipt',
+  ISSUE: 'Consumption Issue',
+  RETURN: 'Purchase Return',
+  REPLACEMENT: 'Purchase Replacement Inward',
+  TRANSFER: 'Transfer Between Order',
+};
+export const zTrimsDocLine = z.object({
+  itemId: zRef(),
+  lot: text(40).default(''),
+  qty: zQty({ positive: true }),
+  rate: zOptional(zRate()),
+  /** Accessories PO line received / returned / replaced against. */
+  poLineId: zOptional(zRef()),
+  /** REPLACEMENT: the return line being replaced. */
+  returnLineId: zOptional(zRef()),
+  colour: zOptional(text(30)),
+  size: zOptional(text(30)),
+  reason: zOptional(text(200)),
+});
 export const zTrimsDocInput = z
   .object({
-    type: z.enum(['RECEIPT', 'ISSUE']),
+    type: z.enum(TRIMS_DOC_TYPES),
     docDate: zDate(),
     vendorId: zOptional(zRef()),
     orderId: zOptional(zRef()),
+    toOrderId: zOptional(zRef()),
+    returnDocId: zOptional(zRef()),
     supplierInvoiceNo: zOptional(text(40)),
+    dcNo: zOptional(text(40)),
+    dcDate: zOptional(zDate()),
     remarks: zOptional(text(500)),
-    lines: z.array(z.object({ itemId: zRef(), lot: text(40).default(''), qty: zQty({ positive: true }), rate: zOptional(zRate()) })).min(1).max(300),
+    lines: z.array(zTrimsDocLine).min(1).max(300),
   })
   .superRefine((v, ctx) => {
-    if (v.type === 'RECEIPT' && !v.vendorId) ctx.addIssue({ code: 'custom', path: ['vendorId'], message: 'Supplier is required for a receipt' });
-    if (v.type === 'ISSUE' && !v.orderId) ctx.addIssue({ code: 'custom', path: ['orderId'], message: 'Order is required for an issue' });
+    const need = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+    if ((v.type === 'RECEIPT' || v.type === 'RETURN' || v.type === 'REPLACEMENT') && !v.vendorId) need('vendorId', 'Supplier is required');
+    if ((v.type === 'ISSUE' || v.type === 'TRANSFER') && !v.orderId) need('orderId', v.type === 'TRANSFER' ? 'From order is required' : 'Order is required for an issue');
+    if (v.type === 'TRANSFER') {
+      if (!v.toOrderId) need('toOrderId', 'To order is required');
+      else if (v.toOrderId === v.orderId) need('toOrderId', 'Pick a different order to transfer to');
+    }
+    if (v.type === 'REPLACEMENT' && !v.returnDocId) need('returnDocId', 'Pick the purchase return being replaced');
+    v.lines.forEach((l, i) => {
+      if (v.type === 'RETURN' && !l.reason) ctx.addIssue({ code: 'custom', path: ['lines', i, 'reason'], message: 'Reason for return is required' });
+      if (v.type === 'REPLACEMENT' && !l.returnLineId) ctx.addIssue({ code: 'custom', path: ['lines', i, 'returnLineId'], message: 'Each line must be against a returned line' });
+    });
   });
 export const zTrimsDocUpdate = z.intersection(zTrimsDocInput, z.object({ version: z.number().int().min(1) }));
+
+/** Accessories SPL.Request (Q-072): extra accessories for an order beyond its requirement; approved by management. */
+export const zSplRequestInput = z.object({
+  docDate: zDate(),
+  orderId: zRef(),
+  requestedBy: zOptional(text(80)),
+  reason: text(300).min(1, 'Reason is required'),
+  remarks: zOptional(text(500)),
+  lines: z
+    .array(z.object({ itemId: zRef(), colour: zOptional(text(30)), size: zOptional(text(30)), qty: zQty({ positive: true }), reason: zOptional(text(200)) }))
+    .min(1)
+    .max(200),
+});
+export const zSplRequestUpdate = zSplRequestInput.omit({ orderId: true }).extend({ version: z.number().int().min(1) });
+
+/**
+ * Accessories PO line position (Q-072): net received = receipts − returns + replacements; pending =
+ * ordered − net received (never below zero). Returns reopen the balance until replaced.
+ */
+export function poLinePosition(ordered: DecimalLike, received: DecimalLike, returned: DecimalLike, replaced: DecimalLike) {
+  const net = D(received).minus(D(returned)).plus(D(replaced));
+  const pending = D(ordered).minus(net);
+  return { netReceived: net.toFixed(3), pending: (pending.isNegative() ? D(0) : pending).toFixed(3), excess: (pending.isNegative() ? pending.neg() : D(0)).toFixed(3) };
+}

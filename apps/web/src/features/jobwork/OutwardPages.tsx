@@ -65,14 +65,14 @@ const columns: DTColumn<OutwardDc>[] = [
   },
 ];
 
-export function OutwardDcsPage() {
+export function OutwardDcsPage({ processId, openOnly, embedded, direct }: { processId?: string; openOnly?: boolean; embedded?: boolean; direct?: boolean } = {}) {
   const { can } = useAuth();
   const fy = useFy();
   const [status, setStatus] = useState('');
-  const [view, setView] = useState('');
+  const [view, setView] = useState(openOnly ? 'open' : '');
   return (
     <div>
-      <PageHeader
+      {embedded ? null : <PageHeader
         title="Outward D.C.s"
         description="Yarn and fabric sent to job workers (Rule 55). Loss % is measured per D.C. across its inward returns."
         actions={
@@ -87,7 +87,7 @@ export function OutwardDcsPage() {
             </>
           ) : null
         }
-      />
+      />}
       <DataTable<OutwardDc>
         id="outward-dcs"
         endpoint="/outward-dcs"
@@ -100,8 +100,10 @@ export function OutwardDcsPage() {
           open: view === 'open' ? 'true' : undefined,
           overdue: view === 'overdue' ? 'true' : undefined,
           approval: view === 'approval' ? 'PENDING' : undefined,
-          from: fy.start,
-          to: fy.end,
+          processId,
+          direct: direct ? 'true' : undefined,
+          from: openOnly ? undefined : fy.start,
+          to: openOnly ? undefined : fy.end,
         }}
         filterBar={
           <>

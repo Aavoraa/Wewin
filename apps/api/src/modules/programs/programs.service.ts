@@ -5,6 +5,8 @@ import {
   type zProgramListQuery,
   type zProgramUpdate,
   type zTrimsBomInput,
+  accessoryQtyDetails,
+  programMissing,
   programPlan,
   trimsRequirement,
 } from '@wewin/shared';
@@ -37,12 +39,13 @@ export function registerProgramDependencyCounter(fn: (programId: string, tx: Tx)
 
 function shape(p: ProgramDetail) {
   const plan = programPlan(
-    p.requiredKg.toString(),
+    p.requiredKg?.toString() ?? '0',
     p.processes.map((x) => ({ sequence: x.sequence, allowedLossPct: x.allowedLossPct.toString() })),
   );
   return {
     ...p,
-    requiredKg: p.requiredKg.toFixed(3),
+    requiredKg: p.requiredKg?.toFixed(3) ?? null,
+    missing: programMissing({ fabricItemId: p.fabricItemId, requiredKg: p.requiredKg?.toString() ?? null, processes: p.processes }),
     mtrToKg: p.mtrToKg?.toString() ?? null,
     processes: p.processes.map((x) => ({
       ...x,
@@ -54,12 +57,13 @@ function shape(p: ProgramDetail) {
   };
 }
 
-async function validateRows(fabricItemId: string, processes: ProcessInput[]) {
-  const itemIds = [fabricItemId, ...processes.flatMap((p) => [p.inputItemId, p.outputItemId])];
+async function validateRows(fabricItemId: string | null, processes: ProcessInput[]) {
+  const itemIds = [fabricItemId, ...processes.flatMap((p) => [p.inputItemId, p.outputItemId])].filter((x): x is string => !!x);
   const items = new Map((await repo.itemsByIds(itemIds)).map((i) => [i.id, i]));
-  if (items.get(fabricItemId)?.type !== 'FABRIC') throw new AppError('VALIDATION_ERROR', 'Program fabric must be a FABRIC item', 400);
+  if (fabricItemId && items.get(fabricItemId)?.type !== 'FABRIC') throw new AppError('VALIDATION_ERROR', 'Program fabric must be a FABRIC item', 400);
   for (const p of processes) {
     for (const id of [p.inputItemId, p.outputItemId]) {
+      if (!id) continue;
       const t = items.get(id)?.type;
       if (t !== 'YARN' && t !== 'FABRIC') throw new AppError('VALIDATION_ERROR', `Process ${p.sequence}: items must be yarn or fabric`, 400);
     }
@@ -187,6 +191,8 @@ export const programsService = {
       const p = await repo.getForUpdate(tx, id);
       if (!p) throw notFound('Fabric program');
       if (p.status !== 'DRAFT') throw invalidState(`Only a draft program can be approved (it is ${p.status.toLowerCase()})`);
+      const missing = programMissing({ fabricItemId: p.fabricItemId, requiredKg: p.requiredKg?.toString() ?? null, processes: p.processes });
+      if (missing.length) throw new AppError('VALIDATION_ERROR', `Fill in before approving: ${missing.join(', ')}`, 400, { missing });
       await ordersService.requireOpen(p.orderId, tx);
       await repo.setStatus(tx, id, { status: 'APPROVED', approvedAt: new Date(), approvedById: user.id });
       await audit.log(tx, { docType: 'FABRIC_PROGRAM', recordId: id, action: 'APPROVE', docNo: p.programNo });
@@ -227,6 +233,7 @@ export const programsService = {
   },
 
   bySourceScan: (scanId: string) => repo.bySourceScan(scanId),
+  processTemplates: () => repo.processTemplates(),
 
   /** What a Programme Entry screenshot can be matched to: items used before for the same description / counts, and kilo-stage processes. */
   async scanMemory(fabricDescription: string, counts: string[]) {
@@ -262,6 +269,7 @@ export const programsService = {
       qtyPerGarment: l.qtyPerGarment.toString(),
       wastagePct: l.wastagePct.toString(),
       requirement: trimsRequirement({ colour: l.colour, size: l.size, qtyPerGarment: l.qtyPerGarment.toString(), wastagePct: l.wastagePct.toString() }, matrix),
+      qtyDetails: accessoryQtyDetails({ colour: l.colour, size: l.size, qtyPerGarment: l.qtyPerGarment.toString(), wastagePct: l.wastagePct.toString(), sizewise: l.sizewise, colourwise: l.colourwise }, matrix),
     }));
   },
 
@@ -279,5 +287,26 @@ export const programsService = {
       await repo.replaceBom(tx, orderId, input.lines);
     }, RC);
     return this.getBom(orderId);
+  },
+
+  /** Accessories Requirement "Copy" (Q-069): another order's requirement lines; colour / size limits the target order lacks are dropped. */
+  async copyBom(orderId: string, fromOrderId: string) {
+    if (orderId === fromOrderId) throw new AppError('VALIDATION_ERROR', 'Pick a different order to copy from', 400);
+    const [target, source] = await Promise.all([ordersService.getDetail(orderId), repo.bom(fromOrderId)]);
+    if (!source.length) throw new AppError('VALIDATION_ERROR', 'That order has no accessories requirement to copy', 400);
+    return source.map((l) => ({
+      trimItemId: l.trimItemId,
+      trimItem: l.trimItem,
+      colour: l.colour && target.colours.includes(l.colour) ? l.colour : null,
+      size: l.size && target.sizes.includes(l.size) ? l.size : null,
+      qtyPerGarment: l.qtyPerGarment.toString(),
+      wastagePct: l.wastagePct.toString(),
+      remarks: l.remarks,
+      country: l.country,
+      garDefine: l.garDefine,
+      sizewise: l.sizewise,
+      colourwise: l.colourwise,
+      consumption: l.consumption,
+    }));
   },
 };

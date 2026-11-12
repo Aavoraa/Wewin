@@ -24,3 +24,4 @@ export * from './opening';
 export * from './voice';
 export * from './quality';
 export * from './purchase';
+export * from './stockdocs';

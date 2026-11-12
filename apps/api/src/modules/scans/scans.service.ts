@@ -43,6 +43,8 @@ import {
   emptyProgrammeScan,
   matchOrderRef,
   normName,
+  programFinishedKg,
+  zProgramInput,
 } from '@wewin/shared';
 import { prisma, withTx, afterCommit } from '../../core/db';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
@@ -430,8 +432,17 @@ function edited(prev: ScanField, raw: string | null, kind: 'num' | 'int' | 'date
 }
 
 export const scansService = {
-  async upload(file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined, target: ScanTarget | null, user: CurrentUser) {
+  async upload(file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined, target: ScanTarget | null, user: CurrentUser, orderId: string | null = null) {
     if (!file) throw new AppError('VALIDATION_ERROR', 'Choose a PDF, JPG or PNG file to upload', 400);
+    // Uploaded from an order's Fabric programs tab: a programme screenshot of that order, the order already confirmed.
+    let review: Prisma.InputJsonValue | undefined;
+    if (orderId) {
+      if (target !== 'PROGRAM') throw new AppError('VALIDATION_ERROR', 'Only a programme screenshot is uploaded against an order', 400);
+      const o = await ordersService.requireOpen(orderId);
+      const detail = await ordersService.getDetail(o.id);
+      const order: Match = { id: detail.id, state: 'CONFIRMED', score: 1, candidates: [{ id: detail.id, code: detail.orderNo, name: detail.styleNo, score: 1, reason: 'Uploaded from the order' }] };
+      review = json({ target: 'PROGRAM', vendor: NO_MATCH, header: {}, lines: [], sources: [], programProcessId: null, existingDocId: null, confirmed: [], programme: null, programmeOrder: order });
+    }
     const stored = await storeUpload(file);
     try {
       const id = await withTx(async (tx) => {
@@ -443,6 +454,7 @@ export const scansService = {
           sha256: stored.sha256,
           target,
           uploadedById: user.id,
+          ...(review ? { review } : {}),
         });
         await repo.event(tx, { scanId: s.id, kind: 'UPLOADED', note: `${stored.originalName} (${Math.round(stored.size / 1024)} KB)`, userId: user.id });
         afterCommit(tx, async () => void (await jobs.send(QUEUES.SCAN_EXTRACT, { scanId: s.id, mode: 'auto' }, { singletonKey: s.id })));
@@ -697,6 +709,25 @@ export const scansService = {
     return this.get(id);
   },
 
+  /**
+   * Delete an uploaded file: the file and everything read from it are removed; the scan row stays as a
+   * DISCARDED, purged record so the history (who uploaded and deleted it) is kept. Refused once a
+   * document was created from it — cancel that document instead.
+   */
+  async remove(id: string, user: CurrentUser) {
+    const fileKey = await withTx(async (tx) => {
+      const s = await repo.lock(tx, id);
+      if (!s) throw notFound('Scanned document');
+      if (s.status === 'APPLIED') throw new AppError('INVALID_STATE', 'A document was created from this file; cancel that document instead of deleting the file', 409);
+      if (s.status === 'PROCESSING') throw new AppError('INVALID_STATE', 'The file is being read; delete it in a moment', 409);
+      await repo.update(tx, id, { status: 'DISCARDED', discardedAt: s.discardedAt ?? new Date(), extraction: Prisma.DbNull, layout: Prisma.DbNull, review: Prisma.DbNull, validation: Prisma.DbNull, purgedAt: new Date() });
+      await repo.event(tx, { scanId: id, kind: 'DELETED', note: s.originalName, userId: user.id });
+      await audit.log(tx, { docType: 'INVOICE_SCAN', recordId: id, action: 'DISCARD', reason: 'File deleted', data: { file: s.originalName } });
+      return s.purgedAt ? null : s.fileKey;
+    }, RC);
+    if (fileKey) await removeStored(fileKey);
+  },
+
   async discard(id: string, reason: string, user: CurrentUser) {
     await withTx(async (tx) => {
       const s = await repo.lock(tx, id);
@@ -909,6 +940,80 @@ export const scansService = {
       processes,
       otherPortions: p.portions.filter((x) => x !== selected && x.portion.trim()).map((x) => ({ portion: x.portion.trim(), colour: x.fabColour.trim(), printColour: x.printColour.trim() })),
       labels: Object.fromEntries(items.map((i) => [i.id, i.name])),
+    };
+  },
+
+  /** Fabric programs page / an order's Fabric programs tab (Q-068): programme screenshots with what was read, problems left and the programme created. */
+  async programmeScans(orderId: string | null) {
+    const rows = await repo.programmeScans(orderId, orderId ? 50 : 20);
+    return Promise.all(
+      rows.map(async (r) => {
+        const review = r.review as unknown as Review | null;
+        const checked = r.validation as unknown as Checked | null;
+        const created = r.appliedDocId ? await programsService.bySourceScan(r.id) : null;
+        const om = review?.programmeOrder ?? null;
+        return {
+          id: r.id,
+          version: r.version,
+          originalName: r.originalName,
+          order: om ? { id: om.id, confirmed: om.state === 'CONFIRMED', candidates: om.candidates.map((c) => ({ id: c.id, label: `${c.code} · ${c.name}`, reason: c.reason })) } : null,
+          status: r.status,
+          error: r.error,
+          createdAt: r.createdAt,
+          programme: review?.programme ?? null,
+          issues: (checked?.issues ?? []).filter((i) => i.level !== 'INFO').map((i) => ({ level: i.level, message: i.message })),
+          program: created ? { id: created.id, programNo: created.programNo, status: created.status } : null,
+        };
+      }),
+    );
+  },
+
+  /**
+   * "Save programme" (Q-070): every portion of the screenshot becomes a DRAFT programme of the confirmed
+   * order — the selected portion with everything read (and the required kg when the order's sizes carry
+   * an Act.PcsWgt), the others with portion and colour. Fabric item, kg and process items can be filled
+   * later; approval needs them. The selected portion's programme marks the scan as used.
+   */
+  async saveProgrammes(id: string, user: CurrentUser) {
+    const d = await this.programmeDraft(id, user);
+    const order = await ordersService.getDetail(d.orderId);
+    const qtyBySize = order.lines.filter((l) => !d.colour || l.colour === d.colour).reduce<Record<string, number>>((a, l) => ({ ...a, [l.size]: (a[l.size] ?? 0) + l.qty }), {});
+    const kg = programFinishedKg(qtyBySize, d.sizeSpecs);
+    const unmatched = d.processes.filter((x) => !x.processId).map((x) => x.readName);
+    const selected = zProgramInput.parse({
+      orderId: d.orderId,
+      sourceScanId: d.sourceScanId,
+      colour: d.colour,
+      portion: d.portion,
+      printColour: d.printColour,
+      fabricItemId: d.fabricItemId,
+      fabricDescription: d.fabricDescription,
+      fabricType: d.fabricType,
+      greyGsm: d.greyGsm,
+      gsm: d.gsm,
+      gauge: d.gauge,
+      loopLength: d.loopLength,
+      uom: d.uom,
+      mtrToKg: d.mtrToKg,
+      collarCuffReqd: d.collarCuffReqd,
+      withMeasurement: d.withMeasurement,
+      measureUnit: d.measureUnit,
+      tubSingle: d.tubSingle,
+      processTemplate: d.processTemplate,
+      requiredKg: Number(kg.kg) > 0 ? kg.kg : null,
+      yarnMix: d.yarnMix,
+      sizeSpecs: d.sizeSpecs.filter((x) => order.sizes.includes(x.size)),
+      processes: d.processes.filter((x) => x.processId).map((x, i) => ({ sequence: i + 1, processId: x.processId, allowedLossPct: x.allowedLossPct })),
+      remarks: unmatched.length ? `Processes not in the process master: ${unmatched.join(', ')}` : null,
+    });
+    const created = [await programsService.create(selected, user)];
+    for (const x of d.otherPortions) {
+      const colour = order.colours.find((c) => c.toUpperCase() === x.colour.toUpperCase()) ?? d.colour;
+      created.push(await programsService.create(zProgramInput.parse({ orderId: d.orderId, colour, portion: x.portion, printColour: x.printColour || null }), user));
+    }
+    return {
+      programs: created.map((p) => ({ id: p.id, programNo: p.programNo, portion: p.portion, missing: p.missing })),
+      sizesNotOnOrder: d.sizeSpecs.map((x) => x.size).filter((s) => !order.sizes.includes(s)),
     };
   },
 

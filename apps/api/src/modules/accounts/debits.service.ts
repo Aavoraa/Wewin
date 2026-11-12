@@ -65,9 +65,9 @@ export async function raiseAutoDebitNote(tx: Tx, vendorId: string, billId: strin
 }
 
 /** Cost per kg used to value excess loss: program costing, else last purchase rate (A§7.1, Q-003). */
-async function excessRate(tx: Tx, e: { materialCostPerKg: string | null; inputItemId: string; docNo: string }): Promise<string> {
+async function excessRate(tx: Tx, e: { materialCostPerKg: string | null; inputItemId: string | null; docNo: string }): Promise<string> {
   if (e.materialCostPerKg) return e.materialCostPerKg;
-  const last = await yarnService.lastPurchaseRate(e.inputItemId, tx);
+  const last = e.inputItemId ? await yarnService.lastPurchaseRate(e.inputItemId, tx) : null;
   if (last) return last;
   throw new AppError('COST_RATE_MISSING', `No cost per kg to value the excess loss on ${e.docNo}: set it on the fabric program or post a purchase rate`, 409);
 }

@@ -281,6 +281,8 @@ model Item {
   hsnCode          String?                @map("hsn_code")
   spec             String?
   gsm              Int?
+  /// Accessories (TRIM) group as in the desktop stock register: LABEL, TAG, STICKER, POLYBAG… (Q-069).
+  trimGroup        String?                @map("trim_group")
   isActive         Boolean                @default(true) @map("is_active")
   version          Int                    @default(1)
   createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -296,11 +298,13 @@ model Item {
   outwardLines     OutwardDcLine[]        @relation("outwardLineItem")
   inwardLines      InwardDcLine[]         @relation("inwardLineItem")
   poLines          PurchaseOrderLine[]    @relation("poLineItem")
+  stockDocLines    StockDocLine[]         @relation("stockDocLineItem")
   rolls            FabricRoll[]           @relation("rollItem")
   bundles          CutBundle[]            @relation("bundlePanel")
   panelDcLines     PanelDcLine[]          @relation("panelDcItem")
   recutLines       RecutSlipLine[]        @relation("recutPanel")
   trimsDocLines    TrimsDocLine[]         @relation("trimsDocItem")
+  splRequestLines  SplRequestLine[]       @relation("splItem")
   rateContracts    RateContract[]         @relation("rateItem")
 
   @@index([type])
@@ -510,6 +514,7 @@ model Vendor {
   debitNotes             DebitNote[]      @relation("dnVendor")
   payments               PaymentVoucher[] @relation("payVendor")
   purchaseOrders         PurchaseOrder[]  @relation("poVendor")
+  stockDocs              StockDoc[]       @relation("stockDocVendor")
 
   @@index([name])
   @@map("vendors")
@@ -608,12 +613,16 @@ model Order {
   cartons            Carton[]            @relation("cartonOrder")
   packingLists       PackingList[]       @relation("packingOrder")
   trimsDocs          TrimsDoc[]          @relation("trimsOrder")
+  trimsInbound       TrimsDoc[]          @relation("trimsToOrder")
+  splRequests        SplRequest[]        @relation("splOrder")
   rateContracts      RateContract[]      @relation("rateOrder")
   bills              VendorBill[]        @relation("billOrder")
   exportLines        ExportInvoiceLine[] @relation("exportLineOrder")
   qcInspections      QcInspection[]      @relation("qcOrder")
   purchaseOrders     PurchaseOrder[]     @relation("poOrder")
   purchaseOrderLines PurchaseOrderLine[] @relation("poLineOrder")
+  stockDocs          StockDoc[]          @relation("stockDocOrder")
+  stockDocsTo        StockDoc[]          @relation("stockDocToOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -683,9 +692,9 @@ model FabricProgram {
   id                String                 @id @default(uuid()) @db.Uuid
   programNo         String                 @unique @map("program_no")
   orderId           String                 @map("order_id") @db.Uuid
-  fabricItemId      String                 @map("fabric_item_id") @db.Uuid
+  fabricItemId      String?                @map("fabric_item_id") @db.Uuid
   colour            String?
-  requiredKg        Decimal                @map("required_kg") @db.Decimal(12, 3)
+  requiredKg        Decimal?               @map("required_kg") @db.Decimal(12, 3)
   gsm               Int?
   dia               String?
   /// Programme entry fields (Q-067): portion, fabric details, yarn mix, size-wise measurements.
@@ -715,7 +724,7 @@ model FabricProgram {
   createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   order             Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  fabricItem        Item                   @relation("programFabric", fields: [fabricItemId], references: [id], onDelete: Restrict)
+  fabricItem        Item?                  @relation("programFabric", fields: [fabricItemId], references: [id], onDelete: Restrict)
   processes         FabricProgramProcess[]
 
   @@index([orderId])
@@ -727,16 +736,16 @@ model FabricProgramProcess {
   programId         String        @map("program_id") @db.Uuid
   sequence          Int
   processId         String        @map("process_id") @db.Uuid
-  inputItemId       String        @map("input_item_id") @db.Uuid
-  outputItemId      String        @map("output_item_id") @db.Uuid
+  inputItemId       String?       @map("input_item_id") @db.Uuid
+  outputItemId      String?       @map("output_item_id") @db.Uuid
   allowedLossPct    Decimal       @map("allowed_loss_pct") @db.Decimal(7, 4)
   /// Cost per kg of the INPUT material, used to value excess loss (Q-003).
   materialCostPerKg Decimal?      @map("material_cost_per_kg") @db.Decimal(12, 4)
   plannedVendorId   String?       @map("planned_vendor_id") @db.Uuid
   program           FabricProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
   process           Process       @relation(fields: [processId], references: [id], onDelete: Restrict)
-  inputItem         Item          @relation("ppInput", fields: [inputItemId], references: [id], onDelete: Restrict)
-  outputItem        Item          @relation("ppOutput", fields: [outputItemId], references: [id], onDelete: Restrict)
+  inputItem         Item?         @relation("ppInput", fields: [inputItemId], references: [id], onDelete: Restrict)
+  outputItem        Item?         @relation("ppOutput", fields: [outputItemId], references: [id], onDelete: Restrict)
   outwardDcs        OutwardDc[]
 
   @@unique([programId, sequence])
@@ -753,6 +762,12 @@ model TrimsBomLine {
   qtyPerGarment Decimal @map("qty_per_garment") @db.Decimal(12, 4)
   wastagePct    Decimal @default(0) @map("wastage_pct") @db.Decimal(7, 4)
   remarks       String?
+  /// Accessories Requirement Entry (Q-069): Country, Gar.Define, Sizewise, ColourWise, Consumption.
+  country       String?
+  garDefine     String? @map("gar_define")
+  sizewise      Boolean @default(false)
+  colourwise    Boolean @default(false)
+  consumption   String  @default("Flat")
   order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   trimItem      Item    @relation("trimItem", fields: [trimItemId], references: [id], onDelete: Restrict)
 
@@ -1317,6 +1332,12 @@ model PackingList {
 enum TrimsDocType {
   RECEIPT
   ISSUE
+  /// Accessories Purchase Return (Q-072): store → supplier, against the receipt's PO line.
+  RETURN
+  /// Purchase Replacement Inward (Q-072): supplier → store, against a purchase return.
+  REPLACEMENT
+  /// Accessories Transfer Between Order (Q-072): quantity only, store (order) → store (to order).
+  TRANSFER
 }
 
 model TrimsDoc {
@@ -1327,6 +1348,13 @@ model TrimsDoc {
   vendorId          String?        @map("vendor_id") @db.Uuid
   orderId           String?        @map("order_id") @db.Uuid
   supplierInvoiceNo String?        @map("supplier_invoice_no")
+  /// Supplier's D.C. no. / date on a receipt, return or replacement.
+  dcNo              String?        @map("dc_no")
+  dcDate            DateTime?      @map("dc_date") @db.Date
+  /// TRANSFER: the order the accessories move to.
+  toOrderId         String?        @map("to_order_id") @db.Uuid
+  /// REPLACEMENT: the purchase return being replaced.
+  returnDocId       String?        @map("return_doc_id") @db.Uuid
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
   sourceScanId      String?        @unique @map("source_scan_id") @db.Uuid
   remarks           String?
@@ -1342,6 +1370,9 @@ model TrimsDoc {
   updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   vendor            Vendor?        @relation("trimsVendor", fields: [vendorId], references: [id], onDelete: Restrict)
   order             Order?         @relation("trimsOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  toOrder           Order?         @relation("trimsToOrder", fields: [toOrderId], references: [id], onDelete: Restrict)
+  returnDoc         TrimsDoc?      @relation("trimsReplacement", fields: [returnDocId], references: [id], onDelete: Restrict)
+  replacements      TrimsDoc[]     @relation("trimsReplacement")
   lines             TrimsDocLine[]
 
   @@index([type, status, docDate])
@@ -1349,16 +1380,28 @@ model TrimsDoc {
 }
 
 model TrimsDocLine {
-  id     String   @id @default(uuid()) @db.Uuid
-  docId  String   @map("doc_id") @db.Uuid
-  lineNo Int      @map("line_no")
-  itemId String   @map("item_id") @db.Uuid
-  lot    String   @default("")
-  qty    Decimal  @db.Decimal(12, 3)
-  rate   Decimal? @db.Decimal(12, 4)
-  doc    TrimsDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
-  item   Item     @relation("trimsDocItem", fields: [itemId], references: [id], onDelete: Restrict)
+  id           String             @id @default(uuid()) @db.Uuid
+  docId        String             @map("doc_id") @db.Uuid
+  lineNo       Int                @map("line_no")
+  itemId       String             @map("item_id") @db.Uuid
+  lot          String             @default("")
+  qty          Decimal            @db.Decimal(12, 3)
+  rate         Decimal?           @db.Decimal(12, 4)
+  /// Accessories PO line this receipt / return / replacement is against (Q-072).
+  poLineId     String?            @map("po_line_id") @db.Uuid
+  /// REPLACEMENT: the return line being replaced.
+  returnLineId String?            @map("return_line_id") @db.Uuid
+  colour       String?
+  size         String?
+  reason       String?
+  doc          TrimsDoc           @relation(fields: [docId], references: [id], onDelete: Cascade)
+  item         Item               @relation("trimsDocItem", fields: [itemId], references: [id], onDelete: Restrict)
+  poLine       PurchaseOrderLine? @relation("trimsPoLine", fields: [poLineId], references: [id], onDelete: Restrict)
+  returnLine   TrimsDocLine?      @relation("trimsReturnLine", fields: [returnLineId], references: [id], onDelete: Restrict)
+  replacedBy   TrimsDocLine[]     @relation("trimsReturnLine")
 
+  @@index([poLineId])
+  @@index([returnLineId])
   @@map("trims_doc_lines")
 }
 
@@ -2031,35 +2074,154 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderLine {
-  id          String        @id @default(uuid()) @db.Uuid
-  poId        String        @map("po_id") @db.Uuid
-  lineNo      Int           @map("line_no")
-  itemId      String        @map("item_id") @db.Uuid
-  orderId     String?       @map("order_id") @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
+  poId        String         @map("po_id") @db.Uuid
+  lineNo      Int            @map("line_no")
+  itemId      String         @map("item_id") @db.Uuid
+  orderId     String?        @map("order_id") @db.Uuid
   colour      String?
   size        String?
-  millName    String?       @map("mill_name")
+  millName    String?        @map("mill_name")
   bags        Int?
   counts      String?
   gsm         Int?
   gauge       String?
-  loopLength  String?       @map("loop_length")
+  loopLength  String?        @map("loop_length")
   dia         String?
   design      String?
   description String?
-  qty         Decimal       @db.Decimal(14, 3)
+  qty         Decimal        @db.Decimal(14, 3)
   unit        String
-  altQty      Decimal?      @map("alt_qty") @db.Decimal(14, 3)
-  rate        Decimal       @db.Decimal(14, 4)
-  per         Decimal       @default(1) @db.Decimal(14, 3)
-  amount      Decimal       @db.Decimal(14, 2)
+  altQty      Decimal?       @map("alt_qty") @db.Decimal(14, 3)
+  rate        Decimal        @db.Decimal(14, 4)
+  per         Decimal        @default(1) @db.Decimal(14, 3)
+  amount      Decimal        @db.Decimal(14, 2)
   remarks     String?
-  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
-  item        Item          @relation("poLineItem", fields: [itemId], references: [id], onDelete: Restrict)
-  order       Order?        @relation("poLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  po          PurchaseOrder  @relation(fields: [poId], references: [id], onDelete: Cascade)
+  item        Item           @relation("poLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  order       Order?         @relation("poLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  trimsLines  TrimsDocLine[] @relation("trimsPoLine")
 
   @@index([poId])
   @@index([itemId])
   @@index([orderId])
   @@map("purchase_order_lines")
+}
+
+// ───────────────────────────── Other in / out, order transfers, rejections (Q-071) ─────────────────────────────
+
+enum StockDocKind {
+  OTHER_DELIVERY
+  OTHER_INWARD
+  ORDER_TRANSFER
+  REJECTION
+}
+
+/// Desktop Transaction menu stock documents outside job work. Posting moves stock through the ledger
+/// (store ↔ OTHERS, store → ORDER_TRANSFER → store, store → REJECTED); cancelling reverses it.
+model StockDoc {
+  id             String         @id @default(uuid()) @db.Uuid
+  docNo          String?        @unique @map("doc_no")
+  docDate        DateTime       @map("doc_date") @db.Date
+  kind           StockDocKind
+  purpose        String?
+  partyName      String?        @map("party_name")
+  vendorId       String?        @map("vendor_id") @db.Uuid
+  orderId        String?        @map("order_id") @db.Uuid
+  toOrderId      String?        @map("to_order_id") @db.Uuid
+  fromProcess    String?        @map("from_process")
+  clrLot         String?        @map("clr_lot")
+  deliveredBy    String?        @map("delivered_by")
+  vehicleNo      String?        @map("vehicle_no")
+  grossKg        Decimal?       @map("gross_kg") @db.Decimal(12, 3)
+  cones          Int?
+  raiseDebitNote Boolean        @default(false) @map("raise_debit_note")
+  debitNoteId    String?        @map("debit_note_id") @db.Uuid
+  remarks        String?
+  status         DocStatus      @default(DRAFT)
+  version        Int            @default(1)
+  postedAt       DateTime?      @map("posted_at") @db.Timestamptz(3)
+  postedById     String?        @map("posted_by_id") @db.Uuid
+  cancelledAt    DateTime?      @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById  String?        @map("cancelled_by_id") @db.Uuid
+  cancelReason   String?        @map("cancel_reason")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById    String?        @map("created_by_id") @db.Uuid
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor         Vendor?        @relation("stockDocVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  order          Order?         @relation("stockDocOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  toOrder        Order?         @relation("stockDocToOrder", fields: [toOrderId], references: [id], onDelete: Restrict)
+  lines          StockDocLine[]
+
+  @@index([kind, status, docDate])
+  @@map("stock_docs")
+}
+
+model StockDocLine {
+  id       String   @id @default(uuid()) @db.Uuid
+  docId    String   @map("doc_id") @db.Uuid
+  lineNo   Int      @map("line_no")
+  itemId   String   @map("item_id") @db.Uuid
+  colour   String   @default("")
+  size     String   @default("")
+  lot      String   @default("")
+  millName String?  @map("mill_name")
+  counts   String?
+  bags     Int?
+  qty      Decimal  @db.Decimal(14, 3)
+  unit     String
+  rate     Decimal? @db.Decimal(14, 4)
+  reason   String?
+  doc      StockDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  item     Item     @relation("stockDocLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([docId])
+  @@index([itemId])
+  @@map("stock_doc_lines")
+}
+
+// ───────────────────────────── Accessories SPL.Request (Q-072) ─────────────────────────────
+
+/// Extra accessories for an order beyond its requirement (wastage, replacement, extra pieces).
+/// DRAFT → POSTED (= approved by management, numbered SPR) → CANCELLED. Approved qty is added to the
+/// order's accessories requirement (BalanceReqQty on the accessories PO). Moves no stock.
+model SplRequest {
+  id            String           @id @default(uuid()) @db.Uuid
+  docNo         String?          @unique @map("doc_no")
+  docDate       DateTime         @map("doc_date") @db.Date
+  orderId       String           @map("order_id") @db.Uuid
+  requestedBy   String?          @map("requested_by")
+  reason        String
+  remarks       String?
+  status        DocStatus        @default(DRAFT)
+  version       Int              @default(1)
+  postedAt      DateTime?        @map("posted_at") @db.Timestamptz(3)
+  postedById    String?          @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?        @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?          @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?          @map("cancel_reason")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?          @map("created_by_id") @db.Uuid
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order         Order            @relation("splOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  lines         SplRequestLine[]
+
+  @@index([orderId, status])
+  @@map("spl_requests")
+}
+
+model SplRequestLine {
+  id        String     @id @default(uuid()) @db.Uuid
+  requestId String     @map("request_id") @db.Uuid
+  lineNo    Int        @map("line_no")
+  itemId    String     @map("item_id") @db.Uuid
+  colour    String?
+  size      String?
+  qty       Decimal    @db.Decimal(14, 3)
+  reason    String?
+  request   SplRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  item      Item       @relation("splItem", fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([requestId])
+  @@map("spl_request_lines")
 }

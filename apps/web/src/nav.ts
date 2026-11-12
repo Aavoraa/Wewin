@@ -46,6 +46,13 @@ import {
   Landmark,
   FileUp,
   type LucideIcon,
+  PackagePlus,
+  PackageMinus,
+  RefreshCcw,
+  XCircle,
+  CircleCheckBig,
+  ArrowLeftRight,
+  FilePlus2,
 } from 'lucide-react';
 import { type PermissionKey } from '@wewin/shared';
 
@@ -81,8 +88,39 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Purchase',
-    items: [{ label: 'Purchase orders', to: '/purchase-orders', icon: ShoppingCart, perm: 'purchase.view' }],
+    // Desktop Transaction menu (Q-071).
+    label: 'Transaction',
+    items: [
+      { label: 'Purchase', to: '/purchase-orders', icon: ShoppingCart, perm: 'purchase.view' },
+      { label: 'Yarn Dyeing', to: '/transactions/YARN_DYEING', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Yarn Twisting', to: '/transactions/YARN_TWISTING', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Yarn Other Process', to: '/transactions/YARN_OTHER', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Knitting', to: '/transactions/KNITTING', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Grey Process', to: '/transactions/GREY_PROCESS', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Fabric Dyeing', to: '/transactions/DYEING', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Printing', to: '/transactions/FABRIC_PRINTING', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Fabric Other Process', to: '/transactions/FABRIC_OTHER', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Fabric Reprocess', to: '/transactions/FABRIC_REPROCESS', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Fabric to Yarn', to: '/transactions/FABRIC_TO_YARN', icon: Workflow, perm: 'jobwork.view' },
+      { label: 'Direct Delivery Receipt', to: '/direct-delivery', icon: ArrowDownToLine, perm: 'jobwork.view' },
+      { label: 'Yarn/Fabric Other Inw/Del', to: '/stock-docs/OTHER_DELIVERY', icon: ArrowUpFromLine, perm: 'stock.view' },
+      { label: 'Yarn Transfer Between Order', to: '/stock-docs/ORDER_TRANSFER', icon: Undo2, perm: 'stock.view' },
+      { label: 'Rejection Entry', to: '/stock-docs/REJECTION', icon: ClipboardCheck, perm: 'stock.view' },
+    ],
+  },
+  {
+    // Desktop Accessories menu (Q-072).
+    label: 'Accessories',
+    items: [
+      { label: 'Purchase Order', to: '/purchase-orders?kind=ACCESSORY', icon: ShoppingCart, perm: 'purchase.view' },
+      { label: 'Purchase Receipt', to: '/accessories/RECEIPT', icon: PackagePlus, perm: 'trims.view' },
+      { label: 'Purchase Return', to: '/accessories/RETURN', icon: PackageMinus, perm: 'trims.view' },
+      { label: 'Purchase Replacement Inward', to: '/accessories/REPLACEMENT', icon: RefreshCcw, perm: 'trims.view' },
+      { label: 'Purchase Order Cancel', to: '/accessories/po-cancel', icon: XCircle, perm: 'trims.view' },
+      { label: 'Purchase Order Close', to: '/accessories/po-close', icon: CircleCheckBig, perm: 'trims.view' },
+      { label: 'Transfer Between Order', to: '/accessories/TRANSFER', icon: ArrowLeftRight, perm: 'trims.view' },
+      { label: 'SPL.Request', to: '/spl-requests', icon: FilePlus2, perm: 'trims.view' },
+    ],
   },
   {
     label: 'Job work',

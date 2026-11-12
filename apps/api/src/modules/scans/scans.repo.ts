@@ -69,6 +69,15 @@ export const scansRepo = {
   events(scanId: string) {
     return prisma.invoiceScanEvent.findMany({ where: { scanId }, orderBy: { createdAt: 'asc' } });
   },
+  /** Programme Entry screenshots (of one order: review.programmeOrder.id), newest first. */
+  programmeScans(orderId: string | null, take = 50) {
+    return prisma.invoiceScan.findMany({
+      where: { target: 'PROGRAM', status: { not: 'DISCARDED' }, ...(orderId ? { review: { path: ['programmeOrder', 'id'], equals: orderId } } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { id: true, version: true, originalName: true, status: true, error: true, createdAt: true, review: true, validation: true, appliedDocId: true },
+    });
+  },
   sameFile(sha256: string, excludeId: string) {
     return prisma.invoiceScan.findMany({ where: { sha256, id: { not: excludeId }, status: { not: 'DISCARDED' } }, select: { id: true, status: true, createdAt: true, originalName: true } });
   },

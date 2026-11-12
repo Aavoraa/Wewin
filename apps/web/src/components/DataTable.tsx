@@ -181,7 +181,7 @@ export function DataTable<T extends object>(props: DataTableProps<T>) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="no-print flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           <Input
@@ -284,7 +284,7 @@ export function DataTable<T extends object>(props: DataTableProps<T>) {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground print:[&_button]:hidden print:[&_select]:hidden">
         <span>
           {total ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total.toLocaleString('en-IN')}` : '0 records'}
         </span>

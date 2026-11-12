@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orderTotals, programFinishedKg, programPlan, trimsRequirement, zOrderInput, zProgramInput } from './orders';
+import { accessoryQtyDetails, orderTotals, programFinishedKg, programPlan, trimsRequirement, zOrderInput, zProgramInput } from './orders';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const base = {
@@ -124,5 +124,37 @@ describe('programme entry fields (Q-067)', () => {
       { size: '4A', actPcsWeight: '6.5' },
     ]);
     expect(r).toEqual({ kg: '18.750', missing: ['6A'] });
+  });
+});
+
+describe('accessories requirement — Qty Details (Q-069)', () => {
+  const matrix = [
+    { colour: 'NAVY', size: '4A', qty: 100 },
+    { colour: 'NAVY', size: '5A', qty: 150 },
+    { colour: 'RED', size: '4A', qty: 50 },
+  ];
+  it('MAIN LABEL (not sizewise / colourwise), 4% excess: one total, rounded up', () => {
+    expect(accessoryQtyDetails({ qtyPerGarment: '1', wastagePct: '4', sizewise: false, colourwise: false }, matrix)).toEqual([{ colour: null, size: null, orderQty: 300, required: '312' }]);
+  });
+  it('SIZE LABEL sizewise: one row per size', () => {
+    expect(accessoryQtyDetails({ qtyPerGarment: '1', wastagePct: '4', sizewise: true, colourwise: false }, matrix)).toEqual([
+      { colour: null, size: '4A', orderQty: 150, required: '156' },
+      { colour: null, size: '5A', orderQty: 150, required: '156' },
+    ]);
+  });
+  it('SEWING THREAD colourwise, 0.02 cones a garment: per colour, rounded up', () => {
+    expect(accessoryQtyDetails({ qtyPerGarment: '0.02', wastagePct: '0', sizewise: false, colourwise: true }, matrix)).toEqual([
+      { colour: 'NAVY', size: null, orderQty: 250, required: '5' },
+      { colour: 'RED', size: null, orderQty: 50, required: '1' },
+    ]);
+  });
+});
+
+describe('incomplete draft programmes (Q-070)', () => {
+  it('a draft may have only the order; programMissing lists what approval still needs', async () => {
+    const { programMissing } = await import('./orders');
+    expect(zProgramInput.safeParse({ orderId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', portion: 'BODY + SLV' }).success).toBe(true);
+    expect(programMissing({ fabricItemId: null, requiredKg: null, processes: [{ sequence: 1, inputItemId: 'x', outputItemId: null }] })).toEqual(['finished fabric item', 'required finished kg', 'output item of process 1']);
+    expect(programMissing({ fabricItemId: 'f', requiredKg: '8.1', processes: [{ sequence: 1, inputItemId: 'a', outputItemId: 'b' }] })).toEqual([]);
   });
 });

@@ -61,12 +61,13 @@ function RateForm({ form, editing }: { form: UseFormReturn<FieldValues, unknown,
 }
 
 /** Rate contracts per vendor + process with an effective period (A§7.3). Used by bill matching. */
-export function RatesPage() {
+export function RatesPage({ processId, title }: { processId?: string; title?: string } = {}) {
   return (
     <MasterCrudPage<RateContract>
       id="rate-contracts"
       noun="rate contract"
-      title="Rate contracts"
+      title={title ?? 'Rate contracts'}
+      filters={{ processId }}
       description="Job-work rates per vendor and process. The rate effective on each D.C. date prices the bill match; an order- or item-specific rate wins over a general one."
       endpoint="/rate-contracts"
       editPerm="masters.rates.edit"
@@ -83,7 +84,7 @@ export function RatesPage() {
       ]}
       schema={zRateContractInput}
       updateSchema={zRateContractUpdate}
-      emptyForm={{ vendorId: '', processId: '', itemId: null, orderId: null, unit: 'KG', rate: '', effectiveFrom: '', effectiveTo: '', remarks: '' }}
+      emptyForm={{ vendorId: '', processId: processId ?? '', itemId: null, orderId: null, unit: 'KG', rate: '', effectiveFrom: '', effectiveTo: '', remarks: '' }}
       toForm={(r) => ({
         vendorId: r.vendorId,
         processId: r.processId,

@@ -92,8 +92,9 @@ export const zCostingInput = z.object({
 export const zProgramProcess = z.object({
   sequence: z.coerce.number().int().min(1).max(20),
   processId: zRef(),
-  inputItemId: zRef(),
-  outputItemId: zRef(),
+  /** Optional on a draft; required to approve (Q-070). */
+  inputItemId: zOptional(zRef()),
+  outputItemId: zOptional(zRef()),
   allowedLossPct: zPct(),
   materialCostPerKg: zOptional(zRate()),
   plannedVendorId: zOptional(zRef()),
@@ -126,9 +127,10 @@ export const PROGRAM_UOMS = ['Kgs', 'Mtrs'] as const;
 
 const programShape = z.object({
   orderId: zRef(),
-  fabricItemId: zRef(),
+  /** Fabric item and required kg are optional on a draft; required to approve (Q-070). */
+  fabricItemId: zOptional(zRef()),
   colour: zOptional(z.string().trim().max(30)),
-  requiredKg: zKg({ positive: true }),
+  requiredKg: zOptional(zKg({ positive: true })),
   gsm: zOptional(z.coerce.number().int().min(1).max(2000)),
   dia: zOptional(z.string().trim().max(30)),
   remarks: zOptional(z.string().trim().max(500)),
@@ -150,7 +152,7 @@ const programShape = z.object({
   sizeSpecs: z.array(zSizeSpec).max(40).default([]),
   /** Created from a Programme Entry screenshot in Scan invoices (Q-068). */
   sourceScanId: zOptional(zRef()),
-  processes: z.array(zProgramProcess).min(1, 'Add at least one process'),
+  processes: z.array(zProgramProcess).max(20).default([]),
 });
 function programRules(v: { processes: { sequence: number }[]; yarnMix?: { consPct: string }[]; sizeSpecs?: { size: string }[] }, ctx: z.RefinementCtx) {
   const seqs = v.processes.map((p) => p.sequence);
@@ -174,6 +176,12 @@ export const zTrimsBomLine = z.object({
   qtyPerGarment: zDecimal({ scale: 4, positive: true }),
   wastagePct: zPct().default('0'),
   remarks: zOptional(z.string().trim().max(200)),
+  /** Accessories Requirement Entry (Q-069). */
+  country: zOptional(z.string().trim().max(60)),
+  garDefine: zOptional(z.string().trim().max(60)),
+  sizewise: z.boolean().default(false),
+  colourwise: z.boolean().default(false),
+  consumption: z.string().trim().min(1).max(20).default('Flat'),
 });
 export const zTrimsBomInput = z.object({ lines: z.array(zTrimsBomLine).max(200) });
 
@@ -219,6 +227,29 @@ export function trimsRequirement(
   return { garments, required: req.toFixed(4), rounded: req.ceil().toFixed(0) };
 }
 
+/**
+ * Accessories Requirement "Qty Details" (Q-069): a requirement line split by size when Sizewise, by
+ * colour when ColourWise (both → colour × size), else one total. Each cell: order pieces × consumption
+ * per garment × (1 + excess %), rounded up to whole units.
+ */
+export function accessoryQtyDetails(
+  line: { colour?: string | null; size?: string | null; qtyPerGarment: DecimalLike; wastagePct: DecimalLike; sizewise: boolean; colourwise: boolean },
+  lines: MatrixLine[],
+): { colour: string | null; size: string | null; orderQty: number; required: string }[] {
+  const scoped = lines.filter((l) => (!line.colour || l.colour === line.colour) && (!line.size || l.size === line.size));
+  const cells = new Map<string, { colour: string | null; size: string | null; orderQty: number }>();
+  for (const l of scoped) {
+    const colour = line.colourwise ? l.colour : null;
+    const size = line.sizewise ? l.size : null;
+    const k = `${colour ?? ''}|${size ?? ''}`;
+    const c = cells.get(k) ?? { colour, size, orderQty: 0 };
+    c.orderQty += Number(l.qty) || 0;
+    cells.set(k, c);
+  }
+  const factor = D(line.qtyPerGarment).times(D(1).plus(D(line.wastagePct).div(100)));
+  return [...cells.values()].map((c) => ({ ...c, required: D(c.orderQty).times(factor).ceil().toFixed(0) }));
+}
+
 /** Planned input kg at each process, back-calculated from required output and allowed loss. */
 export function programPlan(requiredKg: DecimalLike, processes: { sequence: number; allowedLossPct: DecimalLike }[]) {
   const sorted = [...processes].sort((a, b) => b.sequence - a.sequence);
@@ -250,4 +281,17 @@ export function programFinishedKg(qtyBySize: Record<string, number>, specs: { si
     kg = kg.plus(D(qty).times(D(w)).div(1000));
   }
   return { kg: kg.toDecimalPlaces(3).toFixed(3), missing };
+}
+
+/** What still stops a draft programme from being approved (Q-070); empty = complete. */
+export function programMissing(p: { fabricItemId?: string | null; requiredKg?: string | null; processes: { sequence: number; inputItemId?: string | null; outputItemId?: string | null }[] }): string[] {
+  const out: string[] = [];
+  if (!p.fabricItemId) out.push('finished fabric item');
+  if (!p.requiredKg || !D(p.requiredKg).gt(0)) out.push('required finished kg');
+  if (!p.processes.length) out.push('at least one process');
+  for (const r of p.processes) {
+    if (!r.inputItemId) out.push(`input item of process ${r.sequence}`);
+    if (!r.outputItemId) out.push(`output item of process ${r.sequence}`);
+  }
+  return out;
 }

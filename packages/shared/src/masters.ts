@@ -125,6 +125,8 @@ export const zItemInput = z.object({
   hsnCode: zOptional(z.string().trim().regex(/^\d{4,8}$/, 'HSN must be 4–8 digits')),
   spec: optText(300),
   gsm: zOptional(z.coerce.number().int().min(1).max(2000)),
+  /** Accessories group (LABEL, TAG, STICKER, POLYBAG…) for TRIM items (Q-069). */
+  trimGroup: optText(40),
 });
 export type ItemInput = z.input<typeof zItemInput>;
 export const zItemUpdate = zItemInput.extend({ version: z.number().int().min(1) });

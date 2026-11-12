@@ -21,6 +21,8 @@ import { openingRouter } from './opening/opening.routes';
 import { voiceRouter } from './voice/voice.routes';
 import { qualityRouter } from './quality/quality.routes';
 import { purchaseRouter } from './purchase/purchase.routes';
+import { stockDocsRouter } from './stockdocs/stockdocs.routes';
+import { splRouter } from './spl/spl.routes';
 
 /** Business module routers, mounted under /api/v1 after authentication. */
-export const moduleRouters: Router[] = [stockRouter, mastersRouter, ordersRouter, programsRouter, yarnRouter, jobworkRouter, cuttingRouter, panelsRouter, sewingRouter, packingRouter, trimsRouter, wipRouter, accountsRouter, alertsRouter, scansRouter, exportRouter, reportsRouter, attachmentsRouter, openingRouter, voiceRouter, qualityRouter, purchaseRouter];
+export const moduleRouters: Router[] = [stockRouter, mastersRouter, ordersRouter, programsRouter, yarnRouter, jobworkRouter, cuttingRouter, panelsRouter, sewingRouter, packingRouter, trimsRouter, wipRouter, accountsRouter, alertsRouter, scansRouter, exportRouter, reportsRouter, attachmentsRouter, openingRouter, voiceRouter, qualityRouter, purchaseRouter, stockDocsRouter, splRouter];

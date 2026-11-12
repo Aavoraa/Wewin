@@ -165,3 +165,91 @@ describe('Programme Entry screenshot → fabric programme (Q-068)', () => {
     ok(await noProg.get(`/api/v1/invoice-scans/${d.id}/programme-draft`), 403);
   });
 });
+
+describe('uploaded from the order\'s Fabric programs tab (Q-068)', () => {
+  it('belongs to that order straight away (no order to confirm) and is listed on the order with what was read', async () => {
+    const res = await request(app)
+      .post('/api/v1/invoice-scans')
+      .set('authorization', `Bearer ${merch.token}`)
+      .field('target', 'PROGRAM')
+      .field('orderId', order.id)
+      .attach('file', await programmePdf('O/0009/WKF/25/NO-MATCH-REF'), { filename: 'neck-rib.pdf', contentType: 'application/pdf' });
+    ok(res, 201);
+    const id = res.body.data.id as string;
+    await scansService.process(id);
+    for (let i = 0; i < 600 && ['QUEUED', 'PROCESSING'].includes((await prisma.invoiceScan.findUniqueOrThrow({ where: { id } })).status); i++) await new Promise((r) => setTimeout(r, 100));
+    const d = (await merch.get(`/api/v1/invoice-scans/${id}`)).body.data;
+    expect(d.review.programmeOrder).toMatchObject({ id: order.id, state: 'CONFIRMED' });
+    expect(d.status).toBe('READY');
+    const list = await merch.get(`/api/v1/orders/${order.id}/programme-scans`);
+    ok(list);
+    expect(list.body.data.find((x: { id: string }) => x.id === id)).toMatchObject({ originalName: 'neck-rib.pdf', status: 'READY', programme: expect.objectContaining({ colour: 'NAVY' }), program: null });
+    // An invoice cannot be uploaded against an order.
+    const bad = await request(app).post('/api/v1/invoice-scans').set('authorization', `Bearer ${merch.token}`).field('orderId', order.id).attach('file', await programmePdf('X'), { filename: 'x.pdf', contentType: 'application/pdf' });
+    expect(bad.status).toBe(400);
+  });
+});
+
+describe('"Save programme": every portion saved as a draft at once (Q-070)', () => {
+  it('saves NECK RIB with what was read and BODY + SLV / FOLDING as drafts; approval needs the missing parts', async () => {
+    const res = await request(app).post('/api/v1/invoice-scans').set('authorization', `Bearer ${merch.token}`).field('target', 'PROGRAM').field('orderId', order.id).attach('file', await programmePdf('O/0010/WKF/25/SAVE'), { filename: 'save.pdf', contentType: 'application/pdf' });
+    ok(res, 201);
+    const id = res.body.data.id as string;
+    await scansService.process(id);
+    for (let i = 0; i < 600 && ['QUEUED', 'PROCESSING'].includes((await prisma.invoiceScan.findUniqueOrThrow({ where: { id } })).status); i++) await new Promise((r) => setTimeout(r, 100));
+    // Stand in for AI: the full reading of the user's screenshot, sizes as on this order.
+    const read = { ...fullRead('O/0010/WKF/25/SAVE'), fabricDescription: `NEW FABRIC ${TAG}`, sizes: fullRead('x').sizes };
+    const row = await prisma.invoiceScan.findUniqueOrThrow({ where: { id } });
+    await prisma.invoiceScan.update({ where: { id }, data: { review: { ...(row.review as object), programme: read } } });
+
+    const saved = await merch.post(`/api/v1/invoice-scans/${id}/save-programmes`);
+    ok(saved, 201);
+    const progs = saved.body.data.programs as { id: string; portion: string; missing: string[] }[];
+    expect(progs.map((p) => p.portion)).toEqual(['NECK RIB', 'BODY + SLV', 'FOLDING']);
+    expect(progs[0]!.missing).toEqual(expect.arrayContaining(['finished fabric item', 'input item of process 1']));
+    const neck = (await merch.get(`/api/v1/programs/${progs[0]!.id}`)).body.data;
+    expect(neck).toMatchObject({ status: 'DRAFT', portion: 'NECK RIB', fabricItemId: null, fabricDescription: `NEW FABRIC ${TAG}`, greyGsm: 260, processTemplate: 'GREY PUR + DYEING (KGS)', sourceScanId: id });
+    expect(neck.requiredKg).toMatch(/^\d+\.\d{3}$/); // pieces of NAVY × 6 g
+    expect(neck.processes).toHaveLength(3);
+    expect(neck.yarnMix.map((y: { counts: string }) => y.counts)).toEqual([`30s 100% COMBED ${TAG}`, 'LYCRA']);
+    expect((await merch.get(`/api/v1/invoice-scans/${id}`)).body.data.status).toBe('APPLIED');
+    ok(await merch.post(`/api/v1/invoice-scans/${id}/save-programmes`), 409); // once
+
+    // Approval needs everything; the draft is completed later.
+    const refused = await owner.post(`/api/v1/programs/${progs[0]!.id}/approve`);
+    ok(refused, 400);
+    expect(refused.body.error.message).toMatch(/finished fabric item/);
+    const complete = await owner.patch(`/api/v1/programs/${neck.id}`, {
+      ...neck,
+      orderId: undefined,
+      version: neck.version,
+      fabricItemId: m.items.dyed.id,
+      processes: neck.processes.map((p: { sequence: number; processId: string; allowedLossPct: string }) => ({ sequence: p.sequence, processId: p.processId, allowedLossPct: p.allowedLossPct, inputItemId: m.items.greige.id, outputItemId: m.items.dyed.id })),
+    });
+    ok(complete);
+    ok(await owner.post(`/api/v1/programs/${neck.id}/approve`));
+    // The incomplete portions are listed with the order.
+    const o = (await owner.get(`/api/v1/orders/${order.id}`)).body.data;
+    expect(o.programs.some((p: { id: string; fabricItem: unknown }) => p.id === progs[1]!.id && p.fabricItem === null)).toBe(true);
+  });
+});
+
+describe('deleting an uploaded file', () => {
+  it('removes the file and what was read (history kept); refused once a document was created from it', async () => {
+    const res = await request(app).post('/api/v1/invoice-scans').set('authorization', `Bearer ${merch.token}`).field('target', 'PROGRAM').field('orderId', order.id).attach('file', await programmePdf('O/0011/DEL'), { filename: 'to-delete.pdf', contentType: 'application/pdf' });
+    ok(res, 201);
+    const id = res.body.data.id as string;
+    await scansService.process(id);
+    for (let i = 0; i < 600 && ['QUEUED', 'PROCESSING'].includes((await prisma.invoiceScan.findUniqueOrThrow({ where: { id } })).status); i++) await new Promise((r) => setTimeout(r, 100));
+    ok(await merch.del(`/api/v1/invoice-scans/${id}`), 204);
+    const row = await prisma.invoiceScan.findUniqueOrThrow({ where: { id } });
+    expect(row).toMatchObject({ status: 'DISCARDED', review: null, extraction: null });
+    expect(row.purgedAt).not.toBeNull();
+    expect((await prisma.invoiceScanEvent.findMany({ where: { scanId: id, kind: 'DELETED' } })).length).toBe(1);
+    expect((await merch.get(`/api/v1/orders/${order.id}/programme-scans`)).body.data.some((x: { id: string }) => x.id === id)).toBe(false);
+    ok(await merch.get(`/api/v1/invoice-scans/${id}/file`), 404);
+
+    const used = await prisma.invoiceScan.findFirstOrThrow({ where: { status: 'APPLIED', target: 'PROGRAM' } });
+    ok(await owner.del(`/api/v1/invoice-scans/${used.id}`), 409);
+  });
+});
