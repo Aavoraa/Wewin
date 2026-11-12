@@ -56,11 +56,13 @@ test.describe.serial('dashboard, reports, attachments, opening data', () => {
     await page.goto('/orders');
     await page.getByRole('row').nth(1).click();
     await expect(page.getByRole('heading', { name: 'Attachments' })).toBeVisible();
+    const file = `buyer-po-${Date.now()}.pdf`; // unique per run, so a rerun never meets an old copy
     const pdf = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF');
-    await page.getByLabel('Attach files').setInputFiles({ name: 'buyer-po-e2e.pdf', mimeType: 'application/pdf', buffer: pdf });
-    await expect(page.getByText('buyer-po-e2e.pdf').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Remove buyer-po-e2e.pdf' }).click();
-    await expect(page.getByText('buyer-po-e2e.pdf')).toHaveCount(0);
+    await page.getByLabel('Attach files').setInputFiles({ name: file, mimeType: 'application/pdf', buffer: pdf });
+    await expect(page.getByText(file).first()).toBeVisible();
+    await page.getByRole('button', { name: `Delete ${file}` }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByRole('button', { name: `Delete ${file}` })).toHaveCount(0); // gone from the list (the toast still names it)
   });
 
   test('opening data: template → filled file → problems → post → opening bill', async () => {

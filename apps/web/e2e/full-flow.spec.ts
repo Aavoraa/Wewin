@@ -104,7 +104,7 @@ test.describe.serial('full order workflow', () => {
   async function outward(process: RegExp, vendor: string, fill: () => Promise<void>) {
     await page.goto('/outward-dcs/new');
     await pick(page, 'Order *', orderNo);
-    const sel = await field(page, /Program process/);
+    const sel = page.getByLabel('Programme', { exact: true }); // fabric programme steps and yarn programmes (Q-074)
     await expect(sel.locator('option', { hasText: process })).toHaveCount(1);
     await sel.selectOption((await sel.locator('option', { hasText: process }).getAttribute('value'))!);
     await pick(page, /Job worker/, vendor);

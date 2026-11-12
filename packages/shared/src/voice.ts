@@ -31,8 +31,14 @@ export type VoiceFormSpec = z.infer<typeof zVoiceFormSpec>;
 
 export const zVoiceInterpret = z.object({
   transcript: z.string().trim().min(1, 'Nothing was heard').max(600),
-  /** Screens the user may open (label + path), from the navigation the user can see. */
-  screens: z.array(z.object({ label: z.string().max(60), to: z.string().regex(/^\/[a-z0-9/-]*$/) })).max(80).default([]),
+  /**
+   * Screens the user may open (label + in-app path), from the navigation the user can see. Paths may
+   * hold capitals, underscores and a query (/transactions/YARN_DYEING, /purchase-orders?kind=ACCESSORY).
+   */
+  screens: z
+    .array(z.object({ label: z.string().max(60), to: z.string().max(120).regex(/^\/[A-Za-z0-9/_-]*(\?[A-Za-z0-9=&_-]*)?$/) }))
+    .max(120)
+    .default([]),
   form: zVoiceFormSpec.optional(),
 });
 
