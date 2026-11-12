@@ -8,6 +8,7 @@ import { reportsService } from './reports.service';
 let owner: Client;
 let stockOnly: Client;
 let exporter: Client;
+let orderNo: string;
 const ok = (r: { status: number; body: unknown }, s = 200) => expect(r.status, JSON.stringify(r.body)).toBe(s);
 
 async function readyExport(c: Client, reportKey: string, params: Record<string, string> = {}) {
@@ -28,7 +29,7 @@ beforeAll(async () => {
   stockOnly = await asUser(['dashboard.view', 'reports.view', 'stock.view']);
   exporter = await asUser(['dashboard.view', 'reports.view', 'reports.export', 'orders.view']);
   const m = await masters();
-  await createOrder(owner, m);
+  orderNo = (await createOrder(owner, m)).orderNo as string;
 });
 
 describe('report catalogue and live run', () => {
@@ -43,7 +44,8 @@ describe('report catalogue and live run', () => {
     const r = await exporter.get('/api/v1/reports/run/order-progress?status=CONFIRMED');
     ok(r);
     expect(r.body.data.rows.length).toBeGreaterThan(0);
-    expect(r.body.data.rows[0]).toMatchObject({ ordered: 1500, packed: 0, shipped: 0, balance: 1500, status: 'CONFIRMED' });
+    // Other test files' orders share this database; check this file's own order, not whichever row comes first.
+    expect(r.body.data.rows.find((x: { orderNo: string }) => x.orderNo === orderNo)).toMatchObject({ ordered: 1500, packed: 0, shipped: 0, balance: 1500, status: 'CONFIRMED' });
     expect((await stockOnly.get('/api/v1/reports/run/order-progress')).status).toBe(403);
     expect((await owner.get('/api/v1/reports/run/process-loss?from=31-12-2026')).status).toBe(400);
     expect((await owner.get('/api/v1/reports/run/nope')).status).toBe(404);
