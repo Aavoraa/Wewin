@@ -38,6 +38,12 @@ elif [ "${VERCEL_ENV:-}" = "production" ]; then
   if [ -n "${SEED_OWNER_PASSWORD:-}" ]; then
     echo "[build] loading foundation data (owner login, roles, locations, series)"
     (cd packages/db && NODE_ENV=production SEED_DEMO="${SEED_DEMO:-false}" pnpm exec tsx prisma/seed.ts)
+  else
+    echo "[build] WARNING: SEED_OWNER_PASSWORD is not set — a new database gets no owner login." >&2
+  fi
+  if [ -n "${RESET_OWNER_PASSWORD:-}" ]; then
+    echo "[build] resetting the owner password (RESET_OWNER_PASSWORD is set — remove it after this deploy)"
+    (cd packages/db && pnpm exec tsx prisma/reset-owner.ts)
   fi
 else
   echo "[build] ${VERCEL_ENV:-local} build: database not touched"
