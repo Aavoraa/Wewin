@@ -148,7 +148,7 @@ export function DashboardPage() {
           canCreate={!!user && user.permissions.includes('orders.create')}
         />
         <Pipeline stages={o.stages} />
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid gap-5 min-[1500px]:grid-cols-[minmax(0,1fr)_380px]">
           <div className="grid min-w-0 gap-5">
             <PendingTasks tasks={o.tasks} />
             <div className="grid gap-5 lg:grid-cols-2">
@@ -170,8 +170,8 @@ const greeting = () => {
 
 function Header({ o, canCreate, name }: { o: Overview; canCreate: boolean; name?: string }) {
   return (
-    <div className="grid items-center gap-5 xl:grid-cols-[auto_minmax(0,1fr)_auto]">
-      <div className="min-w-0 xl:pr-4">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-4 min-[1700px]:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="min-w-0 min-[1700px]:pr-4">
         <div className="text-[15px] text-[#3f483e]">
           {greeting()}
           {name ? <span className="font-semibold text-[#3e6328]">, {name.split(' ')[0]}</span> : null}
@@ -181,7 +181,7 @@ function Header({ o, canCreate, name }: { o: Overview; canCreate: boolean; name?
           <Calendar className="size-4" /> {longDate(o.asOf)}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="order-3 col-span-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 min-[1700px]:order-none min-[1700px]:col-span-1">
         {o.kpis.map((k) => {
           const t = KPI[k.key] ?? KPI.activeOrders!;
           const alert = k.key === 'overdue' && k.value > 0;
@@ -222,7 +222,7 @@ function Header({ o, canCreate, name }: { o: Overview; canCreate: boolean; name?
       {canCreate ? (
         <Button
           asChild
-          className="h-auto min-h-11 rounded-xl bg-[#24543a] px-4 py-3 shadow-[0_2px_8px_rgba(36,84,58,0.25)] hover:bg-[#1c4430]"
+          className="order-2 h-auto min-h-11 justify-self-end rounded-xl min-[1700px]:order-none bg-[#24543a] px-4 py-3 shadow-[0_2px_8px_rgba(36,84,58,0.25)] hover:bg-[#1c4430]"
         >
           <Link to="/orders/new">
             <Plus /> Create Order
@@ -280,12 +280,12 @@ function Pipeline({ stages }: { stages: Overview['stages'] }) {
   if (!stages.length) return null;
   return (
     <section className="min-w-0">
-      <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 min-[1700px]:flex min-[1700px]:items-stretch min-[1700px]:gap-0">
         {stages.map((s, i) => (
-          <div key={s.key} className="contents xl:flex xl:min-w-0 xl:flex-1 xl:items-stretch">
+          <div key={s.key} className="contents min-[1700px]:flex min-[1700px]:min-w-0 min-[1700px]:flex-1 min-[1700px]:items-stretch">
             <StageCard stage={s} n={i + 1} />
             {i < stages.length - 1 ? (
-              <div className="hidden w-9 shrink-0 items-center justify-center xl:flex" aria-hidden>
+              <div className="hidden w-9 shrink-0 items-center justify-center min-[1700px]:flex" aria-hidden>
                 <span className="grid size-6 place-items-center rounded-full bg-white text-[#1b201d] shadow-[0_1px_3px_rgba(16,24,20,0.15)]">
                   <ArrowRight className="size-3.5" />
                 </span>
@@ -348,7 +348,7 @@ function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number 
                 <I className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium leading-tight text-[#1b201d]">
+                <span className="block text-[13px] font-medium leading-tight text-[#1b201d]">
                   {it.label}
                 </span>
                 <span
