@@ -30,6 +30,12 @@ export function dbFingerprint(url: string | undefined): string | null {
 async function setupStatus() {
   const [m] = await prisma.$queryRaw<{ count: bigint; latest: string | null }[]>`SELECT count(*) AS count, max(migration_name) AS latest FROM _prisma_migrations WHERE finished_at IS NOT NULL`;
   const [t] = await prisma.$queryRaw<{ scans: boolean }[]>`SELECT to_regclass('public.invoice_scans') IS NOT NULL AS scans`;
+  // Login diagnostics without details: does the owner login exist, is it usable.
+  const [o] = await prisma.$queryRaw<{ users: bigint; owner: boolean; owner_active: boolean | null; owner_locked: boolean | null }[]>`
+    SELECT (SELECT count(*) FROM users) AS users,
+           EXISTS (SELECT 1 FROM users WHERE username = 'owner') AS owner,
+           (SELECT is_active FROM users WHERE username = 'owner') AS owner_active,
+           (SELECT locked_until > now() FROM users WHERE username = 'owner') AS owner_locked`;
   return {
     database: dbFingerprint(process.env.DATABASE_URL),
     migrations: Number(m?.count ?? 0),
@@ -37,6 +43,8 @@ async function setupStatus() {
     scansTable: !!t?.scans,
     fileStorage: storageDriver(),
     blobConnected: !!process.env.BLOB_READ_WRITE_TOKEN,
+    users: Number(o?.users ?? 0),
+    ownerLogin: !o?.owner ? 'missing' : o.owner_active === false ? 'inactive' : o.owner_locked ? 'locked' : 'ok',
   };
 }
 
