@@ -42,7 +42,7 @@ elif [ "${VERCEL_ENV:-}" = "production" ]; then
     echo "[build] WARNING: SEED_OWNER_PASSWORD is not set — a new database gets no owner login." >&2
   fi
   if [ -n "${RESET_OWNER_PASSWORD:-}" ]; then
-    echo "[build] resetting the owner password (RESET_OWNER_PASSWORD is set — remove it after this deploy)"
+    echo "[build] RESET_OWNER_PASSWORD is set — applied once per value (later deploys skip it); remove it when done"
     (cd packages/db && pnpm exec tsx prisma/reset-owner.ts)
   fi
 else
