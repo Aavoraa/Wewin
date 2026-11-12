@@ -60,7 +60,7 @@ Default permission matrix: Q-002.
 - Inward D.C. with roll-level lines (roll no., kg, dye lot, GSM, dia), linked through `dc_links` to one or more outward D.C.s.
 - Process loss per outward D.C.: running loss % while open (warning), close posts residual to PROCESS_LOSS and freezes final loss %.
 - Live loss badge (green within allowed, amber near, red over — "near" threshold Q-005).
-- Rule 55 delivery challan print (GSTIN, HSN, qty, value, "for job work", original/duplicate/triplicate); inward/GRN print (A5).
+- Rule 55 delivery challan print (GSTIN, HSN, qty, value, "for job work", original/duplicate/triplicate); inward/GRN print (A4; all prints are A4 since 2026-11-12, labels excepted).
 - Material-at-vendors screen; pending quantities shown inline on inward forms.
 
 ### 3.6 Cutting (B-Step 6)

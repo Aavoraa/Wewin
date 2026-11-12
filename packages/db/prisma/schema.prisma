@@ -499,6 +499,9 @@ model Vendor {
   bankAccount            String?          @map("bank_account")
   bankIfsc               String?          @map("bank_ifsc")
   whatsappNumber         String?          @map("whatsapp_number")
+  /// Vendor certificate (Q-074): required on the vendor form; nullable for vendors created before it and by imports.
+  certificateNo          String?          @map("certificate_no")
+  certificateExpiry      DateTime?        @map("certificate_expiry") @db.Date
   isActive               Boolean          @default(true) @map("is_active")
   version                Int              @default(1)
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)

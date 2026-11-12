@@ -2,6 +2,7 @@ export * from './decimal';
 export * from './dates';
 export * from './format';
 export * from './permissions';
+export * from './approvals';
 export * from './constants';
 export * from './api';
 export * from './settings';

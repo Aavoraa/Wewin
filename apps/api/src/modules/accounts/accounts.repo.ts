@@ -6,7 +6,12 @@ type Db = Tx | typeof prisma;
 const dec = (v: string | null | undefined) => (v === null || v === undefined ? null : new Prisma.Decimal(v));
 
 const billInclude = {
-  vendor: { select: { id: true, code: true, name: true, gstin: true, creditDays: true, debitNoteGstApplicable: true, debitNoteGstRatePct: true, tdsApplicable: true, tdsRatePct: true } },
+  vendor: {
+    select: {
+      id: true, code: true, name: true, gstin: true, creditDays: true, debitNoteGstApplicable: true, debitNoteGstRatePct: true, tdsApplicable: true, tdsRatePct: true,
+      addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, certificateNo: true, certificateExpiry: true,
+    },
+  },
   order: { select: { id: true, orderNo: true, styleNo: true } },
   lines: { orderBy: { lineNo: 'asc' } },
   debitNotes: { where: { status: 'POSTED' }, select: { id: true, docNo: true, docDate: true, totalAmount: true, isAuto: true } },

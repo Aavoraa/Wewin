@@ -165,6 +165,67 @@ describe('vendor bills — 3-way match, auto debit notes, no double billing', ()
     expect(b.figures).toMatchObject({ netPayable: '720.00', outstanding: '720.00' });
   });
 
+  it('no bill for a vendor whose certificate is expired or missing; the bill carries the certificate for printing (Q-074)', async () => {
+    const knitter = m.vendors.knitter.id;
+    const before = await prisma.vendor.findUniqueOrThrow({ where: { id: knitter }, select: { certificateNo: true, certificateExpiry: true } });
+    const r = await knitRound('20', '19');
+    const draft = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00'));
+    ok(draft, 201);
+    expect(draft.body.data.vendor).toMatchObject({ certificateNo: before.certificateNo, certificateExpiry: '2099-12-31' });
+    try {
+      // Expired after the draft was saved: posting is refused, and so is a new bill.
+      await prisma.vendor.update({ where: { id: knitter }, data: { certificateNo: 'GOTS-OLD', certificateExpiry: new Date('2026-10-01T00:00:00.000Z') } });
+      const post = await accountant.post(`/api/v1/vendor-bills/${draft.body.data.id}/post`);
+      expect(post.status).toBe(400);
+      expect(post.body.error.message).toContain('expired on 2026-10-01');
+      expect((await owner.get(`/api/v1/vendor-bills/${draft.body.data.id}`)).body.data.status).toBe('DRAFT');
+      const fresh = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00'));
+      expect(fresh.status).toBe(400);
+      expect(fresh.body.error.message).toContain('GOTS-OLD');
+
+      // Valid on the bill date but expired today: a back-dated bill is still refused.
+      await prisma.vendor.update({ where: { id: knitter }, data: { certificateExpiry: new Date(`${addDays(todayIst(), -1)}T00:00:00.000Z`) } });
+      expect((await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00'))).status).toBe(400);
+
+      // No certificate at all.
+      await prisma.vendor.update({ where: { id: knitter }, data: { certificateNo: null, certificateExpiry: null } });
+      const none = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00'));
+      expect(none.status).toBe(400);
+      expect(none.body.error.message).toContain('no certificate');
+
+      // The setting turns the rule off.
+      const key = '/api/v1/settings/business/accounts.billRequiresValidCertificate';
+      ok(await owner.put(key, { value: false }));
+      try {
+        const allowed = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00'));
+        ok(allowed, 201);
+        ok(await owner.del(`/api/v1/vendor-bills/${allowed.body.data.id}`), 204);
+      } finally {
+        ok(await owner.put(key, { value: true }));
+      }
+    } finally {
+      await prisma.vendor.update({ where: { id: knitter }, data: before });
+      // Leave no open bill behind for the ledger and ageing tests below.
+      await owner.del(`/api/v1/vendor-bills/${draft.body.data.id}`);
+    }
+  });
+
+  it('bill variance approval switched off: a bill outside tolerance posts with its variance recorded (Q-075)', async () => {
+    const key = '/api/v1/settings/business/accounts.billVarianceApprovalRequired';
+    const r = await knitRound('20', '19');
+    ok(await owner.put(key, { value: false }));
+    try {
+      const c = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '500.00'));
+      ok(c, 201);
+      expect(c.body.data).toMatchObject({ withinTolerance: false, approvalStatus: 'NOT_REQUIRED', variance: '158.00' });
+      ok(await accountant.post(`/api/v1/vendor-bills/${c.body.data.id}/post`));
+      // Leave nothing open for the ledger and ageing tests below.
+      ok(await owner.post(`/api/v1/vendor-bills/${c.body.data.id}/cancel`, { reason: 'Test bill' }));
+    } finally {
+      ok(await owner.put(key, { value: true }));
+    }
+  });
+
   it('a draft bill cannot be edited after posting', async () => {
     const r = await owner.patch(`/api/v1/vendor-bills/${bill2}`, { ...billBody([round1.inwardId], '1'), version: 99 });
     expect(r.status).toBe(409);
@@ -289,7 +350,8 @@ describe('alerts — overdue D.C. and GST time limit (A6)', () => {
     const r = await knitRound('10', '9.8');
     const c = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '176.40', { docDate: todayIst(), vendorInvoiceDate: addDays(todayIst(), -40) }));
     ok(c, 201);
-    ok(await accountant.post(`/api/v1/vendor-bills/${c.body.data.id}/post`));
+    const posted = await accountant.post(`/api/v1/vendor-bills/${c.body.data.id}/post`);
+    ok(posted);
     await alertsService.checkPayments();
     const a = await prisma.alert.findFirstOrThrow({ where: { dedupeKey: `PAYMENT_DUE:${c.body.data.id}` } });
     expect(a).toMatchObject({ severity: 'CRITICAL', status: 'ACTIVE' });
@@ -297,7 +359,8 @@ describe('alerts — overdue D.C. and GST time limit (A6)', () => {
     const ack = await owner.post(`/api/v1/alerts/${a.id}/acknowledge`);
     ok(ack);
     expect(ack.body.data.status).toBe('ACKNOWLEDGED');
-    const list = await owner.get('/api/v1/alerts?status=OPEN&kind=PAYMENT_DUE');
+    // Search for this bill's alert: open alerts from earlier runs of a shared test database fill the first page.
+    const list = await owner.get(`/api/v1/alerts?status=OPEN&kind=PAYMENT_DUE&q=${encodeURIComponent(posted.body.data.docNo)}`);
     ok(list);
     expect(list.body.data.some((x: { id: string }) => x.id === a.id)).toBe(true);
   });

@@ -126,7 +126,7 @@ export function LineGrid<R extends GridRow>({
   const totals = columns.some((c) => c.total);
 
   return (
-    <div ref={ref} className="overflow-x-auto rounded-lg border bg-card" onKeyDown={onKeyDown}>
+    <div ref={ref} className="print-fit overflow-x-auto rounded-lg border bg-card" onKeyDown={onKeyDown}>
       <table className="w-full border-collapse text-sm">
         <thead className="bg-muted">
           <tr>

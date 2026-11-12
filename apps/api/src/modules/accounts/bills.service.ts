@@ -1,6 +1,6 @@
 import { type Prisma } from '@wewin/db';
 import { type z } from 'zod';
-import { D, addDays, payStatus, todayIst, type zBillInput, type zBillListQuery } from '@wewin/shared';
+import { D, addDays, billCertificateProblem, payStatus, todayIst, type zBillInput, type zBillListQuery } from '@wewin/shared';
 import { type Tx, prisma, withTx } from '../../core/db';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
 import { orderBy, paging } from '../../core/list';
@@ -42,6 +42,7 @@ export function billFigures(b: BillDetail) {
 function shape(b: BillDetail) {
   return {
     ...b,
+    vendor: { ...b.vendor, certificateExpiry: dateOnly(b.vendor.certificateExpiry) },
     docDate: dateOnly(b.docDate)!,
     vendorInvoiceDate: dateOnly(b.vendorInvoiceDate)!,
     dueDate: dateOnly(b.dueDate)!,
@@ -126,9 +127,21 @@ async function buildLines(input: Input, db: Tx | typeof prisma) {
   return { lines, match };
 }
 
+/** Q-074: no bill (save or post) for a vendor whose certificate is missing or expired, unless the setting is off. */
+async function assertVendorCertificate(
+  vendor: { name: string; certificateNo: string | null; certificateExpiry: Date | null },
+  billDate: string,
+  db: Tx | typeof prisma,
+) {
+  if (!(await settingsService.get('accounts.billRequiresValidCertificate', db as Tx))) return;
+  const problem = billCertificateProblem({ ...vendor, certificateExpiry: dateOnly(vendor.certificateExpiry) }, billDate, todayIst());
+  if (problem) throw new AppError('VALIDATION_ERROR', problem, 400);
+}
+
 async function header(input: Input, match: ReturnType<typeof matchBill>, db: Tx | typeof prisma) {
   const vendor = await mastersService.vendorById(input.vendorId, db);
   if (!vendor.isActive) throw new AppError('VALIDATION_ERROR', 'Vendor is inactive', 400);
+  await assertVendorCertificate(vendor, input.docDate, db);
   return {
     docDate: toDbDate(input.docDate),
     vendorId: input.vendorId,
@@ -144,8 +157,10 @@ async function header(input: Input, match: ReturnType<typeof matchBill>, db: Tx 
     expectedTaxable: match.expectedTotal,
     variance: match.variance,
     withinTolerance: match.withinTolerance,
-    // Any edit resets approval; a bill outside tolerance must be (re-)approved before posting.
-    approvalStatus: match.withinTolerance ? ('NOT_REQUIRED' as const) : ('PENDING' as const),
+    // Any edit resets approval; a bill outside tolerance must be (re-)approved before posting,
+    // unless that approval is switched off (Q-075) — the variance is still recorded on the bill.
+    approvalStatus:
+      match.withinTolerance || !(await settingsService.get('accounts.billVarianceApprovalRequired', db as Tx)) ? ('NOT_REQUIRED' as const) : ('PENDING' as const),
     approvedById: null,
     approvedAt: null,
     approvalNote: null,
@@ -262,13 +277,14 @@ export const billsService = {
       const b = await repo.getBill(id, tx);
       if (!b) throw notFound('Vendor bill');
       assertDraft(b, 'Vendor bill');
+      await assertVendorCertificate(b.vendor, dateOnly(b.docDate)!, tx);
       const input = inputFrom(b);
       const inIds = input.lines.filter((l) => l.sourceType === 'INWARD_DC').map((l) => l.sourceId);
       const pnIds = input.lines.filter((l) => l.sourceType === 'PANEL_IN').map((l) => l.sourceId);
       await jobworkService.lockInwards(tx, inIds);
       await panelsService.lockIns(tx, pnIds);
       const { match } = await buildLines(input, tx);
-      if (!match.withinTolerance) {
+      if (!match.withinTolerance && (await settingsService.get('accounts.billVarianceApprovalRequired', tx))) {
         if (match.expectedTotal !== b.expectedTaxable.toFixed(2) || match.variance !== b.variance.toFixed(2)) {
           throw new AppError('APPROVAL_REQUIRED', 'Rates or quantities changed since the bill was saved; save it again and get it approved', 409);
         }

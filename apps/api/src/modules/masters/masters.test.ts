@@ -50,6 +50,28 @@ describe('vendors', () => {
     expect((await owner.post('/api/v1/vendors', body)).status).toBe(409);
   });
 
+  it('stores the certificate number and expiry date, and refuses one without the other (Q-074)', async () => {
+    const res = await owner.post('/api/v1/vendors', vendorBody({ certificateNo: 'GOTS-2026-118', certificateExpiry: '2027-03-31' }));
+    expect(res.status).toBe(201);
+    const got = await owner.get(`/api/v1/vendors/${res.body.data.id}`);
+    expect(got.body.data).toMatchObject({ certificateNo: 'GOTS-2026-118', certificateExpiry: '2027-03-31' });
+    const list = await owner.get(`/api/v1/vendors?q=${res.body.data.code}`);
+    expect(list.body.data[0]).toMatchObject({ certificateNo: 'GOTS-2026-118', certificateExpiry: '2027-03-31' });
+
+    const renewed = await owner.patch(`/api/v1/vendors/${res.body.data.id}`, {
+      ...vendorBody({ code: res.body.data.code, certificateNo: 'GOTS-2027-004', certificateExpiry: '2028-03-31' }),
+      version: got.body.data.version,
+    });
+    expect(renewed.status).toBe(200);
+    expect((await owner.get(`/api/v1/vendors/${res.body.data.id}`)).body.data).toMatchObject({ certificateNo: 'GOTS-2027-004', certificateExpiry: '2028-03-31' });
+
+    const half = await owner.post('/api/v1/vendors', vendorBody({ certificateNo: 'GOTS-1' }));
+    expect(half.status).toBe(400);
+    expect(half.body.error.details.fieldErrors.certificateExpiry).toBeDefined();
+    const badDate = await owner.post('/api/v1/vendors', vendorBody({ certificateNo: 'GOTS-1', certificateExpiry: '31-03-2027' }));
+    expect(badDate.status).toBe(400);
+  });
+
   it('updates with optimistic concurrency, renames the location, and keeps the code immutable', async () => {
     const v = (await owner.post('/api/v1/vendors', vendorBody())).body.data;
     const ok = await owner.patch(`/api/v1/vendors/${v.id}`, { ...vendorBody({ code: v.code, name: 'Renamed Knits' }), version: v.version });

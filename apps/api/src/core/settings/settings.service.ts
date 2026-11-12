@@ -1,4 +1,6 @@
 import {
+  APPROVAL_SWITCHES,
+  type ApprovalSwitchSetting,
   type CompanySettingsInput,
   SETTINGS_SCHEMA,
   SETTING_KEYS,
@@ -68,7 +70,7 @@ export const settingsService = {
     if (!(key in SETTINGS_SCHEMA)) throw new AppError('NOT_FOUND', `Unknown setting ${key}`, 404);
     const parsed = SETTINGS_SCHEMA[key as SettingKey].schema.safeParse(value);
     if (!parsed.success) throw new AppError('VALIDATION_ERROR', `Invalid value for ${key}`, 400, parsed.error.flatten());
-    return withTx(
+    const saved = await withTx(
       (tx) =>
         tx.appSetting.upsert({
           where: { key },
@@ -77,6 +79,9 @@ export const settingsService = {
         }),
       { isolation: 'ReadCommitted' },
     );
+    // An approval switch changes who may approve (Q-075): drop cached permissions so it applies at once.
+    if (APPROVAL_SWITCHES.some((s) => s.setting === key)) onApprovalSwitchChange?.();
+    return saved;
   },
 
   listSeries() {
@@ -98,3 +103,15 @@ export const settingsService = {
     );
   },
 };
+
+let onApprovalSwitchChange: (() => void) | undefined;
+/** The auth layer registers its permission-cache reset here (avoids an import cycle). */
+export function onApprovalSwitchChanged(fn: () => void): void {
+  onApprovalSwitchChange = fn;
+}
+
+/** Whether each switchable approval is required (Q-075). */
+export async function approvalSwitches(tx?: Tx): Promise<Record<ApprovalSwitchSetting, boolean>> {
+  const all = await settingsService.getAll(tx);
+  return Object.fromEntries(APPROVAL_SWITCHES.map((s) => [s.setting, all[s.setting]])) as Record<ApprovalSwitchSetting, boolean>;
+}
