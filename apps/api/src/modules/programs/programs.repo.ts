@@ -21,8 +21,8 @@ export type ProgramDetail = Prisma.FabricProgramGetPayload<{ include: typeof inc
 export interface ProcessRowData {
   sequence: number;
   processId: string;
-  inputItemId: string;
-  outputItemId: string;
+  inputItemId: string | null;
+  outputItemId: string | null;
   allowedLossPct: string;
   materialCostPerKg: string | null;
   plannedVendorId: string | null;
@@ -69,13 +69,13 @@ export const programsRepo = {
   },
   create(
     tx: Tx,
-    data: { programNo: string; orderId: string; fabricItemId: string; colour: string | null; requiredKg: string; gsm: number | null; dia: string | null; remarks: string | null; sourceScanId: string | null } & ProgramSpecData,
+    data: { programNo: string; orderId: string; fabricItemId: string | null; colour: string | null; requiredKg: string | null; gsm: number | null; dia: string | null; remarks: string | null; sourceScanId: string | null } & ProgramSpecData,
     processes: ProcessRowData[],
   ) {
     return tx.fabricProgram.create({
       data: {
         ...data,
-        requiredKg: new Prisma.Decimal(data.requiredKg),
+        requiredKg: dec(data.requiredKg),
         mtrToKg: dec(data.mtrToKg),
         processes: {
           create: processes.map((p) => ({ ...p, allowedLossPct: new Prisma.Decimal(p.allowedLossPct), materialCostPerKg: dec(p.materialCostPerKg) })),
@@ -87,12 +87,12 @@ export const programsRepo = {
     tx: Tx,
     id: string,
     version: number,
-    data: { fabricItemId: string; colour: string | null; requiredKg: string; gsm: number | null; dia: string | null; remarks: string | null } & ProgramSpecData,
+    data: { fabricItemId: string | null; colour: string | null; requiredKg: string | null; gsm: number | null; dia: string | null; remarks: string | null } & ProgramSpecData,
     processes: ProcessRowData[],
   ) {
     const r = await tx.fabricProgram.updateMany({
       where: { id, version },
-      data: { ...data, requiredKg: new Prisma.Decimal(data.requiredKg), mtrToKg: dec(data.mtrToKg), version: { increment: 1 } },
+      data: { ...data, requiredKg: dec(data.requiredKg), mtrToKg: dec(data.mtrToKg), version: { increment: 1 } },
     });
     if (r.count === 0) return false;
     await tx.fabricProgramProcess.deleteMany({ where: { programId: id } });
@@ -146,6 +146,20 @@ export const programsRepo = {
       ORDER BY lower(m->>'counts'), p.created_at DESC`;
     return new Map(rows.map((r) => [r.counts, r.item_id]));
   },
+  /** Prs.Template (Q-067): each template name with the process route of the latest programme that used it. */
+  async processTemplates() {
+    const rows = await prisma.fabricProgram.findMany({
+      where: { processTemplate: { not: null }, status: { not: 'CANCELLED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { processTemplate: true, processes: { orderBy: { sequence: 'asc' }, select: { sequence: true, processId: true, allowedLossPct: true } } },
+    });
+    const seen = new Map<string, (typeof rows)[number]['processes']>();
+    for (const r of rows) {
+      const k = r.processTemplate!.trim().toUpperCase();
+      if (k && !seen.has(k)) seen.set(k, r.processes);
+    }
+    return [...seen.entries()].map(([name, processes]) => ({ name, processes: processes.map((p) => ({ sequence: p.sequence, processId: p.processId, allowedLossPct: p.allowedLossPct.toString() })) }));
+  },
   activeKgProcesses() {
     return prisma.process.findMany({ where: { isActive: true, stage: 'KG' }, select: { id: true, code: true, name: true } });
   },
@@ -157,14 +171,26 @@ export const programsRepo = {
   bom(orderId: string, db: Db = prisma) {
     return db.trimsBomLine.findMany({
       where: { orderId },
-      include: { trimItem: { select: { id: true, code: true, name: true, unit: true } } },
-      orderBy: [{ trimItem: { code: 'asc' } }],
+      include: { trimItem: { select: { id: true, code: true, name: true, unit: true, trimGroup: true } } },
+      orderBy: [{ trimItem: { trimGroup: 'asc' } }, { trimItem: { name: 'asc' } }],
     });
   },
   async replaceBom(
     tx: Tx,
     orderId: string,
-    lines: { trimItemId: string; colour: string | null; size: string | null; qtyPerGarment: string; wastagePct: string; remarks: string | null }[],
+    lines: {
+      trimItemId: string;
+      colour: string | null;
+      size: string | null;
+      qtyPerGarment: string;
+      wastagePct: string;
+      remarks: string | null;
+      country: string | null;
+      garDefine: string | null;
+      sizewise: boolean;
+      colourwise: boolean;
+      consumption: string;
+    }[],
   ) {
     await tx.trimsBomLine.deleteMany({ where: { orderId } });
     if (lines.length) {

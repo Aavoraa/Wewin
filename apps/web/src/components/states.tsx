@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
 import { errorMessage } from '@/lib/api';
 import { Button } from './ui/button';
+import { PrintButton } from './PrintButton';
 
 export function LoadingState({ label = 'Loading…' }: { label?: string }) {
   return (
@@ -42,11 +43,14 @@ export function PageHeader({
   description,
   actions,
   badge,
+  printable = true,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   badge?: ReactNode;
+  /** Every page offers Print (prints the page as shown); off only where a page has its own print layout. */
+  printable?: boolean;
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -54,9 +58,14 @@ export function PageHeader({
         <h1 className="flex items-center gap-2 text-lg font-semibold">
           {title} {badge}
         </h1>
-        {description ? <p className="mt-0.5 text-sm text-muted-foreground">{description}</p> : null}
+        {description ? <p className="no-print mt-0.5 text-sm text-muted-foreground">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions || printable ? (
+        <div className="no-print flex flex-wrap items-center gap-2">
+          {printable ? <PrintButton /> : null}
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

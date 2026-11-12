@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Paperclip, Trash2 } from 'lucide-react';
+import { FileText, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_BYTES, ATTACHMENT_OWNERS, type AttachmentOwner } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatDateTimeIst } from '@/lib/format';
 import { Button } from './ui/button';
+import { DeleteFileButton } from './DeleteFileButton';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface Attachment {
@@ -96,21 +97,7 @@ export function AttachmentsPanel({ type, id }: { type: AttachmentOwner; id: stri
               <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                 {size(a.sizeBytes)} · {a.uploadedBy} · {formatDateTimeIst(a.createdAt)}
                 {can('attachments.upload') ? (
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={`Remove ${a.originalName}`}
-                    onClick={async () => {
-                      try {
-                        await api.del(`/attachments/${a.id}`);
-                        void qc.invalidateQueries({ queryKey: key });
-                      } catch (e) {
-                        toast.error(errorMessage(e));
-                      }
-                    }}
-                  >
-                    <Trash2 />
-                  </Button>
+                  <DeleteFileButton endpoint={`/attachments/${a.id}`} name={a.originalName} onDeleted={() => void qc.invalidateQueries({ queryKey: key })} />
                 ) : null}
               </span>
             </div>

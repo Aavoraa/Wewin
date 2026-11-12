@@ -75,6 +75,18 @@ export const purchaseRepo = {
   ordersByIds(ids: string[], db: Db = prisma) {
     return db.order.findMany({ where: { id: { in: ids } }, select: { id: true, orderNo: true, status: true } });
   },
+  /** Accessories PO lines with their PO header (for receipts, returns and replacements — Q-072). */
+  accessoryLines(where: Prisma.PurchaseOrderLineWhereInput, db: Db = prisma) {
+    return db.purchaseOrderLine.findMany({
+      where: { ...where, po: { kind: 'ACCESSORY', ...(where.po as object | undefined) } },
+      orderBy: [{ po: { docNo: 'asc' } }, { lineNo: 'asc' }],
+      include: {
+        po: { select: { id: true, docNo: true, docDate: true, status: true, vendorId: true, orderId: true, vendor: { select: { name: true } }, order: { select: { orderNo: true, styleNo: true } } } },
+        item: { select: { id: true, code: true, name: true, unit: true, trimGroup: true } },
+        order: { select: { id: true, orderNo: true, styleNo: true } },
+      },
+    });
+  },
   pendingCount(db: Db = prisma) {
     return db.purchaseOrder.count({ where: { status: 'DRAFT' } });
   },

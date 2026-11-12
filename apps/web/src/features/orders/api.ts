@@ -25,7 +25,7 @@ export interface OrderDetail {
   garmentItem: { id: string; code: string; name: string };
   lines: { id: string; colour: string; size: string; qty: number; unitPrice: string | null }[];
   components: { id: string; code: string; name: string; panelItemId: string; pcsPerGarment: number; panelItem: { code: string; name: string } }[];
-  programs: { id: string; programNo: string; status: string; requiredKg: string; fabricItem: { code: string; name: string } }[];
+  programs: { id: string; programNo: string; status: string; requiredKg: string | null; colour: string | null; portion: string | null; fabricDescription: string | null; gsm: number | null; fabricItem: { code: string; name: string } | null }[];
   totals: { pcs: number; value: string; fullyPriced: boolean; byColour: Record<string, number>; bySize: Record<string, number> };
 }
 

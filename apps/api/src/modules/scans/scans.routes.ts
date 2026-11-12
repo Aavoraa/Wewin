@@ -1,7 +1,7 @@
 import { type RequestHandler, Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { SCAN_TARGETS, TARGET_SPECS, zAliasListQuery, zApplyScan, zIdParam, zReason, zReviewPatch, zScanListQuery } from '@wewin/shared';
+import { SCAN_TARGETS, TARGET_SPECS, zAliasListQuery, zApplyScan, zIdParam, zReason, zReviewPatch, zScanListQuery, zRef } from '@wewin/shared';
 import { requirePermission } from '../../core/auth/auth.middleware';
 import { AppError } from '../../core/errors/app-error';
 import { HANDLED, ListResult, handle } from '../../core/http';
@@ -29,7 +29,16 @@ scansRouter.get('/invoice-scans', view, handle({ query: zScanListQuery }, async 
   const r = await s.list(query);
   return new ListResult(r.rows, { page: r.p.page, pageSize: r.p.pageSize, total: r.total });
 }));
-scansRouter.post('/invoice-scans', work, singleFile, handle({ body: z.object({ target: z.enum(SCAN_TARGETS).optional() }) }, ({ req, body, user }) => s.upload(req.file, body.target ?? null, user), { status: 201 }));
+scansRouter.post(
+  '/invoice-scans',
+  work,
+  singleFile,
+  // orderId: a Programme Entry screenshot uploaded from an order's Fabric programs tab belongs to that order (Q-068).
+  handle({ body: z.object({ target: z.enum(SCAN_TARGETS).optional(), orderId: zRef().optional() }) }, ({ req, body, user }) => s.upload(req.file, body.target ?? null, user, body.orderId ?? null), { status: 201 }),
+);
+scansRouter.get('/orders/:id/programme-scans', view, handle(id, ({ params }) => s.programmeScans(params.id)));
+scansRouter.get('/programme-scans', view, handle({}, () => s.programmeScans(null)));
+scansRouter.post('/invoice-scans/:id/save-programmes', requirePermission('scans.apply', 'programs.edit'), handle(id, ({ params, user }) => s.saveProgrammes(params.id, user), { status: 201 }));
 scansRouter.get('/invoice-scans/:id', view, handle(id, ({ params }) => s.get(params.id)));
 scansRouter.get('/invoice-scans/:id/layout', view, handle(id, ({ params }) => s.layout(params.id)));
 scansRouter.get('/invoice-scans/:id/events', view, handle(id, ({ params }) => s.events(params.id)));
@@ -49,6 +58,11 @@ scansRouter.get('/invoice-scans/:id/file', view, handle(id, async ({ params, use
 }));
 scansRouter.patch('/invoice-scans/:id/review', work, handle({ params: zIdParam, body: zReviewPatch }, ({ params, body, user }) => s.patchReview(params.id, body, user)));
 scansRouter.post('/invoice-scans/:id/reprocess', work, handle({ params: zIdParam, body: z.object({ mode: z.enum(['auto', 'local', 'ai']).default('auto') }) }, ({ params, body, user }) => s.reprocess(params.id, body.mode, user)));
+scansRouter.delete('/invoice-scans/:id', work, handle(id, async ({ params, user, res }) => {
+  await s.remove(params.id, user);
+  res.status(204).end();
+  return HANDLED;
+}));
 scansRouter.post('/invoice-scans/:id/discard', work, handle({ params: zIdParam, body: zReason }, ({ params, body, user }) => s.discard(params.id, body.reason, user)));
 scansRouter.post('/invoice-scans/:id/apply', requirePermission('scans.apply'), handle({ params: zIdParam, body: zApplyScan }, ({ params, body, user }) => s.apply(params.id, body, user)));
 

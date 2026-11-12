@@ -1,11 +1,28 @@
 import { Router } from 'express';
-import { zProductionListQuery, zTrimsDocInput, zTrimsDocUpdate } from '@wewin/shared';
+import { z } from 'zod';
+import { zBoolString, zProductionListQuery, zRef, zTrimsDocInput, zTrimsDocUpdate } from '@wewin/shared';
 import { mountDocRoutes } from '../../core/doc-routes';
+import { requirePermission } from '../../core/auth/auth.middleware';
+import { handle } from '../../core/http';
 import { trimsService as s } from './trims.service';
 
-/** /api/v1/trims-docs (?type=RECEIPT|ISSUE) — the architecture's /trims-receipts and /trims-issues as one typed document. */
+/**
+ * /api/v1/trims-docs (?type=RECEIPT|ISSUE|RETURN|REPLACEMENT|TRANSFER) — the Accessories menu's
+ * Purchase Receipt, Purchase Return, Replacement Inward, Consumption Issue and Transfer Between Order (Q-072).
+ */
 export const trimsRouter = Router();
 const perms = { view: 'trims.view', create: 'trims.create', post: 'trims.post', cancel: 'trims.cancel' } as const;
+
+const zPoLinesQuery = z.object({
+  vendorId: zRef().optional(),
+  orderId: zRef().optional(),
+  poId: zRef().optional(),
+  status: z.enum(['POSTED', 'CLOSED', 'CANCELLED']).optional(),
+  openOnly: zBoolString.optional(),
+});
+trimsRouter.get('/trims-docs/po-lines', requirePermission('trims.view'), handle({ query: zPoLinesQuery }, ({ query }) => s.poLines(query)));
+trimsRouter.get('/trims-docs/replaceable', requirePermission('trims.view'), handle({ query: z.object({ vendorId: zRef().optional(), returnDocId: zRef().optional() }) }, ({ query }) => s.replaceable(query)));
+
 const svc = {
   list: (q: never) => s.list(q),
   get: (id: string) => s.get(id),

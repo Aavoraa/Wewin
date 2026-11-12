@@ -40,13 +40,13 @@ const columns: DTColumn<InwardDc>[] = [
   { key: 'status', header: 'Status', type: 'status', sort: 'status' },
 ];
 
-export function InwardDcsPage() {
+export function InwardDcsPage({ processId, embedded, direct }: { processId?: string; embedded?: boolean; direct?: boolean } = {}) {
   const { can } = useAuth();
   const fy = useFy();
   const [status, setStatus] = useState('');
   return (
     <div>
-      <PageHeader
+      {embedded ? null : <PageHeader
         title="Inward D.C.s"
         description="Processed fabric returned by job workers, roll by roll, linked to the outward D.C.s it came from."
         actions={
@@ -61,7 +61,7 @@ export function InwardDcsPage() {
             </>
           ) : null
         }
-      />
+      />}
       <DataTable<InwardDc>
         id="inward-dcs"
         endpoint="/inward-dcs"
@@ -69,7 +69,7 @@ export function InwardDcsPage() {
         exportTitle="Inward DCs"
         searchPlaceholder="Inward no., vendor D.C., vendor or roll…"
         rowHref={(r) => `/inward-dcs/${r.id}`}
-        filters={{ status: status || undefined, from: fy.start, to: fy.end }}
+        filters={{ status: status || undefined, processId, direct: direct ? 'true' : undefined, from: fy.start, to: fy.end }}
         filterBar={<StatusFilter value={status} onChange={setStatus} />}
       />
     </div>

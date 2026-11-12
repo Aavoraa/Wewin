@@ -7,6 +7,10 @@ import { useFy } from '@/lib/fy';
 import { cn } from '@/lib/utils';
 import { NAV } from '@/nav';
 import { LoadingState } from '../states';
+import { PrintButton } from '../PrintButton';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { type CompanyHeader } from '@/print/PrintLayout';
 import { Button } from '../ui/button';
 import { Select } from '../ui/input';
 import {
@@ -185,6 +189,26 @@ function HelpMenu() {
   );
 }
 
+/** Shown only on paper: company, the page being printed, who printed it and when. */
+function PrintHeader() {
+  const { user, can } = useAuth();
+  const company = useQuery({ queryKey: ['print', 'company'], queryFn: () => api.get<CompanyHeader>('/settings/company'), staleTime: 300_000, enabled: can('settings.view') });
+  const { pathname } = useLocation();
+  const page = NAV.flatMap((g) => g.items).filter((i) => pathname === i.to || pathname.startsWith(`${i.to}/`)).sort((a, b) => b.to.length - a.to.length)[0];
+  return (
+    <div className="mb-3 hidden border-b border-black pb-2 text-black print:flex print:items-end print:justify-between">
+      <div>
+        <div className="text-sm font-bold uppercase">{company.data?.tradeName ?? company.data?.legalName ?? 'Wewin Knit Fashions'}</div>
+        {page ? <div className="text-xs">{page.label}</div> : null}
+      </div>
+      <div className="text-right text-[10px]">
+        Printed {new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+        {user ? ` · ${user.fullName}` : ''}
+      </div>
+    </div>
+  );
+}
+
 /** App shell (A§9): module sidebar, top bar with brand, search, notifications, help and user menu. */
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -250,6 +274,7 @@ export function AppShell() {
           </Button>
           <TopbarExtras />
           <div className="ml-auto flex items-center gap-1.5">
+            <PrintButton compact />
             <NotificationBell />
             <HelpMenu />
             <VoiceAssistant />
@@ -298,7 +323,8 @@ export function AppShell() {
             </DropdownMenu>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-3 sm:p-5">
+        <main className="min-w-0 flex-1 p-3 sm:p-5 print:p-0">
+          <PrintHeader />
           <Suspense fallback={<LoadingState label="Loading…" />}>
             <Outlet />
           </Suspense>

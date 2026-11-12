@@ -182,7 +182,7 @@ async function validateInward(input: InInput, db: Tx | typeof prisma) {
     if (!o) throw new AppError('VALIDATION_ERROR', `Link ${n + 1}: unknown outward D.C.`, 400);
     if (o.status !== 'POSTED') throw new AppError('INVALID_STATE', `Outward D.C. ${o.docNo ?? '(draft)'} is ${o.status.toLowerCase()}; only open posted D.C.s can receive`, 409);
     if (o.vendorId !== input.vendorId) throw new AppError('VALIDATION_ERROR', `Outward D.C. ${o.docNo} was sent to a different vendor`, 400);
-    allowedOutputs.add(o.programProcess.outputItemId);
+    if (o.programProcess.outputItemId) allowedOutputs.add(o.programProcess.outputItemId);
     processes.add(o.processId);
     orders.add(o.orderId);
   });
@@ -280,6 +280,7 @@ export const jobworkService = {
       ...(q.overdue === 'true' ? { status: 'POSTED', expectedReturnDate: { lt: today } } : {}),
       ...(q.vendorId ? { vendorId: q.vendorId } : {}),
       ...(q.orderId ? { orderId: q.orderId } : {}),
+      ...(q.direct === 'true' ? { fromLocation: { kind: 'VENDOR' } } : {}),
       ...(q.processId ? { processId: q.processId } : {}),
       ...(q.approval === 'PENDING' ? { status: 'DRAFT', approvedAt: null } : q.approval === 'APPROVED' ? { approvedAt: { not: null } } : {}),
       ...(q.from || q.to ? { docDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
@@ -603,6 +604,8 @@ export const jobworkService = {
       ...(q.status ? { status: q.status } : {}),
       ...(q.vendorId ? { vendorId: q.vendorId } : {}),
       ...(q.billed === 'true' ? { billId: { not: null } } : q.billed === 'false' ? { billId: null } : {}),
+      ...(q.processId ? { links: { some: { outward: { processId: q.processId } } } } : {}),
+      ...(q.direct === 'true' ? { toLocation: { kind: 'VENDOR' } } : {}),
       ...(q.from || q.to ? { docDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
       ...(q.q
         ? {
@@ -879,7 +882,7 @@ export const jobworkService = {
     return rows
       .map((r) => ({
         id: r.id,
-        label: `${r.program.order.orderNo} · ${r.program.programNo} · ${r.sequence}. ${r.process.name} (input ${r.inputItem.name}) — allowed loss ${D(r.allowedLossPct.toString()).toString()}%`,
+        label: `${r.program.order.orderNo} · ${r.program.programNo} · ${r.sequence}. ${r.process.name} (input ${r.inputItem?.name ?? '—'}) — allowed loss ${D(r.allowedLossPct.toString()).toString()}%`,
         planned: r.plannedVendorId === vendorId,
         inputItemId: r.inputItemId,
       }))

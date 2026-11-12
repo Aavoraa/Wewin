@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { prisma } from '../../core/db';
 import { type Client, asUser } from '../../../test/helpers';
 import { type Masters, createOrder, masters } from '../../../test/fixtures';
 
@@ -65,5 +66,32 @@ describe('programme entry fields (Q-067)', () => {
 
   it('refuses a yarn mix that does not add up to 100%', async () => {
     ok(await owner.post('/api/v1/programs', { ...neckRib(), yarnMix: [{ counts: '30s', consPct: '90' }] }), 400);
+  });
+});
+
+describe('accessories requirement entry (Q-069)', () => {
+  it('saves Group / Country / Gar.Define / Sizewise / ColourWise / Excess % / Consumption, shows Qty Details, copies to another order', async () => {
+    const label = await prisma.item.update({ where: { id: m.items.label.id }, data: { trimGroup: 'LABEL' } });
+    const saved = await owner.put(`/api/v1/orders/${order.id}/trims-bom`, {
+      lines: [
+        { trimItemId: label.id, country: 'FRANCE', garDefine: 'TOP', sizewise: true, colourwise: false, qtyPerGarment: '1', wastagePct: '4', consumption: 'Flat' },
+        { trimItemId: m.items.polybag.id, sizewise: false, colourwise: false, qtyPerGarment: '1', wastagePct: '0' },
+      ],
+    });
+    ok(saved);
+    const sizeLabel = saved.body.data.find((l: { trimItemId: string }) => l.trimItemId === label.id);
+    expect(sizeLabel).toMatchObject({ country: 'FRANCE', garDefine: 'TOP', sizewise: true, colourwise: false, consumption: 'Flat', trimItem: { trimGroup: 'LABEL' } });
+    const orderDetail = (await owner.get(`/api/v1/orders/${order.id}`)).body.data as { sizes: string[]; lines: { size: string; qty: number }[] };
+    expect(sizeLabel.qtyDetails.map((d: { size: string }) => d.size).sort()).toEqual([...orderDetail.sizes].sort());
+    const firstSize = orderDetail.sizes[0]!;
+    const pcs = orderDetail.lines.filter((l) => l.size === firstSize).reduce((a, l) => a + l.qty, 0);
+    expect(sizeLabel.qtyDetails.find((d: { size: string }) => d.size === firstSize).required).toBe(String(Math.ceil(pcs * 1.04)));
+
+    const other = await createOrder(owner, m);
+    const copied = await owner.get(`/api/v1/orders/${other.id}/trims-bom/copy?fromOrderId=${order.id}`);
+    ok(copied);
+    expect(copied.body.data).toHaveLength(2);
+    expect(copied.body.data[0]).toMatchObject({ sizewise: expect.any(Boolean), consumption: expect.any(String) });
+    ok(await owner.get(`/api/v1/orders/${other.id}/trims-bom/copy?fromOrderId=${other.id}`), 400);
   });
 });

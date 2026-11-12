@@ -37,6 +37,7 @@ import { useDocumentHotkeys } from '@/lib/hotkeys';
 import { formatDate, formatDateTimeIst, formatInr } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DeleteFileButton } from '@/components/DeleteFileButton';
 import { EntityPicker } from '@/components/EntityPicker';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
@@ -597,6 +598,7 @@ export function ScanReviewPage() {
               <Button variant="ghost" className="text-destructive" onClick={() => setDiscarding(true)}>
                 <Ban /> Discard
               </Button>
+              <DeleteFileButton endpoint={`/invoice-scans/${scan.id}`} name={scan.originalName} label="Delete file" size="sm" onDeleted={() => navigate('/scans')} />
               <ReprocessButton scan={scan} onDone={(s) => qc.setQueryData(key, s)} />
             </>
           ) : null}

@@ -43,11 +43,19 @@ export const reportsService = {
     return REPORTS.filter((r) => user.permissions.has(r.permission)).map(({ run: _run, schema: _schema, ...r }) => r);
   },
 
+  /** Live run for the screen: at most LIVE_ROW_LIMIT rows (the rest via Excel export). */
   async run(key: string, raw: Record<string, unknown>, user: CurrentUser) {
+    const run = await this.runAll(key, raw, user);
+    const { rows } = run;
+    return { ...run, total: rows.length, truncated: rows.length > LIVE_ROW_LIMIT, rows: rows.slice(0, LIVE_ROW_LIMIT) };
+  },
+
+  /** Every row, untruncated — for callers that filter further (voice enquiries narrow by what was said). */
+  async runAll(key: string, raw: Record<string, unknown>, user: CurrentUser) {
     const r = requireReport(key, user);
     const p = params(r, raw);
     const rows = await r.run(p);
-    return { key, title: r.title, columns: r.columns, params: p, total: rows.length, truncated: rows.length > LIVE_ROW_LIMIT, rows: rows.slice(0, LIVE_ROW_LIMIT) };
+    return { key, title: r.title, columns: r.columns, params: p, rows };
   },
 
   /** Queue an Excel export (A8). The file is built by the report-export job and only its requester can download it. */

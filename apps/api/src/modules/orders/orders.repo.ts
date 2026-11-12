@@ -10,7 +10,7 @@ const detailInclude = {
   lines: { orderBy: [{ colour: 'asc' }, { size: 'asc' }] },
   components: { orderBy: { sortOrder: 'asc' }, include: { panelItem: { select: { id: true, code: true, name: true } } } },
   costing: { include: { lines: { orderBy: { sortOrder: 'asc' } } } },
-  programs: { select: { id: true, programNo: true, status: true, requiredKg: true, fabricItem: { select: { code: true, name: true } } } },
+  programs: { orderBy: { createdAt: 'asc' }, select: { id: true, programNo: true, status: true, requiredKg: true, colour: true, portion: true, fabricDescription: true, gsm: true, fabricItem: { select: { code: true, name: true } } } },
 } satisfies Prisma.OrderInclude;
 
 export type OrderDetail = Prisma.OrderGetPayload<{ include: typeof detailInclude }>;

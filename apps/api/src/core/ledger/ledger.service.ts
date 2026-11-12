@@ -64,7 +64,8 @@ export const ledger = {
    * Write mirror rows for every not-yet-reversed movement of a source (cancellation).
    * Refused with NEGATIVE_STOCK when the stock has already moved on (a dependent document exists).
    */
-  async reverse(tx: Tx, source: Omit<SourceDoc, 'docDate'> & { docDate?: string }, postedById: string): Promise<number> {
+  /** `opts.perOrder`: also keep each order's own stock non-negative (documents whose stock is held per order — Q-072). */
+  async reverse(tx: Tx, source: Omit<SourceDoc, 'docDate'> & { docDate?: string }, postedById: string, opts: { perOrder?: boolean } = {}): Promise<number> {
     const originals = await ledgerRepo.movementsToReverse(tx, source.type, source.id);
     if (originals.length === 0) return 0;
     const reversalOf = new Map<string, string>();
@@ -97,9 +98,23 @@ export const ledger = {
     const locIds = [...new Set(rows.flatMap((r) => [r.fromLocationId, r.toLocationId]))];
     const itemIds = [...new Set(rows.map((r) => r.itemId))];
     const [locs, items] = await Promise.all([ledgerRepo.locationsByIds(tx, locIds), ledgerRepo.itemsByIds(tx, itemIds)]);
-    await assertNoNegative(tx, rows, new Map(locs.map((l) => [l.id, l])), new Map(items.map((i) => [i.id, i])));
+    const locMap = new Map(locs.map((l) => [l.id, l]));
+    await assertNoNegative(tx, rows, locMap, new Map(items.map((i) => [i.id, i])));
+    if (opts.perOrder)
+      await this.assertOrderStock(tx, rows.filter((r) => locMap.get(r.fromLocationId)?.kind !== 'VIRTUAL').map((r) => ({ ...r, locationId: r.fromLocationId })), "the document's order");
     afterCommit(tx, () => jobs.refreshStockBalances());
     return rows.length;
+  },
+
+  /**
+   * After posting an order transfer: the from-order's own stock at the store must not go negative.
+   * The posting-wide check is per location only, and a transfer's out and in rows cancel there.
+   */
+  async assertOrderStock(tx: Tx, keys: { itemId: string; locationId: string; orderId: string | null; lot?: string | null; colour?: string | null; size?: string | null }[], label = 'the order') {
+    const bal = await ledgerRepo.orderBalances(tx, keys.map((k) => ({ itemId: k.itemId, locationId: k.locationId, orderId: k.orderId, lot: k.lot ?? '', colour: k.colour ?? '', size: k.size ?? '' })));
+    const short = bal.filter((b) => D(b.qty).isNegative());
+    if (short.length)
+      throw new AppError('NEGATIVE_STOCK', `Not enough stock held for ${label}`, 409, short.map((b) => ({ itemId: b.itemId, lot: b.lot || undefined, colour: b.colour || undefined, size: b.size || undefined, balanceAfter: b.qty })));
   },
 
   /** Live balances for specific keys (used by services for pending / availability checks). */
