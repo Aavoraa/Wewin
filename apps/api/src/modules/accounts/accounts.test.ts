@@ -165,7 +165,7 @@ describe('vendor bills — 3-way match, auto debit notes, no double billing', ()
     expect(b.figures).toMatchObject({ netPayable: '720.00', outstanding: '720.00' });
   });
 
-  it('no bill for a vendor whose certificate is expired or missing; the bill carries the certificate for printing (Q-073)', async () => {
+  it('no bill for a vendor whose certificate is expired or missing; the bill carries the certificate for printing (Q-074)', async () => {
     const knitter = m.vendors.knitter.id;
     const before = await prisma.vendor.findUniqueOrThrow({ where: { id: knitter }, select: { certificateNo: true, certificateExpiry: true } });
     const r = await knitRound('20', '19');
@@ -210,7 +210,7 @@ describe('vendor bills — 3-way match, auto debit notes, no double billing', ()
     }
   });
 
-  it('bill variance approval switched off: a bill outside tolerance posts with its variance recorded (Q-074)', async () => {
+  it('bill variance approval switched off: a bill outside tolerance posts with its variance recorded (Q-075)', async () => {
     const key = '/api/v1/settings/business/accounts.billVarianceApprovalRequired';
     const r = await knitRound('20', '19');
     ok(await owner.put(key, { value: false }));
@@ -350,7 +350,8 @@ describe('alerts — overdue D.C. and GST time limit (A6)', () => {
     const r = await knitRound('10', '9.8');
     const c = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '176.40', { docDate: todayIst(), vendorInvoiceDate: addDays(todayIst(), -40) }));
     ok(c, 201);
-    ok(await accountant.post(`/api/v1/vendor-bills/${c.body.data.id}/post`));
+    const posted = await accountant.post(`/api/v1/vendor-bills/${c.body.data.id}/post`);
+    ok(posted);
     await alertsService.checkPayments();
     const a = await prisma.alert.findFirstOrThrow({ where: { dedupeKey: `PAYMENT_DUE:${c.body.data.id}` } });
     expect(a).toMatchObject({ severity: 'CRITICAL', status: 'ACTIVE' });
@@ -358,7 +359,8 @@ describe('alerts — overdue D.C. and GST time limit (A6)', () => {
     const ack = await owner.post(`/api/v1/alerts/${a.id}/acknowledge`);
     ok(ack);
     expect(ack.body.data.status).toBe('ACKNOWLEDGED');
-    const list = await owner.get('/api/v1/alerts?status=OPEN&kind=PAYMENT_DUE');
+    // Search for this bill's alert: open alerts from earlier runs of a shared test database fill the first page.
+    const list = await owner.get(`/api/v1/alerts?status=OPEN&kind=PAYMENT_DUE&q=${encodeURIComponent(posted.body.data.docNo)}`);
     ok(list);
     expect(list.body.data.some((x: { id: string }) => x.id === a.id)).toBe(true);
   });

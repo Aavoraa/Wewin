@@ -318,6 +318,18 @@ interface AccessoryBalance {
   balance: string;
 }
 
+/** Yarn still to order for an order, from its approved fabric programmes (Q-073). */
+interface YarnBalance {
+  itemId: string | null;
+  item: { code: string; name: string } | null;
+  counts: string | null;
+  colour: string | null;
+  requiredKg: string;
+  poKg: string;
+  balance: string;
+  programs: string[];
+}
+
 export function PurchaseOrderPage() {
   const { id } = useParams();
   const [search] = useSearchParams();
@@ -425,6 +437,44 @@ export function PurchaseOrderPage() {
     queryFn: () => api.get<AccessoryBalance[]>(`/orders/${balOrder}/accessory-balance`),
     enabled: balKind === 'ACCESSORY' && !!balOrder,
   });
+
+  // Yarn PO (Q-073): the yarn the order's approved fabric programmes need, less what is already on yarn POs.
+  const balPurpose = form.watch('purpose');
+  const yarnBalance = useQuery({
+    queryKey: ['yarn-balance', balOrder],
+    queryFn: () => api.get<YarnBalance[]>(`/orders/${balOrder}/yarn-balance`),
+    enabled: balKind === 'YARN' && balPurpose === 'ORDER' && !!balOrder,
+  });
+  const yarnEditable = (po?.status ?? 'DRAFT') === 'DRAFT' && can('purchase.create');
+  /** Fill the PO lines with the yarn still to order; lines already entered are kept. `auto` = on picking the order. */
+  const loadYarn = (rows: YarnBalance[], orderId: string, auto: boolean) => {
+    const open = rows.filter((r) => Number(r.balance) > 0);
+    const unpicked = open.filter((r) => !r.itemId);
+    const kept = form.getValues('lines').filter((l) => l.itemId);
+    const have = new Set(kept.map((l) => `${l.itemId}|${l.colour.trim().toUpperCase()}`));
+    const add = open.filter((r): r is YarnBalance & { itemId: string } => !!r.itemId && !have.has(`${r.itemId}|${(r.colour ?? '').toUpperCase()}`));
+    if (!add.length) {
+      if (!auto)
+        toast.info(
+          rows.length
+            ? 'Nothing left to order — the yarn for this order is already on POs.'
+            : "No yarn requirement for this order — approve its fabric programme (with the yarn and process losses) first.",
+        );
+    } else {
+      form.setValue('lines', [...kept, ...add.map((r) => ({ ...blank(), itemId: r.itemId, orderId, colour: r.colour ?? '', counts: r.counts ?? '', qty: r.balance }))], { shouldDirty: true });
+      setLabels((x) => ({ ...x, ...Object.fromEntries(add.map((r) => [r.itemId, r.item?.name ?? r.itemId])) }));
+      toast.success(`${add.length} yarn line(s) filled from the fabric programme (${[...new Set(add.flatMap((r) => r.programs))].join(', ')}) — enter the mill and rate`);
+    }
+    if (unpicked.length) toast.warning(`Pick the yarn item in the programme's yarn mix for: ${unpicked.map((r) => r.counts ?? '?').join(', ')}`);
+  };
+  // Picking the order on a yarn PO with no lines yet fills them straight away.
+  const [autoFor, setAutoFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!yarnBalance.data || !balOrder || autoFor === balOrder || !yarnEditable) return;
+    setAutoFor(balOrder);
+    if (form.getValues('lines').every((l) => !l.itemId && !l.qty)) loadYarn(yarnBalance.data, balOrder, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yarnBalance.data, balOrder]);
 
   if (!d.isNew && d.query.isLoading) return <LoadingState />;
   if (!d.isNew && d.query.isError) return <ErrorState error={d.query.error} />;
@@ -611,6 +661,18 @@ export function PurchaseOrderPage() {
                   {kind === 'ACCESSORY' && v.orderId ? (
                     <Button type="button" size="sm" variant="outline" onClick={loadRequirement} title="Lines from the order's Accessories Requirement with a balance still to order">
                       <ListChecks /> Load BalanceReqQty
+                    </Button>
+                  ) : null}
+                  {kind === 'YARN' && purpose === 'ORDER' && v.orderId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!yarnBalance.data}
+                      onClick={() => yarnBalance.data && loadYarn(yarnBalance.data, v.orderId, false)}
+                      title="Lines from the order's approved fabric programmes: yarn still to order (required − already on POs)"
+                    >
+                      <ListChecks /> Load yarn requirement
                     </Button>
                   ) : null}
                   <Button type="button" size="sm" variant="outline" onClick={() => lines.append(blank())}>

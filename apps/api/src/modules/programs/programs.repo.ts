@@ -123,6 +123,23 @@ export const programsRepo = {
   itemsByIds(ids: string[], db: Db = prisma) {
     return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, type: true, code: true } });
   },
+  /** An order's approved programmes with what the yarn requirement needs (Q-073). */
+  approvedForYarn(orderId: string, db: Db = prisma) {
+    return db.fabricProgram.findMany({
+      where: { orderId, status: 'APPROVED' },
+      orderBy: { programNo: 'asc' },
+      select: {
+        programNo: true,
+        colour: true,
+        requiredKg: true,
+        yarnMix: true,
+        processes: { select: { sequence: true, allowedLossPct: true, inputItemId: true, inputItem: { select: { type: true } } } },
+      },
+    });
+  },
+  itemNames(ids: string[], db: Db = prisma) {
+    return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true, type: true } });
+  },
   /** Programme created from a scan (one per scan). */
   bySourceScan(scanId: string) {
     return prisma.fabricProgram.findUnique({ where: { sourceScanId: scanId }, select: { id: true, programNo: true, status: true } });

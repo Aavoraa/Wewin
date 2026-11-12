@@ -74,7 +74,7 @@ const vendorShape = z.object({
   bankName: optText(100),
   bankAccount: optText(40),
   bankIfsc: optText(20),
-  /** Vendor certificate (Q-073). Number and expiry are recorded together. */
+  /** Vendor certificate (Q-074). Number and expiry are recorded together. */
   certificateNo: optText(60),
   certificateExpiry: zOptional(zDate()),
   processIds: z.array(zRef()).default([]),
@@ -104,7 +104,7 @@ export const zVendorInput = vendorShape.superRefine(vendorRules);
 export const zVendorUpdate = vendorShape.extend({ version: z.number().int().min(1) }).superRefine(vendorRules);
 
 /**
- * The vendor form requires the certificate (Q-073). The API accepts vendors without one so imports,
+ * The vendor form requires the certificate (Q-074). The API accepts vendors without one so imports,
  * scans and vendors created before the certificate keep working; the vendor list flags them.
  */
 function certificateRequired(v: Pick<VendorShape, 'certificateNo' | 'certificateExpiry'>, ctx: z.RefinementCtx) {
@@ -117,7 +117,7 @@ export const zVendorFormUpdate = vendorShape
   .superRefine(vendorRules)
   .superRefine(certificateRequired);
 
-/** Days before expiry at which a certificate is shown as "expiring" (Q-073 default). */
+/** Days before expiry at which a certificate is shown as "expiring" (Q-074 default). */
 export const CERTIFICATE_EXPIRY_WARN_DAYS = 30;
 export type CertificateStatus = 'MISSING' | 'EXPIRED' | 'EXPIRING' | 'VALID';
 
@@ -214,7 +214,7 @@ export const zRoleInput = z.object({
 export const zRoleUpdate = zRoleInput.omit({ code: true }).extend({ version: z.number().int().min(1) });
 
 /**
- * Why a bill for this vendor may not be generated (Q-073), or null when it may.
+ * Why a bill for this vendor may not be generated (Q-074), or null when it may.
  * The certificate must exist and be in force on the bill date and on `today` — a back-dated bill
  * cannot get round an expired certificate.
  */

@@ -127,7 +127,7 @@ async function buildLines(input: Input, db: Tx | typeof prisma) {
   return { lines, match };
 }
 
-/** Q-073: no bill (save or post) for a vendor whose certificate is missing or expired, unless the setting is off. */
+/** Q-074: no bill (save or post) for a vendor whose certificate is missing or expired, unless the setting is off. */
 async function assertVendorCertificate(
   vendor: { name: string; certificateNo: string | null; certificateExpiry: Date | null },
   billDate: string,
@@ -158,7 +158,7 @@ async function header(input: Input, match: ReturnType<typeof matchBill>, db: Tx 
     variance: match.variance,
     withinTolerance: match.withinTolerance,
     // Any edit resets approval; a bill outside tolerance must be (re-)approved before posting,
-    // unless that approval is switched off (Q-074) — the variance is still recorded on the bill.
+    // unless that approval is switched off (Q-075) — the variance is still recorded on the bill.
     approvalStatus:
       match.withinTolerance || !(await settingsService.get('accounts.billVarianceApprovalRequired', db as Tx)) ? ('NOT_REQUIRED' as const) : ('PENDING' as const),
     approvedById: null,

@@ -1232,7 +1232,7 @@ export function ProgramPage() {
       </div>
 
       {/* Toolbar, as on the desktop screen */}
-      <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur lg:left-60">
+      <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur lg:left-[var(--sidebar-w,240px)]">
         <div className="flex flex-wrap items-end gap-1 px-4 py-1.5">
           <ToolButton
             icon={<FilePlus2 />}

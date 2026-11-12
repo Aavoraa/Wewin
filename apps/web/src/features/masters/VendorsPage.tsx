@@ -45,7 +45,7 @@ const columns: DTColumn<VendorRow>[] = [
   { key: 'certificateExpiry', header: 'Certificate expiry', cell: (r) => <CertificateExpiry expiry={r.certificateExpiry} /> },
 ];
 
-/** Expiry date with its state: expired, expiring within CERTIFICATE_EXPIRY_WARN_DAYS, or missing (Q-073). */
+/** Expiry date with its state: expired, expiring within CERTIFICATE_EXPIRY_WARN_DAYS, or missing (Q-074). */
 function CertificateExpiry({ expiry }: { expiry: string | null }) {
   const { status, daysLeft } = certificateStatus(expiry, todayIst());
   if (status === 'MISSING') return <Badge variant="danger">Missing</Badge>;

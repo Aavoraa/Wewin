@@ -3,7 +3,7 @@ import { withApprovalSwitches } from './approvals';
 
 const allOn = { 'programs.approvalRequired': true, 'qc.approvalRequired': true, 'trims.splApprovalRequired': true };
 
-describe('approval switches (Q-074)', () => {
+describe('approval switches (Q-075)', () => {
   it('changes nothing while every approval is required', () => {
     expect([...withApprovalSwitches(['qc.create', 'programs.edit', 'trims.create'], allOn)].sort()).toEqual(['programs.edit', 'qc.create', 'trims.create']);
   });

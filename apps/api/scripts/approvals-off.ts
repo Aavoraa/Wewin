@@ -1,5 +1,5 @@
 /**
- * Wewin's choice (Q-074): only purchase orders need owner approval. Switches every other approval off
+ * Wewin's choice (Q-075): only purchase orders need owner approval. Switches every other approval off
  * on the database in .env through the settings service (audited). Re-runnable.
  *
  *   pnpm --filter @wewin/api approvals:off

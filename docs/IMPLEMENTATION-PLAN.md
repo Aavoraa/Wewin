@@ -107,12 +107,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
-### 2026-11-12 — Only purchase orders need owner approval (Q-074)
+### 2026-11-12 — Only purchase orders need owner approval (Q-075)
 - New settings `programs.approvalRequired`, `qc.approvalRequired`, `trims.splApprovalRequired`, `accounts.billVarianceApprovalRequired` (default on). `withApprovalSwitches` (shared) grants the approve permission to whoever holds the create permission while a switch is off — applied to request permissions and `/auth/me`; changing a switch drops the permission cache. Bill variance off → NOT_REQUIRED and posting skips the approval check.
 - Script `approvals:off` (apps/api) switched Wewin's local database off for all six approvals; the live database needs the same (run it there, or Settings › Business settings).
 - Verified: Vitest (switch rules), Supertest (QC / programme / SPL permissions follow the switches at once, viewers never gain them, PO approval not switchable, bill outside tolerance posts when off).
 
-### 2026-11-12 — Vendor certificate number and expiry (Q-073)
+### 2026-11-12 — Vendor certificate number and expiry (Q-074)
 - Migration `20261112100000_vendor_certificate`: `vendors.certificate_no`, `vendors.certificate_expiry` (DATE), CHECK that both are set or both empty.
 - Shared: `certificateNo` / `certificateExpiry` on the vendor schema (pair rule), `zVendorFormInput` / `zVendorFormUpdate` (both required on the form), `certificateStatus()` with `CERTIFICATE_EXPIRY_WARN_DAYS` = 30.
 - Web: Vendors form has Certificate no. and Certificate expiry date (required); the list shows both with Missing / Expired / N days left.
@@ -123,6 +123,11 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 - Client asked that all prints use A4 sheets. Global `@page { size: A4 }` covers "Print on every page"; the three A5 print views (yarn receipt GRN, inward D.C. / GRN, payment voucher) now print on A4 portrait. This replaces the A5 sizes in ARCHITECTURE §11 / SCOPE §3.5. Label-roll prints (roll labels, bundle tickets, carton labels) keep their 100 × 60 mm label size.
 - Wide line grids and registers (`print-fit`) shrink to the A4 width on paper instead of being cut off at the right edge.
 - Verified: lint, typecheck, tests pass; `@page size: a4` and the `print-fit` rules load in the running web app. Not yet checked on a logged-in print preview.
+
+### 2026-11-12 — Yarn PO lines filled from the order (Q-073)
+- `GET /orders/:id/yarn-balance` (`purchase.view`): yarn the order's approved fabric programmes need (first-process input kg, losses added back, split by yarn mix %), less yarn PO lines not cancelled. Shared `programYarnNeed`.
+- Yarn PO form: picking the header order fills empty lines (yarn, order, balance kg); "Load yarn requirement" button re-loads.
+- Verified: shared `orders.test.ts` (+3: no mix, mix split, fabric-first / no kg), API `purchase.test.ts` (+1: draft programme ignored, PO reduces balance, cancelled PO restores it, permission denied); in the browser, picking WW-2627-001 filled 30s Combed Cotton Yarn, 470.544 kg.
 
 ### 2026-11-11 — Desktop Accessories menu (Q-072) and Print on every page
 - Accessories sidebar group: Purchase Order (accessories POs with **BalanceReqQty** and "Load BalanceReqQty"), Purchase Receipt (GRN against approved PO lines, `TRR`), Purchase Return (`APR`), Purchase Replacement Inward (`ARI`), Purchase Order Cancel / Close, Transfer Between Order (`ATR`), SPL.Request (`SPR`, approval `trims.spl.approve`). Migration `20261111200000_accessories_purchase_chain` (trims doc types RETURN / REPLACEMENT / TRANSFER, PO / return line links, colour / size / reason, D.C. no. / date, spl_requests).

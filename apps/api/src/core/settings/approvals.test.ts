@@ -18,7 +18,7 @@ async function withSetting(key: string, value: boolean, fn: () => Promise<void>)
   }
 }
 
-describe('approval switches (Q-074)', () => {
+describe('approval switches (Q-075)', () => {
   it('QC: while required only qc.approve may approve; switched off, whoever enters checks approves them', async () => {
     const inspector = await asUser(['qc.view', 'qc.create']);
     expect((await inspector.post(`/api/v1/qc/${MISSING_ID}/approve`, { note: 'Checked' })).status).toBe(403);

@@ -1,33 +1,80 @@
 @import 'tailwindcss';
 
-/* Design tokens (shadcn/ui convention). Minimal, enterprise palette: navy primary, neutral surfaces. */
+/*
+ * The app has one (light) theme. Tailwind's `dark:` variant would otherwise follow the OS dark-mode
+ * setting and darken only the backgrounds that carry a `dark:` class, leaving dark text on dark
+ * surfaces. Tie it to an explicit `.dark` class instead (not set anywhere today).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens (shadcn/ui convention), in Wewin Knit Fashions' brand (wewinknitfashions.com):
+   muted olive-green primary (the brand green, toned down), charcoal sidebar, soft green-grey surfaces. Tailwind's blue / sky / slate scales are
+   remapped to the brand greens and charcoal so every screen follows the brand without per-screen edits. */
 @theme {
-  --color-background: #f6f7f9;
-  --color-foreground: #0f172a;
+  --color-background: #f4f6f2;
+  --color-foreground: #1b201d;
   --color-card: #ffffff;
-  --color-card-foreground: #0f172a;
-  --color-muted: #f1f5f9;
-  --color-muted-foreground: #64748b;
-  --color-border: #e2e8f0;
-  --color-input: #cbd5e1;
-  --color-ring: #2563eb;
-  --color-primary: #1e3a5f;
+  --color-card-foreground: #1b201d;
+  --color-muted: #eef2ec;
+  --color-muted-foreground: #5f6b5c;
+  --color-border: #dfe6dc;
+  --color-input: #c8d0c4;
+  --color-ring: #6d8c52;
+  --color-primary: #3e6328;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #eef2f7;
-  --color-secondary-foreground: #1e293b;
-  --color-accent: #e8eef7;
-  --color-accent-foreground: #0f172a;
-  --color-destructive: #b91c1c;
+  --color-secondary: #f1f4ee;
+  --color-secondary-foreground: #1b201d;
+  --color-accent: #eef2ea;
+  --color-accent-foreground: #1b201d;
+  --color-destructive: #b42318;
   --color-destructive-foreground: #ffffff;
-  --color-success: #1d4ed8;
-  --color-warning: #0369a1;
-  --color-sidebar: #13243b;
-  --color-sidebar-foreground: #cbd5e1;
-  --color-sidebar-active: #22395a;
+  --color-success: #3e6328;
+  --color-warning: #a15c07;
+  --color-brand: #6f9348;
+  --color-sidebar: #1b201d;
+  --color-sidebar-foreground: #c9d1c6;
+  --color-sidebar-active: #283029;
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Poppins', 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-lg: 10px;
+
+  /* Brand greens in place of blue and sky */
+  --color-blue-50: #f5f7f2;
+  --color-blue-100: #e9efe3;
+  --color-blue-200: #d5dfca;
+  --color-blue-300: #b7c7a6;
+  --color-blue-400: #93a97c;
+  --color-blue-500: #728c5a;
+  --color-blue-600: #5a7446;
+  --color-blue-700: #475c38;
+  --color-blue-800: #3a4b2e;
+  --color-blue-900: #303e27;
+  --color-blue-950: #192114;
+  --color-sky-50: #f5f7f2;
+  --color-sky-100: #e9efe3;
+  --color-sky-200: #d5dfca;
+  --color-sky-300: #b7c7a6;
+  --color-sky-400: #93a97c;
+  --color-sky-500: #728c5a;
+  --color-sky-600: #5a7446;
+  --color-sky-700: #475c38;
+  --color-sky-800: #3a4b2e;
+  --color-sky-900: #303e27;
+  --color-sky-950: #192114;
+  /* Charcoal neutrals (the website's footer tone) in place of slate */
+  --color-slate-50: #f6f7f5;
+  --color-slate-100: #eef1ec;
+  --color-slate-200: #e0e5dd;
+  --color-slate-300: #c8d0c4;
+  --color-slate-400: #96a191;
+  --color-slate-500: #6b7768;
+  --color-slate-600: #525d50;
+  --color-slate-700: #3f483e;
+  --color-slate-800: #2a312b;
+  --color-slate-900: #1b201d;
+  --color-slate-950: #111512;
 }
 
 @layer base {
@@ -36,10 +83,20 @@
   #root {
     height: 100%;
   }
+  html {
+    /* Native controls (date pickers, selects, scrollbars) stay light with the app theme. */
+    color-scheme: light;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
     font-size: 14px;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
   * {
     @apply border-border;
@@ -110,4 +167,20 @@
 .print-label {
   width: 100mm;
   min-height: 60mm;
+}
+
+/* Thin, quiet scrollbar for the sidebar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #3a443c transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #3a443c;
+  border-radius: 999px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }

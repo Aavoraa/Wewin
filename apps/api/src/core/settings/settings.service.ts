@@ -79,7 +79,7 @@ export const settingsService = {
         }),
       { isolation: 'ReadCommitted' },
     );
-    // An approval switch changes who may approve (Q-074): drop cached permissions so it applies at once.
+    // An approval switch changes who may approve (Q-075): drop cached permissions so it applies at once.
     if (APPROVAL_SWITCHES.some((s) => s.setting === key)) onApprovalSwitchChange?.();
     return saved;
   },
@@ -110,7 +110,7 @@ export function onApprovalSwitchChanged(fn: () => void): void {
   onApprovalSwitchChange = fn;
 }
 
-/** Whether each switchable approval is required (Q-074). */
+/** Whether each switchable approval is required (Q-075). */
 export async function approvalSwitches(tx?: Tx): Promise<Record<ApprovalSwitchSetting, boolean>> {
   const all = await settingsService.getAll(tx);
   return Object.fromEntries(APPROVAL_SWITCHES.map((s) => [s.setting, all[s.setting]])) as Record<ApprovalSwitchSetting, boolean>;

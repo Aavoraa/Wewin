@@ -12,6 +12,7 @@ import { assertDraft, assertPosted, dateOnly, toDbDate } from '../../core/docume
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { assertPermission } from '../../core/auth/auth.middleware';
 import { mastersService } from '../masters/masters.service';
+import { programsService } from '../programs/programs.service';
 import { trimsService } from '../trims/trims.service';
 import { type PoDetail, type PoLineRow, purchaseRepo as repo } from './purchase.repo';
 
@@ -322,6 +323,23 @@ export const purchaseService = {
   },
 
   pendingCount: () => repo.pendingCount(),
+
+  /**
+   * Yarn still to order for an order (Q-073): the yarn its approved fabric programmes need, less what is
+   * already on yarn POs that are not cancelled. A requirement row without a yarn colour counts PO lines
+   * of any colour for that yarn.
+   */
+  async yarnBalance(orderId: string) {
+    const [req, lines] = await Promise.all([programsService.yarnRequirement(orderId), repo.yarnLinesForOrder(orderId)]);
+    const same = (a: string | null, b: string | null) => (a ?? '').trim().toUpperCase() === (b ?? '').trim().toUpperCase();
+    return req.map((r) => {
+      const poKg = r.itemId
+        ? lines.filter((l) => l.itemId === r.itemId && (!r.colour || same(l.colour, r.colour))).reduce((a, l) => a.plus(D(l.qty.toString())), D(0))
+        : D(0);
+      const balance = D(r.requiredKg).minus(poKg);
+      return { ...r, poKg: poKg.toFixed(3), balance: (balance.isNegative() ? D(0) : balance).toFixed(3) };
+    });
+  },
 
   /** Accessories PO lines (with PO header) for the trims module (Q-072). */
   accessoryLines: (where: Prisma.PurchaseOrderLineWhereInput, db: Tx | typeof prisma = prisma) => repo.accessoryLines(where, db),

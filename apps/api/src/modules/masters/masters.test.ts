@@ -50,7 +50,7 @@ describe('vendors', () => {
     expect((await owner.post('/api/v1/vendors', body)).status).toBe(409);
   });
 
-  it('stores the certificate number and expiry date, and refuses one without the other (Q-073)', async () => {
+  it('stores the certificate number and expiry date, and refuses one without the other (Q-074)', async () => {
     const res = await owner.post('/api/v1/vendors', vendorBody({ certificateNo: 'GOTS-2026-118', certificateExpiry: '2027-03-31' }));
     expect(res.status).toBe(201);
     const got = await owner.get(`/api/v1/vendors/${res.body.data.id}`);

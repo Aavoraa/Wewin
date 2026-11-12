@@ -3,7 +3,7 @@ import { CERTIFICATE_EXPIRY_WARN_DAYS, billCertificateProblem, certificateStatus
 
 const base = { code: 'KNT-01', name: 'Sri Murugan Knitting' };
 
-describe('vendor certificate (Q-073)', () => {
+describe('vendor certificate (Q-074)', () => {
   it('API schema: certificate is optional, but number and expiry go together', () => {
     expect(zVendorInput.safeParse(base).success).toBe(true);
     const noExpiry = zVendorInput.safeParse({ ...base, certificateNo: 'OEKO-123' });
@@ -35,7 +35,7 @@ describe('vendor certificate (Q-073)', () => {
   });
 });
 
-describe('billing against the vendor certificate (Q-073)', () => {
+describe('billing against the vendor certificate (Q-074)', () => {
   const v = { name: 'Sri Murugan Knitting', certificateNo: 'GOTS-118', certificateExpiry: '2026-11-30' };
   const today = '2026-11-12';
 

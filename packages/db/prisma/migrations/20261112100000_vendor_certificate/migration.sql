@@ -1,4 +1,4 @@
--- Vendor certificate number and expiry date (Q-073).
+-- Vendor certificate number and expiry date (Q-074).
 -- AlterTable
 ALTER TABLE "vendors" ADD COLUMN "certificate_no" TEXT,
 ADD COLUMN "certificate_expiry" DATE;

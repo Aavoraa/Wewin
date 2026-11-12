@@ -582,7 +582,7 @@ export function ScanReviewPage() {
       </div>
 
       {/* Action bar */}
-      <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur lg:left-60">
+      <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur lg:left-[var(--sidebar-w,240px)]">
         <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-2.5">
           <span className="mr-auto text-xs text-muted-foreground">
             {scan.applied

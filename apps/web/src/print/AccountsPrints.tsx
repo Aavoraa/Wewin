@@ -183,7 +183,7 @@ export function PaymentVoucherPrint({ id }: { id: string }) {
 
 const SOURCE: Record<string, string> = { INWARD_DC: 'Inward D.C.', PANEL_IN: 'Panel inward' };
 
-/** Vendor bill (A4): vendor with certificate no. and expiry (Q-073), invoice, D.C.s billed, GST, debit notes, net payable. */
+/** Vendor bill (A4): vendor with certificate no. and expiry (Q-074), invoice, D.C.s billed, GST, debit notes, net payable. */
 export function VendorBillPrint({ id }: { id: string }) {
   const company = useCompany();
   const q = useQuery({ queryKey: ['print', 'vendor-bill', id], queryFn: () => api.get<VendorBill>(`/vendor-bills/${id}`) });

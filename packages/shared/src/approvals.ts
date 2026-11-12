@@ -1,7 +1,7 @@
 import { type PermissionKey } from './permissions';
 
 /**
- * Approvals Wewin can switch off (Q-074). While a switch is off, whoever holds the `from` permission
+ * Approvals Wewin can switch off (Q-075). While a switch is off, whoever holds the `from` permission
  * (the one that creates the document) also holds the `approve` permission, so they finalise their
  * own document — no separate approver. Purchase order approval is not switchable.
  */

@@ -36,7 +36,7 @@ export async function seedDemo(prisma: PrismaClient): Promise<void> {
     proc[p.code] = (await prisma.process.upsert({ where: { code: p.code }, create: p, update: {} })).id;
   }
 
-  // Demo certificates (Q-073): most valid, KNT-KPK expiring soon, EMB-STE already expired (cannot be billed).
+  // Demo certificates (Q-074): most valid, KNT-KPK expiring soon, EMB-STE already expired (cannot be billed).
   const vendors: { code: string; name: string; city: string; procs: string[]; creditDays: number; cert: [string, string] }[] = [
     { code: 'KNT-SMK', name: 'Sri Murugan Knitting', city: 'Tiruppur', procs: ['KNITTING'], creditDays: 30, cert: ['GOTS-SMK-2026-118', '2027-06-30'] },
     { code: 'KNT-AVK', name: 'Annai Velankanni Knits', city: 'Tiruppur', procs: ['KNITTING'], creditDays: 30, cert: ['OEKO-TEX-AVK-26-4471', '2027-03-31'] },

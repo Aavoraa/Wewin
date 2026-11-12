@@ -29,7 +29,7 @@ async function loadAccess(userId: string): Promise<Omit<CurrentUser, 'sessionId'
           username: u.username,
           fullName: u.fullName,
           roles: u.roles.filter((r) => r.role.isActive).map((r) => r.role.code),
-          // Approvals switched off (Q-074) grant the approve permission to whoever creates the document.
+          // Approvals switched off (Q-075) grant the approve permission to whoever creates the document.
           permissions: withApprovalSwitches(
             u.roles.filter((r) => r.role.isActive).flatMap((r) => r.role.permissions.map((p) => p.permissionKey)),
             await approvalSwitches(),

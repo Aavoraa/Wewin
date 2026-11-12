@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { inFrame } from '@/lib/view-mode';
 import { LoadingState } from '@/components/states';
 import { VoiceAssistant } from '@/components/VoiceAssistant';
-import { WewinMark } from '@/components/layout/TopbarExtras';
+import { WewinBrand, WewinMark } from '@/components/Brand';
 
 const TABS = [
   { to: '/m', label: 'Home', icon: Home, end: true },
@@ -52,8 +52,8 @@ export function MobileShell() {
       <header className="no-print sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-white px-3 pt-[env(safe-area-inset-top)]">
         {isTab ? (
           <span className="flex items-center gap-2">
-            <WewinMark className="h-5 w-7" />
-            <span className="text-base font-bold tracking-[0.06em] text-slate-900">{pathname === '/m' ? 'WEWIN' : TITLES[pathname]}</span>
+            {pathname === '/m' ? <WewinBrand tight className="h-6" /> : <WewinMark className="h-5" />}
+            {pathname === '/m' ? null : <span className="text-base font-bold text-slate-900">{TITLES[pathname]}</span>}
           </span>
         ) : (
           <button className="-ml-1 flex items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-slate-700 active:bg-slate-100" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/m'))}>
