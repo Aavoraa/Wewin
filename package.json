@@ -23,7 +23,8 @@
     "sample-data": "pnpm --filter @wewin/api sample-data",
     "sample-data:more": "pnpm --filter @wewin/api sample-data:more",
     "sample-data:orders": "pnpm --filter @wewin/api sample-data:orders",
-    "sample-data:live": "pnpm --filter @wewin/api sample-data:live"
+    "sample-data:live": "pnpm --filter @wewin/api sample-data:live",
+    "sample-data:modules": "pnpm --filter @wewin/api sample-data:modules"
   },
   "devDependencies": {
     "turbo": "^2.5.6",

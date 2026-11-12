@@ -17,7 +17,8 @@
     "sample-docs": "tsx --env-file=../../.env scripts/make-sample-po-dcs.ts",
     "sample-data:more": "tsx --env-file=../../.env scripts/sample-data-more.ts",
     "sample-data:orders": "tsx --env-file=../../.env scripts/sample-data-orders.ts",
-    "sample-data:live": "tsx --env-file=../../.env --env-file=../../.env.live.local scripts/seed-demo-masters.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data-more.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data-orders.ts"
+    "sample-data:live": "tsx --env-file=../../.env --env-file=../../.env.live.local scripts/seed-demo-masters.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data-more.ts && tsx --env-file=../../.env --env-file=../../.env.live.local scripts/sample-data-orders.ts",
+    "sample-data:modules": "tsx --env-file=../../.env scripts/sample-data-modules.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.130.0",
