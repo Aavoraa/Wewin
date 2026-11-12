@@ -30,6 +30,7 @@ interface StockDocPrintData {
     certificateExpiry: string | null;
   } | null;
   order: { orderNo: string; styleNo: string } | null;
+  toOrder: { orderNo: string; styleNo: string } | null;
   lines: {
     id: string;
     colour: string;
@@ -49,7 +50,8 @@ interface StockDocPrintData {
 
 /**
  * Yarn / fabric delivery to others and rejection entries, printed as a three-copy delivery challan
- * (original / duplicate / triplicate, A4) like the outward D.C. (Q-077).
+ * (original / duplicate / triplicate, A4) like the outward D.C. (Q-077). Inward from others and
+ * transfers between orders print one copy, titled with the document name.
  */
 export function StockDocPrint({ id }: { id: string }) {
   const company = useCompany();
@@ -58,17 +60,23 @@ export function StockDocPrint({ id }: { id: string }) {
   const d = q.data;
   const v = d.vendor;
   const rejection = d.kind === 'REJECTION';
+  const inward = d.kind === 'OTHER_INWARD';
+  const transfer = d.kind === 'ORDER_TRANSFER';
+  const challan = d.kind === 'OTHER_DELIVERY' || d.kind === 'REJECTION';
   const signatory = `For ${company.data?.tradeName ?? company.data?.legalName ?? ''} — Authorised signatory`;
-  return (
-    <PrintLayout title={`${STOCK_DOC_NAMES[d.kind]} ${d.docNo ?? ''}`}>
-      <ChallanCopies>
-        {() => (
+  const content = (
           <>
             <div className="flex items-start justify-between border-b-2 border-black pb-2">
               <CompanyBlock c={company.data} />
               <div className="text-right">
-                <div className="text-base font-bold">DELIVERY CHALLAN</div>
-                <div className="text-[10px]">{STOCK_DOC_NAMES[d.kind]}</div>
+                {challan ? (
+                  <>
+                    <div className="text-base font-bold">DELIVERY CHALLAN</div>
+                    <div className="text-[10px]">{STOCK_DOC_NAMES[d.kind]}</div>
+                  </>
+                ) : (
+                  <div className="text-base font-bold uppercase">{STOCK_DOC_NAMES[d.kind]}</div>
+                )}
                 <div className="mt-1 font-mono text-sm">{d.docNo ?? 'DRAFT'}</div>
                 <div>Date: {formatDate(d.docDate)}</div>
                 {d.status === 'CANCELLED' ? <div className="font-bold text-red-700">CANCELLED</div> : null}
@@ -76,7 +84,16 @@ export function StockDocPrint({ id }: { id: string }) {
             </div>
             <div className="my-2 grid grid-cols-2 gap-3 border-b border-black pb-2">
               <div>
-                <div className="font-semibold">Consignee</div>
+                {transfer ? (
+                  <>
+                    <div className="font-semibold">From order</div>
+                    <div className="font-semibold">{d.order ? `${d.order.orderNo} · ${d.order.styleNo}` : '—'}</div>
+                    <div className="mt-1 font-semibold">To order</div>
+                    <div className="font-semibold">{d.toOrder ? `${d.toOrder.orderNo} · ${d.toOrder.styleNo}` : '—'}</div>
+                  </>
+                ) : (
+                  <>
+                <div className="font-semibold">{inward ? 'Received from' : 'Consignee'}</div>
                 {v ? (
                   <>
                     <div className="font-semibold">{v.name}</div>
@@ -90,17 +107,19 @@ export function StockDocPrint({ id }: { id: string }) {
                 ) : (
                   <div className="font-semibold">{d.partyName ?? '—'}</div>
                 )}
+                  </>
+                )}
               </div>
               <div>
                 {d.purpose ? <div>Purpose: {d.purpose}</div> : null}
-                {d.order ? (
+                {d.order && !transfer ? (
                   <div>
                     Order: {d.order.orderNo} · {d.order.styleNo}
                   </div>
                 ) : null}
                 {d.fromProcess ? <div>From process: {d.fromProcess}</div> : null}
                 {d.deliveredBy ? <div>Delivered by: {d.deliveredBy}</div> : null}
-                <div>Vehicle no.: {d.vehicleNo ?? '—'}</div>
+                {challan || d.vehicleNo ? <div>Vehicle no.: {d.vehicleNo ?? '—'}</div> : null}
               </div>
             </div>
             <table className="w-full border-collapse">
@@ -152,12 +171,10 @@ export function StockDocPrint({ id }: { id: string }) {
                 </tr>
               </tfoot>
             </table>
-            <p className="mt-2 text-[10px]">Value stated for the purpose of the delivery challan only.</p>
+            {challan ? <p className="mt-2 text-[10px]">Value stated for the purpose of the delivery challan only.</p> : null}
             {d.remarks ? <div className="mt-1">Remarks: {d.remarks}</div> : null}
-            <Signatures labels={['Prepared by', 'Receiver signature & seal', signatory]} />
+            <Signatures labels={challan ? ['Prepared by', 'Receiver signature & seal', signatory] : [inward ? 'Received by' : 'Prepared by', 'Checked by', signatory]} />
           </>
-        )}
-      </ChallanCopies>
-    </PrintLayout>
   );
+  return <PrintLayout title={`${STOCK_DOC_NAMES[d.kind]} ${d.docNo ?? ''}`}>{challan ? <ChallanCopies>{() => content}</ChallanCopies> : content}</PrintLayout>;
 }

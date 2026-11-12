@@ -1,5 +1,5 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 import { type AttachmentOwner } from '@wewin/shared';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { type VoiceForm, useRegisterVoiceForm, useVoice, useVoiceConfig } from '@/lib/voice';
@@ -38,6 +38,7 @@ export interface DocumentFormProps {
   onCancel?: (reason: string) => Promise<unknown>;
   onClose?: (reason: string) => Promise<unknown>;
   onDelete?: () => Promise<unknown>;
+  /** The document's printed (bill) format; drafts print it too, marked DRAFT. */
   printHref?: string;
   postWarning?: ReactNode;
   closeDescription?: ReactNode;
@@ -94,6 +95,28 @@ export function DocumentForm(p: DocumentFormProps) {
   const postLabel = p.postLabel ?? 'Post';
   const cancelOk = (p.cancelStatuses ?? ['POSTED']).includes(p.status);
   const closeOk = (p.closeStatuses ?? ['POSTED']).includes(p.status);
+  const navigate = useNavigate();
+  // Print on a document not saved yet: save the draft, then open its bill layout once it has one.
+  const [printAfterSave, setPrintAfterSave] = useState(false);
+  useEffect(() => {
+    if (!printAfterSave || !p.printHref) return;
+    setPrintAfterSave(false);
+    if (!window.open(p.printHref, '_blank')) navigate(p.printHref);
+  }, [printAfterSave, p.printHref, navigate]);
+  // Ctrl+P on a document opens its bill layout instead of printing the screen.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        const el = document.querySelector<HTMLElement>('[data-doc-print]');
+        if (el) {
+          e.preventDefault();
+          el.click();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   async function run(fn: (() => Promise<unknown>) | undefined, ok: string) {
     if (!fn) return;
@@ -181,14 +204,27 @@ export function DocumentForm(p: DocumentFormProps) {
               <Trash2 /> Delete draft
             </Button>
           ) : null}
-          {p.printHref && !isDraft ? (
+          {p.printHref ? (
             <Button variant="outline" asChild>
-              <Link to={p.printHref} target="_blank">
+              <Link to={p.printHref} target="_blank" data-doc-print="">
                 <Printer /> Print
               </Link>
             </Button>
+          ) : editable && p.onSave ? (
+            // Not saved yet: save the draft first, then its bill layout opens (no screen printing).
+            <Button
+              variant="outline"
+              data-doc-print=""
+              title="Saves the draft and opens its print"
+              onClick={() =>
+                void run(p.onSave, 'Saved')
+                  .then(() => setPrintAfterSave(true))
+                  .catch(() => undefined)
+              }
+            >
+              <Printer /> Print
+            </Button>
           ) : (
-            // Drafts and documents without a printed format: print the screen as shown.
             <Button variant="outline" onClick={() => window.print()}>
               <Printer /> Print
             </Button>

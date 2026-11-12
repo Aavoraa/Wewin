@@ -109,6 +109,7 @@ export function ShipmentPage() {
       voice={voice}
       title="Shipment"
       docNo={doc?.docNo}
+      printHref={doc ? `/print/shipment/${doc.id}` : undefined}
       status={status}
       postedAt={doc?.postedAt}
       backHref="/shipments"
@@ -339,6 +340,7 @@ export function BuyerReceiptPage() {
       voice={voice}
       title="Buyer receipt"
       docNo={doc?.docNo}
+      printHref={doc ? `/print/buyer-receipt/${doc.id}` : undefined}
       status={status}
       postedAt={doc?.postedAt}
       backHref="/buyer-receipts"

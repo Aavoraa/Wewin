@@ -22,6 +22,9 @@ describe('orders', () => {
     expect(res.body.data.totals).toMatchObject({ pcs: 1500, value: '4875.00', fullyPriced: true, byColour: { NAVY: 500 } });
     const lines = await owner.get(`/api/v1/orders/${res.body.data.id}/lines`);
     expect(lines.body.data.totals.bySize['2Y']).toBe(300);
+    // The order prints in bill format: the buyer's address and terms come with the order.
+    const got = (await owner.get(`/api/v1/orders/${res.body.data.id}`)).body.data;
+    expect(Object.keys(got.buyer)).toEqual(expect.arrayContaining(['addressLine1', 'city', 'country', 'paymentTerms', 'contactPerson']));
   });
 
   it('validates the style item type and matrix', async () => {

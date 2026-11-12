@@ -195,6 +195,7 @@ export function OrderPage() {
       docNo={o?.orderNo}
       status={status}
       backHref="/orders"
+      printHref={o ? `/print/order/${o.id}` : undefined}
       editable={editable}
       canPost={!isNew && can('orders.confirm')}
       postLabel="Confirm"

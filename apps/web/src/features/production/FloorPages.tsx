@@ -51,7 +51,7 @@ function useSave<T extends object>(form: { handleSubmit: (ok: (v: T) => Promise<
 }
 
 // ═════════ Sewing issue (scan bundles) ═════════
-interface SewingIssue {
+export interface SewingIssue {
   id: string;
   docNo: string | null;
   docDate: string;
@@ -135,6 +135,7 @@ export function SewingIssuePage() {
     <DocumentForm
       voice={voice}
       title="Sewing issue"
+      printHref={doc ? `/print/sewing-issue/${doc.id}` : undefined}
       docNo={doc?.docNo}
       status={status}
       postedAt={doc?.postedAt}
@@ -207,7 +208,7 @@ export function SewingIssuePage() {
 }
 
 // ═════════ Sewing output (daily line entry, phone layout) ═════════
-interface SewingEntry {
+export interface SewingEntry {
   id: string;
   docNo: string | null;
   docDate: string;
@@ -335,6 +336,7 @@ export function SewingEntryPage() {
     <DocumentForm
       voice={voice}
       title="Sewing output"
+      printHref={doc ? `/print/sewing-output/${doc.id}` : undefined}
       docNo={doc?.docNo}
       status={status}
       postedAt={doc?.postedAt}
@@ -387,7 +389,7 @@ export function SewingEntryPage() {
 }
 
 // ═════════ Cartons ═════════
-interface Carton {
+export interface Carton {
   id: string;
   docNo: string | null;
   docDate: string;
@@ -472,6 +474,7 @@ export function CartonPage() {
     <DocumentForm
       voice={voice}
       title="Carton"
+      printHref={doc ? `/print/carton/${doc.id}` : undefined}
       docNo={doc?.docNo}
       status={status}
       postedAt={doc?.postedAt}
@@ -679,7 +682,7 @@ export function PackingListPage() {
 }
 
 // ═════════ Trims receipts & issues ═════════
-interface TrimsDoc {
+export interface TrimsDoc {
   id: string;
   type: 'RECEIPT' | 'ISSUE';
   docNo: string | null;
@@ -751,6 +754,7 @@ export function TrimsDocPage() {
     <DocumentForm
       voice={voice}
       title={type === 'RECEIPT' ? 'Trims receipt' : 'Trims issue'}
+      printHref={doc ? `/print/trims-doc/${doc.id}` : undefined}
       docNo={doc?.docNo}
       status={status}
       postedAt={doc?.postedAt}

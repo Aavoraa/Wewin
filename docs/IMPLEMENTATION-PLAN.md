@@ -107,6 +107,17 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-12 — Every document prints in bill format
+- Wewin asked that every print be in bill format, not a screen layout. `DocumentForm` now opens the document's print layout for drafts too (marked DRAFT); on a document not yet saved, Print saves the draft first and then opens its bill layout. The top-bar Print and Ctrl+P on a document page open the bill layout too; only list and report pages print as shown.
+- `BillDoc` (shared bill layout: letterhead, title, number / date, party with vendor certificate, details, lines table, totals, signatures). New prints: sewing issue, sewing output, carton, trims documents, panel inward, recut slip, cutting lay, quality checks, Program Defined, shipment advice, buyer receipt; Yarn/Fabric inward and order transfers print one copy; the SPL request print is now linked. Every document form has a print layout.
+- Gaps: shipment / receipt prints have no buyer address (only name and country come with them); recut slips show no linked panel D.C. number; QC and programme prints show the approval time, not the approver's name.
+- Verified: typecheck, lint, tests. Not yet seen in a logged-in print preview.
+
+### 2026-11-12 — Order prints in bill format
+- New `order` print (A4, "ORDER CONFIRMATION"): letterhead, buyer address / contact / payment terms, buyer PO no. and date, ship date, currency, style, one line per colour × size with qty, rate and amount, total, amount in words (`amountInWords`, any currency), signatures. Drafts print it too, marked "DRAFT — NOT CONFIRMED" (`DocumentForm.printDrafts`).
+- Orders now return the buyer's address, contact and payment terms.
+- Verified: Vitest (amount in words EUR / USD / GBP / INR), Supertest (order carries buyer details), typecheck, lint. Not yet seen in a logged-in print preview.
+
 ### 2026-11-12 — Three-copy delivery challan for store and fabric dispatches (Q-077)
 - `ChallanCopies` (print layout) prints a document once per copy on its own page; the outward D.C. now uses it. New `stock-doc` print (Yarn/Fabric Other Delivery, Rejection Entry) with consignee, GSTIN, certificate, HSN, bags, qty, rate, value; panels out and accessories purchase returns print three copies.
 - Stock documents now carry the vendor's address, GSTIN and certificate and each item's HSN.

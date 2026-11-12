@@ -142,6 +142,7 @@ export function SplPage() {
   return (
     <DocumentForm
       title="SPL.Request"
+      printHref={doc ? `/print/spl-request/${doc.id}` : undefined}
       docNo={doc?.docNo}
       status={status}
       postedAt={doc?.postedAt}

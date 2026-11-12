@@ -5,7 +5,12 @@ import { type Paging } from '../../core/list';
 type Db = Tx | typeof prisma;
 
 const detailInclude = {
-  buyer: { select: { id: true, code: true, name: true, currency: true } },
+  buyer: {
+    select: {
+      id: true, code: true, name: true, currency: true, country: true, addressLine1: true, addressLine2: true, city: true,
+      contactPerson: true, phone: true, email: true, paymentTerms: true,
+    },
+  },
   garmentItem: { select: { id: true, code: true, name: true } },
   lines: { orderBy: [{ colour: 'asc' }, { size: 'asc' }] },
   components: { orderBy: { sortOrder: 'asc' }, include: { panelItem: { select: { id: true, code: true, name: true } } } },
