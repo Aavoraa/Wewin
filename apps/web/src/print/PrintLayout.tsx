@@ -31,6 +31,7 @@ export function CompanyBlock({ c }: { c?: CompanyHeader }) {
   if (!c) return null;
   return (
     <div>
+      <img src="/brand/wewin-logo.png" alt="Wewin Knit Fashions" className="mb-1 h-8 w-auto" />
       <div className="text-base font-bold uppercase">{c.tradeName ?? c.legalName}</div>
       {c.tradeName ? <div className="text-[10px]">{c.legalName}</div> : null}
       <div className="text-[10px] leading-tight">

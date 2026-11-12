@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { BookOpen, ChevronDown, CircleHelp, Keyboard, KeyRound, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { ROLE_NAMES, type RoleCode } from '@wewin/shared';
@@ -8,9 +8,7 @@ import { cn } from '@/lib/utils';
 import { NAV } from '@/nav';
 import { LoadingState } from '../states';
 import { PrintButton } from '../PrintButton';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import { type CompanyHeader } from '@/print/PrintLayout';
+import { WewinBrand, WewinMark } from '../Brand';
 import { Button } from '../ui/button';
 import { Select } from '../ui/input';
 import {
@@ -70,18 +68,12 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
   return (
     <nav
       className={cn(
-        'flex h-full flex-col overflow-y-auto overflow-x-hidden bg-sidebar py-3 text-sidebar-foreground',
-        collapsed ? 'px-1.5' : 'px-2',
+        'sidebar-scroll flex h-full flex-col overflow-y-auto overflow-x-hidden bg-sidebar py-3 text-sidebar-foreground',
+        collapsed ? 'px-2.5' : 'px-2',
       )}
     >
       <div className={cn('mb-4 flex items-center gap-2', collapsed ? 'flex-col' : 'pl-2')}>
-        <img src="/favicon.svg" alt="" className="size-7 shrink-0" />
-        {collapsed ? null : (
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-white">Wewin ERP</div>
-            <div className="truncate text-[11px] text-slate-400">Wewin Knit Fashions</div>
-          </div>
-        )}
+        {collapsed ? <WewinMark onDark className="h-7" /> : <WewinBrand onDark tight className="min-w-0 flex-1" />}
         {onToggle ? (
           <button
             type="button"
@@ -102,7 +94,7 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
         return (
           <div key={g.label} className={collapsed ? 'mb-3' : 'mb-1'}>
             {collapsed ? (
-              <div className="mx-2 mb-1 border-t border-slate-700" />
+              <div className="mx-2 mb-1 border-t border-slate-800" />
             ) : (
               <button
                 type="button"
@@ -110,7 +102,7 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
                 aria-expanded={open}
                 className={cn(
                   'flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover:bg-sidebar-active hover:text-white',
-                  hasActive ? 'text-slate-200' : 'text-slate-500',
+                  hasActive ? 'text-brand' : 'text-slate-400',
                 )}
               >
                 <span className="flex-1 text-left">{g.label}</span>
@@ -129,12 +121,12 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-2 rounded-md py-1.5 text-[13px] hover:bg-sidebar-active hover:text-white',
-                    collapsed ? 'justify-center px-0' : 'px-2',
-                    isActive && 'bg-sidebar-active font-medium text-white',
+                    collapsed ? 'justify-center px-0 py-2.5' : 'px-2',
+                    isActive && 'bg-sidebar-active font-medium text-white shadow-[inset_3px_0_0_var(--color-brand)]',
                   )
                 }
               >
-                <i.icon className="size-4 shrink-0" />
+                <i.icon className={cn('shrink-0', collapsed ? 'size-5' : 'size-4')} />
                 {collapsed ? null : i.label}
               </NavLink>
             )) : null}
@@ -191,14 +183,13 @@ function HelpMenu() {
 
 /** Shown only on paper: company, the page being printed, who printed it and when. */
 function PrintHeader() {
-  const { user, can } = useAuth();
-  const company = useQuery({ queryKey: ['print', 'company'], queryFn: () => api.get<CompanyHeader>('/settings/company'), staleTime: 300_000, enabled: can('settings.view') });
+  const { user } = useAuth();
   const { pathname } = useLocation();
   const page = NAV.flatMap((g) => g.items).filter((i) => pathname === i.to || pathname.startsWith(`${i.to}/`)).sort((a, b) => b.to.length - a.to.length)[0];
   return (
     <div className="mb-3 hidden border-b border-black pb-2 text-black print:flex print:items-end print:justify-between">
       <div>
-        <div className="text-sm font-bold uppercase">{company.data?.tradeName ?? company.data?.legalName ?? 'Wewin Knit Fashions'}</div>
+        <WewinBrand className="h-8" />
         {page ? <div className="text-xs">{page.label}</div> : null}
       </div>
       <div className="text-right text-[10px]">
@@ -215,19 +206,15 @@ export function AppShell() {
   const fy = useFy();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [savedCollapsed, setCollapsed] = useState(readCollapsed);
-  // The dashboard's pipeline needs the full width: there the sidebar starts as icons (expandable
-  // for the visit); every other page keeps the user's saved choice.
-  const onDashboard = useLocation().pathname === '/';
+  // The full sidebar is the default on every page; the toggle squeezes it to icons and the choice is remembered.
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  // Fixed bars (document action bars) start where the sidebar ends.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '240px');
+  }, [collapsed]);
   const view = useViewMode();
-  const [dashboardExpanded, setDashboardExpanded] = useState(false);
-  const collapsed = onDashboard ? !dashboardExpanded : savedCollapsed;
 
   const toggleCollapsed = () => {
-    if (onDashboard) {
-      setDashboardExpanded((v) => !v);
-      return;
-    }
     setCollapsed((c) => {
       try {
         localStorage.setItem(COLLAPSED_KEY, c ? '0' : '1');
@@ -250,8 +237,8 @@ export function AppShell() {
   return (
     <VoiceProvider>
     <div className="flex h-full">
-      <aside className={cn('no-print hidden shrink-0 transition-[width] lg:block', collapsed ? 'w-14' : 'w-60')}>
-        <div className={cn('fixed inset-y-0 transition-[width]', collapsed ? 'w-14' : 'w-60')}>
+      <aside className={cn('no-print hidden shrink-0 transition-[width] lg:block', collapsed ? 'w-[72px]' : 'w-60')}>
+        <div className={cn('fixed inset-y-0 transition-[width]', collapsed ? 'w-[72px]' : 'w-60')}>
           <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
         </div>
       </aside>
@@ -268,6 +255,7 @@ export function AppShell() {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <div className="no-print h-0.5 bg-brand/80" aria-hidden />
         <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card px-3 sm:px-4">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu />
