@@ -273,39 +273,41 @@ model Location {
 }
 
 model Item {
-  id               String                 @id @default(uuid()) @db.Uuid
-  code             String                 @unique
-  name             String
-  type             ItemType
-  unit             Unit
-  hsnCode          String?                @map("hsn_code")
-  spec             String?
-  gsm              Int?
+  id                 String                 @id @default(uuid()) @db.Uuid
+  code               String                 @unique
+  name               String
+  type               ItemType
+  unit               Unit
+  hsnCode            String?                @map("hsn_code")
+  spec               String?
+  gsm                Int?
   /// Accessories (TRIM) group as in the desktop stock register: LABEL, TAG, STICKER, POLYBAG… (Q-069).
-  trimGroup        String?                @map("trim_group")
-  isActive         Boolean                @default(true) @map("is_active")
-  version          Int                    @default(1)
-  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  movements        StockMovement[]
-  garmentOrders    Order[]                @relation("garmentItem")
-  panelComponents  OrderComponent[]       @relation("panelItem")
-  programFabrics   FabricProgram[]        @relation("programFabric")
-  ppInputs         FabricProgramProcess[] @relation("ppInput")
-  ppOutputs        FabricProgramProcess[] @relation("ppOutput")
-  trimsBomLines    TrimsBomLine[]         @relation("trimItem")
-  yarnReceiptLines YarnReceiptLine[]      @relation("yarnReceiptItem")
-  outwardLines     OutwardDcLine[]        @relation("outwardLineItem")
-  inwardLines      InwardDcLine[]         @relation("inwardLineItem")
-  poLines          PurchaseOrderLine[]    @relation("poLineItem")
-  stockDocLines    StockDocLine[]         @relation("stockDocLineItem")
-  rolls            FabricRoll[]           @relation("rollItem")
-  bundles          CutBundle[]            @relation("bundlePanel")
-  panelDcLines     PanelDcLine[]          @relation("panelDcItem")
-  recutLines       RecutSlipLine[]        @relation("recutPanel")
-  trimsDocLines    TrimsDocLine[]         @relation("trimsDocItem")
-  splRequestLines  SplRequestLine[]       @relation("splItem")
-  rateContracts    RateContract[]         @relation("rateItem")
+  trimGroup          String?                @map("trim_group")
+  isActive           Boolean                @default(true) @map("is_active")
+  version            Int                    @default(1)
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  movements          StockMovement[]
+  garmentOrders      Order[]                @relation("garmentItem")
+  panelComponents    OrderComponent[]       @relation("panelItem")
+  programFabrics     FabricProgram[]        @relation("programFabric")
+  ppInputs           FabricProgramProcess[] @relation("ppInput")
+  ppOutputs          FabricProgramProcess[] @relation("ppOutput")
+  yarnProgramOutputs YarnProgram[]          @relation("yarnProgramOutput")
+  yarnProgramInputs  YarnProgramInput[]     @relation("yarnProgramInput")
+  trimsBomLines      TrimsBomLine[]         @relation("trimItem")
+  yarnReceiptLines   YarnReceiptLine[]      @relation("yarnReceiptItem")
+  outwardLines       OutwardDcLine[]        @relation("outwardLineItem")
+  inwardLines        InwardDcLine[]         @relation("inwardLineItem")
+  poLines            PurchaseOrderLine[]    @relation("poLineItem")
+  stockDocLines      StockDocLine[]         @relation("stockDocLineItem")
+  rolls              FabricRoll[]           @relation("rollItem")
+  bundles            CutBundle[]            @relation("bundlePanel")
+  panelDcLines       PanelDcLine[]          @relation("panelDcItem")
+  recutLines         RecutSlipLine[]        @relation("recutPanel")
+  trimsDocLines      TrimsDocLine[]         @relation("trimsDocItem")
+  splRequestLines    SplRequestLine[]       @relation("splItem")
+  rateContracts      RateContract[]         @relation("rateItem")
 
   @@index([type])
   @@map("items")
@@ -464,6 +466,7 @@ model Process {
   updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
   vendors           VendorProcess[]
   programProcesses  FabricProgramProcess[]
+  yarnPrograms      YarnProgram[]          @relation("yarnProgramProcess")
   outwardDcs        OutwardDc[]            @relation("outwardProcess")
   panelDcs          PanelDc[]              @relation("panelProcess")
   rateContracts     RateContract[]         @relation("rateProcess")
@@ -602,6 +605,7 @@ model Order {
   components         OrderComponent[]
   costing            OrderCosting?
   programs           FabricProgram[]
+  yarnPrograms       YarnProgram[]       @relation("yarnProgramOrder")
   trimsBom           TrimsBomLine[]
   yarnReceipts       YarnReceipt[]
   outwardDcs         OutwardDc[]         @relation("outwardOrder")
@@ -752,6 +756,53 @@ model FabricProgramProcess {
   @@map("fabric_program_processes")
 }
 
+/// Program Defined (Q-074): a yarn process programme for one order — the yarns going in with their
+/// mixing %, the yarn coming out, and the allowed loss %. Approved before yarn is delivered under it.
+model YarnProgram {
+  id                String             @id @default(uuid()) @db.Uuid
+  programNo         String             @unique @map("program_no")
+  orderId           String             @map("order_id") @db.Uuid
+  processId         String             @map("process_id") @db.Uuid
+  outputItemId      String             @map("output_item_id") @db.Uuid
+  outputColour      String?            @map("output_colour")
+  /// Output yarn kg wanted; the plan adds the loss back to get the kg to send.
+  requiredKg        Decimal?           @map("required_kg") @db.Decimal(12, 3)
+  allowedLossPct    Decimal            @map("allowed_loss_pct") @db.Decimal(7, 4)
+  /// Cost per kg of the input yarn, used to value excess loss (Q-003).
+  materialCostPerKg Decimal?           @map("material_cost_per_kg") @db.Decimal(12, 4)
+  status            ProgramStatus      @default(DRAFT)
+  remarks           String?
+  version           Int                @default(1)
+  approvedAt        DateTime?          @map("approved_at") @db.Timestamptz(3)
+  approvedById      String?            @map("approved_by_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order             Order              @relation("yarnProgramOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  process           Process            @relation("yarnProgramProcess", fields: [processId], references: [id], onDelete: Restrict)
+  outputItem        Item               @relation("yarnProgramOutput", fields: [outputItemId], references: [id], onDelete: Restrict)
+  inputs            YarnProgramInput[]
+  outwardDcs        OutwardDc[]
+
+  @@index([orderId])
+  @@index([processId, status])
+  @@map("yarn_programs")
+}
+
+/// Yarn going into a yarn programme, with its share of the mix.
+model YarnProgramInput {
+  id        String      @id @default(uuid()) @db.Uuid
+  programId String      @map("program_id") @db.Uuid
+  lineNo    Int         @map("line_no")
+  itemId    String      @map("item_id") @db.Uuid
+  colour    String?
+  mixPct    Decimal     @map("mix_pct") @db.Decimal(7, 4)
+  program   YarnProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  item      Item        @relation("yarnProgramInput", fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([programId, lineNo])
+  @@map("yarn_program_inputs")
+}
+
 /// Trims bill of materials per order (Q-030: attached to the order, served by the programs module).
 model TrimsBomLine {
   id            String  @id @default(uuid()) @db.Uuid
@@ -828,59 +879,63 @@ model YarnReceiptLine {
 
 /// Outward delivery challan (Rule 55): material sent to a job worker under an approved program process.
 model OutwardDc {
-  id                 String               @id @default(uuid()) @db.Uuid
-  docNo              String?              @unique @map("doc_no")
-  docDate            DateTime             @map("doc_date") @db.Date
-  vendorId           String               @map("vendor_id") @db.Uuid
-  programProcessId   String               @map("program_process_id") @db.Uuid
-  processId          String               @map("process_id") @db.Uuid
-  orderId            String               @map("order_id") @db.Uuid
+  id                 String                @id @default(uuid()) @db.Uuid
+  docNo              String?               @unique @map("doc_no")
+  docDate            DateTime              @map("doc_date") @db.Date
+  vendorId           String                @map("vendor_id") @db.Uuid
+  /// Exactly one of programProcessId (a fabric programme step) and yarnProgramId (Program Defined, Q-074).
+  programProcessId   String?               @map("program_process_id") @db.Uuid
+  yarnProgramId      String?               @map("yarn_program_id") @db.Uuid
+  processId          String                @map("process_id") @db.Uuid
+  orderId            String                @map("order_id") @db.Uuid
   /// YARN_STORE / FABRIC_STORE, or another vendor's location for a direct vendor → vendor transfer.
-  fromLocationId     String               @map("from_location_id") @db.Uuid
-  expectedReturnDate DateTime?            @map("expected_return_date") @db.Date
-  purpose            String               @default("For job work")
-  vehicleNo          String?              @map("vehicle_no")
+  fromLocationId     String                @map("from_location_id") @db.Uuid
+  expectedReturnDate DateTime?             @map("expected_return_date") @db.Date
+  purpose            String                @default("For job work")
+  vehicleNo          String?               @map("vehicle_no")
   remarks            String?
-  status             DocStatus            @default(DRAFT)
-  version            Int                  @default(1)
+  status             DocStatus             @default(DRAFT)
+  version            Int                   @default(1)
   /// Snapshot at posting so later program edits can never change this D.C.'s loss limit.
-  allowedLossPct     Decimal?             @map("allowed_loss_pct") @db.Decimal(7, 4)
+  allowedLossPct     Decimal?              @map("allowed_loss_pct") @db.Decimal(7, 4)
   /// Management approval of the draft (Q-048). Any edit of the draft clears it; posting requires it
   /// while setting `jobwork.outwardApprovalRequired` is on. Printed in the D.C.'s signature block.
-  approvedAt         DateTime?            @map("approved_at") @db.Timestamptz(3)
-  approvedById       String?              @map("approved_by_id") @db.Uuid
-  approvalNote       String?              @map("approval_note")
+  approvedAt         DateTime?             @map("approved_at") @db.Timestamptz(3)
+  approvedById       String?               @map("approved_by_id") @db.Uuid
+  approvalNote       String?               @map("approval_note")
   /// Set when the draft was created from a scanned paper D.C. (idempotent apply).
-  sourceScanId       String?              @unique @map("source_scan_id") @db.Uuid
-  postedAt           DateTime?            @map("posted_at") @db.Timestamptz(3)
-  postedById         String?              @map("posted_by_id") @db.Uuid
-  cancelledAt        DateTime?            @map("cancelled_at") @db.Timestamptz(3)
-  cancelledById      String?              @map("cancelled_by_id") @db.Uuid
-  cancelReason       String?              @map("cancel_reason")
-  closedAt           DateTime?            @map("closed_at") @db.Timestamptz(3)
-  closedById         String?              @map("closed_by_id") @db.Uuid
-  closeReason        String?              @map("close_reason")
+  sourceScanId       String?               @unique @map("source_scan_id") @db.Uuid
+  postedAt           DateTime?             @map("posted_at") @db.Timestamptz(3)
+  postedById         String?               @map("posted_by_id") @db.Uuid
+  cancelledAt        DateTime?             @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById      String?               @map("cancelled_by_id") @db.Uuid
+  cancelReason       String?               @map("cancel_reason")
+  closedAt           DateTime?             @map("closed_at") @db.Timestamptz(3)
+  closedById         String?               @map("closed_by_id") @db.Uuid
+  closeReason        String?               @map("close_reason")
   /// Frozen on close (A§7.1).
-  finalSentKg        Decimal?             @map("final_sent_kg") @db.Decimal(12, 3)
-  finalReceivedKg    Decimal?             @map("final_received_kg") @db.Decimal(12, 3)
-  finalLossKg        Decimal?             @map("final_loss_kg") @db.Decimal(12, 3)
-  finalLossPct       Decimal?             @map("final_loss_pct") @db.Decimal(9, 4)
-  finalExcessKg      Decimal?             @map("final_excess_kg") @db.Decimal(12, 3)
-  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  createdById        String?              @map("created_by_id") @db.Uuid
-  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  vendor             Vendor               @relation("outwardVendor", fields: [vendorId], references: [id], onDelete: Restrict)
-  programProcess     FabricProgramProcess @relation(fields: [programProcessId], references: [id], onDelete: Restrict)
-  process            Process              @relation("outwardProcess", fields: [processId], references: [id], onDelete: Restrict)
-  order              Order                @relation("outwardOrder", fields: [orderId], references: [id], onDelete: Restrict)
-  fromLocation       Location             @relation("outwardFrom", fields: [fromLocationId], references: [id], onDelete: Restrict)
-  approvedBy         User?                @relation("outwardApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  finalSentKg        Decimal?              @map("final_sent_kg") @db.Decimal(12, 3)
+  finalReceivedKg    Decimal?              @map("final_received_kg") @db.Decimal(12, 3)
+  finalLossKg        Decimal?              @map("final_loss_kg") @db.Decimal(12, 3)
+  finalLossPct       Decimal?              @map("final_loss_pct") @db.Decimal(9, 4)
+  finalExcessKg      Decimal?              @map("final_excess_kg") @db.Decimal(12, 3)
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById        String?               @map("created_by_id") @db.Uuid
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor             Vendor                @relation("outwardVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  programProcess     FabricProgramProcess? @relation(fields: [programProcessId], references: [id], onDelete: Restrict)
+  yarnProgram        YarnProgram?          @relation(fields: [yarnProgramId], references: [id], onDelete: Restrict)
+  process            Process               @relation("outwardProcess", fields: [processId], references: [id], onDelete: Restrict)
+  order              Order                 @relation("outwardOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  fromLocation       Location              @relation("outwardFrom", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  approvedBy         User?                 @relation("outwardApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   lines              OutwardDcLine[]
   links              DcLink[]
 
   @@index([status, docDate])
   @@index([vendorId, status])
   @@index([orderId])
+  @@index([yarnProgramId])
   @@map("outward_dcs")
 }
 

@@ -17,7 +17,9 @@ export interface OutwardDc {
   docNo: string | null;
   docDate: string;
   vendorId: string;
-  programProcessId: string;
+  /** Exactly one: a fabric programme step, or a yarn programme (Program Defined, Q-074). */
+  programProcessId: string | null;
+  yarnProgramId: string | null;
   processId: string;
   orderId: string;
   fromLocationId: string;
@@ -41,7 +43,10 @@ export interface OutwardDc {
   process: { id: string; code: string; name: string; defaultReturnDays: number };
   order: { id: string; orderNo: string; styleNo: string; status: string };
   fromLocation: { id: string; code: string; name: string; kind: string; vendorId: string | null };
-  programProcess: { id: string; sequence: number; allowedLossPct: string; inputItemId: string; outputItemId: string; program: { id: string; programNo: string } };
+  programProcess: { id: string; sequence: number; allowedLossPct: string; inputItemId: string; outputItemId: string; program: { id: string; programNo: string } } | null;
+  yarnProgram: { id: string; programNo: string; allowedLossPct: string; outputItemId: string; outputColour: string | null } | null;
+  /** The programme it went under, whichever kind; YARN comes back as yarn into the yarn store. */
+  program: { programNo: string; outputItemId: string | null; kind: 'YARN' | 'FABRIC' };
   lines: {
     id: string;
     lineNo: number;
@@ -74,6 +79,8 @@ export interface PendingOutward {
   process: string;
   programNo: string;
   outputItemId: string;
+  /** YARN: a yarn programme (Program Defined, Q-074) — yarn comes back to the yarn store, no rolls. */
+  outputKind: 'YARN' | 'FABRIC';
   sentKg: string;
   receivedKg: string;
   pendingKg: string;
@@ -105,7 +112,7 @@ export interface InwardDc {
     id: string;
     outwardDcId: string;
     receivedKg: string;
-    outward: { id: string; docNo: string | null; docDate: string | null; status: string; allowedLossPct: string | null; process: { code: string; name: string } };
+    outward: { id: string; docNo: string | null; docDate: string | null; status: string; allowedLossPct: string | null; process: { code: string; name: string }; yarnProgram: { outputItemId: string } | null };
   }[];
   totals: { kg: string; rolls: number };
 }

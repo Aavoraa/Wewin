@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
@@ -126,6 +126,7 @@ interface FormValues {
   docDate: string;
   orderId: string;
   programProcessId: string;
+  yarnProgramId: string;
   vendorId: string;
   fromVendorId: string;
   expectedReturnDate: string;
@@ -139,6 +140,20 @@ interface ProgramOpt {
   programNo: string;
   processes: { id: string; sequence: number; processId: string; inputItemId: string; allowedLossPct: string; materialCostPerKg: string | null; process: { name: string }; inputItem: { name: string } }[];
 }
+/** Approved Program Defined entries (yarn programmes, Q-074) a yarn-process D.C. goes under. */
+interface YarnProgramOpt {
+  id: string;
+  programNo: string;
+  processId: string;
+  allowedLossPct: string;
+  materialCostPerKg: string | null;
+  process: { name: string };
+  outputItem: { name: string };
+  outputColour: string | null;
+  inputs: { itemId: string; colour: string | null; mixPct: string; planKg: string | null; item: { name: string } }[];
+}
+const yarnProgramLabel = (y: YarnProgramOpt) =>
+  `${y.programNo} · ${y.process.name}: ${y.inputs.map((l) => `${l.item.name} ${Number(l.mixPct)}%`).join(' + ')} → ${y.outputItem.name}${y.outputColour ? ` ${y.outputColour}` : ''} — allowed loss ${Number(y.allowedLossPct)}%`;
 const blankLine = (itemId = '', valuePerKg = ''): LineRow => ({ _key: newKey(), itemId, lot: '', colour: '', rollId: '', rollNo: '', qtyKg: '', rolls: '', valuePerKg });
 
 const VOICE_OUTWARD: VoiceFormSpec = { title: 'Outward D.C.', fields: [{ name: 'docDate', label: 'D.C. date', type: 'date' }, { name: 'vendorId', label: 'Job worker', type: 'vendor' }, { name: 'orderId', label: 'Order', type: 'order' }, { name: 'expectedReturnDate', label: 'Expected return', type: 'date' }, { name: 'vehicleNo', label: 'Vehicle no.', type: 'text' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Material', fields: [{ name: 'itemId', label: 'Yarn / fabric', type: 'item' }, { name: 'lot', label: 'Lot', type: 'text' }, { name: 'colour', label: 'Colour', type: 'text' }, { name: 'qtyKg', label: 'Kg', type: 'number' }, { name: 'rolls', label: 'Bags / rolls', type: 'number' }] } };
@@ -151,9 +166,10 @@ export function OutwardDcPage() {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [direct, setDirect] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [search] = useSearchParams();
   const form = useForm<FormValues>({
     resolver: zodResolver(zOutwardDcInput as never),
-    defaultValues: { docDate: todayIst(), orderId: '', programProcessId: '', vendorId: '', fromVendorId: '', expectedReturnDate: '', purpose: 'For job work', vehicleNo: '', remarks: '', lines: [blankLine()] },
+    defaultValues: { docDate: todayIst(), orderId: search.get('orderId') ?? '', programProcessId: '', yarnProgramId: search.get('yarnProgramId') ?? '', vendorId: '', fromVendorId: '', expectedReturnDate: '', purpose: 'For job work', vehicleNo: '', remarks: '', lines: [blankLine()] },
   });
   const voice = useVoiceFill({ form, spec: VOICE_OUTWARD, enabled: (o?.status ?? 'DRAFT') === 'DRAFT' && can('jobwork.create'), setLabels, linesName: 'lines', newLine: () => blankLine(), isBlankLine: (l: LineRow) => !l.itemId && !l.qtyKg && !l.rollId });
   const e = form.formState.errors;
@@ -169,13 +185,48 @@ export function OutwardDcPage() {
     [programs.data],
   );
   const pp = ppOptions.find((x) => x.id === ppId);
+  const ypId = form.watch('yarnProgramId');
+  const yarnPrograms = useQuery({
+    queryKey: ['yarn-programs-approved', orderId],
+    queryFn: () => api.list<YarnProgramOpt>('/yarn-programs', { orderId, status: 'APPROVED', pageSize: 50 }),
+    enabled: !!orderId,
+  });
+  const ypOptions = useMemo(() => yarnPrograms.data?.data ?? [], [yarnPrograms.data]);
+  const yp = ypOptions.find((x) => x.id === ypId);
+  // Opened from a Program Defined entry (?yarnProgramId=): start the lines with its yarns and planned kg.
+  useEffect(() => {
+    if (!yp || !d.isNew || form.getValues('lines').some((l) => l.itemId)) return;
+    setLabels((l) => ({ ...l, ...Object.fromEntries(yp.inputs.map((x) => [x.itemId, x.item.name])) }));
+    form.setValue('lines', yp.inputs.map((x) => ({ ...blankLine(x.itemId, yp.materialCostPerKg ?? ''), colour: x.colour ?? '', qtyKg: x.planKg ?? '' })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yp?.id]);
+  /** The programme select holds a fabric programme step id, or y:<id> for a yarn programme. */
+  const pickProgram = (value: string) => {
+    const isYarn = value.startsWith('y:');
+    const id = isYarn ? value.slice(2) : value;
+    form.setValue('yarnProgramId', isYarn ? id : '', { shouldDirty: true });
+    form.setValue('programProcessId', isYarn ? '' : id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+    if (form.getValues('lines').some((l) => l.itemId)) return;
+    if (isYarn) {
+      const y = ypOptions.find((x) => x.id === id);
+      if (!y) return;
+      setLabels((l) => ({ ...l, ...Object.fromEntries(y.inputs.map((x) => [x.itemId, x.item.name])) }));
+      form.setValue('lines', y.inputs.map((x) => ({ ...blankLine(x.itemId, y.materialCostPerKg ?? ''), colour: x.colour ?? '', qtyKg: x.planKg ?? '' })));
+    } else {
+      const x = ppOptions.find((p) => p.id === id);
+      if (!x) return;
+      setLabels((l) => ({ ...l, [x.inputItemId]: x.inputItem.name }));
+      form.setValue('lines', [blankLine(x.inputItemId, x.materialCostPerKg ?? '')]);
+    }
+  };
 
   useEffect(() => {
     if (!o) return;
     form.reset({
       docDate: o.docDate,
       orderId: o.orderId,
-      programProcessId: o.programProcessId,
+      programProcessId: o.programProcessId ?? '',
+      yarnProgramId: o.yarnProgramId ?? '',
       vendorId: o.vendorId,
       fromVendorId: o.fromLocation.kind === 'VENDOR' ? (o.fromLocation.vendorId ?? '') : '',
       expectedReturnDate: o.expectedReturnDate ?? '',
@@ -301,33 +352,50 @@ export function OutwardDcPage() {
                     if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
                     field.onChange(opt?.id ?? '');
                     form.setValue('programProcessId', '');
+                    form.setValue('yarnProgramId', '');
                   }}
                 />
               )}
             />
           </Field>
-          <Field label="Program process *" error={e.programProcessId?.message} className="sm:col-span-2">
+          <Field label="Programme *" error={e.programProcessId?.message} className="sm:col-span-2">
             <Select
-              {...form.register('programProcessId', {
-                onChange: (ev: { target: { value: string } }) => {
-                  const x = ppOptions.find((p) => p.id === ev.target.value);
-                  if (x && form.getValues('lines').every((l) => !l.itemId)) {
-                    setLabels((l) => ({ ...l, [x.inputItemId]: x.inputItem.name }));
-                    form.setValue('lines', [blankLine(x.inputItemId, x.materialCostPerKg ?? '')]);
-                  }
-                },
-              })}
+              value={ypId ? `y:${ypId}` : ppId}
+              disabled={!editable}
+              onChange={(ev) => pickProgram(ev.target.value)}
               aria-invalid={!!e.programProcessId}
+              aria-label="Programme"
             >
-              <option value="">{orderId ? (programs.isLoading ? 'Loading…' : ppOptions.length ? 'Select…' : 'No approved program for this order') : 'Select the order first'}</option>
-              {ppOptions.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.programNo} · {x.sequence}. {x.process.name} — allowed loss {Number(x.allowedLossPct)}%
-                </option>
-              ))}
-              {o && !ppOptions.some((x) => x.id === o.programProcessId) ? (
-                <option value={o.programProcessId}>
-                  {o.programProcess.program.programNo} · {o.process.name} — allowed {Number(o.allowedLossPct)}%
+              <option value="">
+                {orderId
+                  ? programs.isLoading || yarnPrograms.isLoading
+                    ? 'Loading…'
+                    : ppOptions.length || ypOptions.length
+                      ? 'Select…'
+                      : 'No approved programme for this order'
+                  : 'Select the order first'}
+              </option>
+              {ypOptions.length ? (
+                <optgroup label="Program Defined (yarn processes)">
+                  {ypOptions.map((y) => (
+                    <option key={y.id} value={`y:${y.id}`}>
+                      {yarnProgramLabel(y)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {ppOptions.length ? (
+                <optgroup label="Fabric programme steps">
+                  {ppOptions.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.programNo} · {x.sequence}. {x.process.name} — allowed loss {Number(x.allowedLossPct)}%
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {o && !(ppOptions.some((x) => x.id === o.programProcessId) || ypOptions.some((x) => x.id === o.yarnProgramId)) ? (
+                <option value={o.yarnProgramId ? `y:${o.yarnProgramId}` : (o.programProcessId ?? '')}>
+                  {o.program.programNo} · {o.process.name} — allowed {Number(o.allowedLossPct)}%
                 </option>
               ) : null}
             </Select>
@@ -339,7 +407,7 @@ export function OutwardDcPage() {
               render={({ field }) => (
                 <EntityPicker
                   endpoint="/vendors"
-                  query={{ processId: pp?.processId ?? o?.processId }}
+                  query={{ processId: pp?.processId ?? yp?.processId ?? o?.processId }}
                   map={pickers.vendor}
                   value={field.value}
                   valueLabel={labels[field.value]}
