@@ -1,9 +1,10 @@
-import { type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { formatDate } from '@/lib/format';
 
 export interface CompanyHeader {
   legalName: string;
@@ -79,6 +80,40 @@ export function PrintLayout({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * Vendor certificate under the vendor's name on every print (Q-074). Accepts a full timestamp or a
+ * YYYY-MM-DD date; shows a dash while the vendor has none.
+ */
+export function VendorCertificate({ v, className }: { v: { name: string; certificateNo?: string | null; certificateExpiry?: string | null }; className?: string }) {
+  const expiry = v.certificateExpiry ? v.certificateExpiry.slice(0, 10) : null;
+  return (
+    <div className={className}>
+      <div>Certificate no.: {v.certificateNo ?? '—'}</div>
+      <div>Certificate valid till: {expiry ? formatDate(expiry) : '—'}</div>
+    </div>
+  );
+}
+
+/** Copy labels of a delivery challan (Rule 55): consignee, transporter, sender. */
+export const CHALLAN_COPIES = ['ORIGINAL FOR CONSIGNEE', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR SENDER'] as const;
+export const JOB_WORK_CHALLAN_COPIES = ['ORIGINAL FOR JOB WORKER', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR SENDER'] as const;
+
+/** Prints `children` once per copy, each on its own page with the copy name at the top right. */
+export function ChallanCopies({ copies = CHALLAN_COPIES, children }: { copies?: readonly string[]; children: (copy: string) => ReactNode }) {
+  return (
+    <>
+      {copies.map((copy, ci) => (
+        <Fragment key={copy}>
+          <div className={ci < copies.length - 1 ? 'print-break mb-6' : ''}>
+            <div className="mb-1 text-right text-[10px] font-semibold">{copy}</div>
+            {children(copy)}
+          </div>
+        </Fragment>
+      ))}
+    </>
   );
 }
 

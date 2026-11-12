@@ -4,7 +4,7 @@ import { formatDate, formatQty } from '@/lib/format';
 import { LoadingState } from '@/components/states';
 import { type AccDoc } from '@/features/accessories/AccessoriesPages';
 import { type SplDoc } from '@/features/accessories/SplPages';
-import { CompanyBlock, PrintLayout, Signatures, useCompany } from './PrintLayout';
+import { ChallanCopies, CompanyBlock, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
 
 const TITLE: Record<string, string> = {
   RECEIPT: 'Accessories Purchase - GRN',
@@ -23,8 +23,11 @@ export function AccessoriesDocPrint({ id }: { id: string }) {
   const d = q.data;
   const transfer = d.type === 'TRANSFER';
   const v = d.vendor;
-  return (
-    <PrintLayout title={`${TITLE[d.type]} ${d.docNo ?? ''}`}>
+  // Goods going back to the supplier print as a three-copy delivery challan (Q-077).
+  const challan = d.type === 'RETURN';
+  const content = (
+    <>
+      {challan ? <div className="text-center text-base font-bold">DELIVERY CHALLAN</div> : null}
       <div className="mb-1 text-center text-sm font-bold underline">{TITLE[d.type]}</div>
       <div className="grid grid-cols-2 border border-dashed border-black">
         <div className="border-r border-dashed border-black p-2">
@@ -41,6 +44,7 @@ export function AccessoriesDocPrint({ id }: { id: string }) {
               <div className="font-bold uppercase">{v.name}</div>
               <div className="text-[10px] leading-tight">{[v.addressLine1, v.addressLine2, v.city, v.pincode].filter(Boolean).join(', ')}</div>
               {v.gstin ? <div className="text-[10px]">GSTIN: {v.gstin}</div> : null}
+              <VendorCertificate v={v} className="text-[10px]" />
             </>
           ) : null}
         </div>
@@ -102,6 +106,11 @@ export function AccessoriesDocPrint({ id }: { id: string }) {
         <div className="mt-4">Remark {d.remarks ?? ''}</div>
       </div>
       <Signatures labels={['Received / checked by (Stores)', 'Authorised signatory']} />
+    </>
+  );
+  return (
+    <PrintLayout title={`${TITLE[d.type]} ${d.docNo ?? ''}`}>
+      {challan ? <ChallanCopies>{() => content}</ChallanCopies> : content}
     </PrintLayout>
   );
 }

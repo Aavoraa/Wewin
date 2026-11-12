@@ -1,4 +1,3 @@
-import { Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { D } from '@wewin/shared';
 import { api } from '@/lib/api';
@@ -6,9 +5,7 @@ import { formatDate, formatDateTimeIst, formatInr, formatKg, formatPct } from '@
 import { useQr } from '@/lib/qr';
 import { LoadingState } from '@/components/states';
 import { type InwardDc, type OutwardDc } from '@/features/jobwork/types';
-import { CompanyBlock, PrintLayout, Signatures, useCompany } from './PrintLayout';
-
-const COPIES = ['ORIGINAL FOR JOB WORKER', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR SENDER'] as const;
+import { ChallanCopies, CompanyBlock, JOB_WORK_CHALLAN_COPIES, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
 
 /**
  * Delivery challan for job work (Rule 55, CGST Rules): GSTIN of both parties, HSN, quantity, value,
@@ -22,10 +19,9 @@ export function OutwardDcPrint({ id }: { id: string }) {
   const v = o.vendor;
   return (
     <PrintLayout size="A4" title={`D.C. ${o.docNo ?? ''}`}>
-      {COPIES.map((copy, ci) => (
-        <Fragment key={copy}>
-          <div className={ci < COPIES.length - 1 ? 'print-break mb-6' : ''}>
-            <div className="mb-1 text-right text-[10px] font-semibold">{copy}</div>
+      <ChallanCopies copies={JOB_WORK_CHALLAN_COPIES}>
+        {() => (
+          <>
             <div className="flex items-start justify-between border-b-2 border-black pb-2">
               <CompanyBlock c={company.data} />
               <div className="text-right">
@@ -46,6 +42,7 @@ export function OutwardDcPrint({ id }: { id: string }) {
                   State: {v.state ?? '—'} {v.stateCode ? `(${v.stateCode})` : ''}
                 </div>
                 <div className="font-semibold">GSTIN: {v.gstin ?? 'Unregistered'}</div>
+                <VendorCertificate v={v} />
               </div>
               <div>
                 <div>Purpose: {o.purpose}</div>
@@ -107,9 +104,9 @@ export function OutwardDcPrint({ id }: { id: string }) {
               labels={['Prepared by', "Receiver's signature & seal", `For ${company.data?.tradeName ?? company.data?.legalName ?? ''} — Authorised signatory`]}
               signed={[null, null, o.approvedBy ? `Approved: ${o.approvedBy.fullName}\n${formatDateTimeIst(o.approvedAt)}` : null]}
             />
-          </div>
-        </Fragment>
-      ))}
+          </>
+        )}
+      </ChallanCopies>
     </PrintLayout>
   );
 }
@@ -139,6 +136,7 @@ export function InwardDcPrint({ id }: { id: string }) {
         <div>
           <div className="font-semibold">{i.vendor.name}</div>
           <div>GSTIN: {i.vendor.gstin ?? '—'}</div>
+          <VendorCertificate v={i.vendor} />
         </div>
         <div>
           <div>

@@ -5,7 +5,7 @@ import { type Paging } from '../../core/list';
 type Db = Tx | typeof prisma;
 
 const include = {
-  vendor: { select: { id: true, code: true, name: true, gstin: true, city: true } },
+  vendor: { select: { id: true, code: true, name: true, gstin: true, city: true, certificateNo: true, certificateExpiry: true } },
   order: { select: { id: true, orderNo: true, styleNo: true } },
   lines: { orderBy: { lineNo: 'asc' }, include: { item: { select: { id: true, code: true, name: true, hsnCode: true, unit: true } } } },
 } satisfies Prisma.YarnReceiptInclude;

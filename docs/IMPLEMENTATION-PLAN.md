@@ -107,6 +107,15 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-12 — Three-copy delivery challan for store and fabric dispatches (Q-077)
+- `ChallanCopies` (print layout) prints a document once per copy on its own page; the outward D.C. now uses it. New `stock-doc` print (Yarn/Fabric Other Delivery, Rejection Entry) with consignee, GSTIN, certificate, HSN, bags, qty, rate, value; panels out and accessories purchase returns print three copies.
+- Stock documents now carry the vendor's address, GSTIN and certificate and each item's HSN.
+- Verified: typecheck, lint, tests (stock document data for the print). Not yet seen in a logged-in print preview.
+
+### 2026-11-12 — Vendor certificate on every print (Q-074)
+- `VendorCertificate` (print layout) under the vendor on the outward D.C., inward D.C. / GRN, panel D.C., yarn receipt GRN, purchase order, accessories document, debit note, payment voucher and vendor bill prints; the vendor selects behind those prints now include `certificateNo` / `certificateExpiry`.
+- Verified: typecheck, lint, tests (outward D.C. print data carries the certificate). Not yet seen in a logged-in print preview.
+
 ### 2026-11-12 — Program Defined on every process screen (Q-076)
 - Wewin asked to keep Program Defined for all processes. The tab is on all ten Transaction process screens; a programme may be for any active kilo process, with in / out items of the process's material (`PROCESS_MATERIAL`, shared); numbered `/PD<n>` outside the yarn processes.
 - Deliveries for knitting and the fabric processes may go under Program Defined or a fabric programme step (yarn processes still need Program Defined). Returns follow the programme's output item: yarn to YARN_STORE without rolls, fabric as rolls in FABRIC_STORE.
