@@ -6,6 +6,6 @@
     "dev": { "cache": false, "persistent": true },
     "lint": {},
     "typecheck": {},
-    "test": { "cache": false }
+    "test": { "cache": false, "passThroughEnv": ["JWT_SECRET", "CORS_ORIGIN", "TZ", "FY_START_MONTH", "SEED_OWNER_PASSWORD"] }
   }
 }
