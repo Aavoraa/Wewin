@@ -21,6 +21,26 @@ export const SETTINGS_SCHEMA = {
     default: true,
     description: 'Draft cutting lays must be approved (cutting.approve) before posting (Q-062).',
   },
+  'programs.approvalRequired': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Fabric programmes need approval by programs.approve. Off: whoever creates a programme also approves it (Q-074).',
+  },
+  'qc.approvalRequired': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Quality checks need approval by qc.approve. Off: whoever enters a check also approves it (Q-074).',
+  },
+  'trims.splApprovalRequired': {
+    schema: z.boolean(),
+    default: true,
+    description: 'Accessories special requests (SPL) need approval by trims.spl.approve. Off: whoever raises one also approves it (Q-074).',
+  },
+  'accounts.billVarianceApprovalRequired': {
+    schema: z.boolean(),
+    default: true,
+    description: 'A vendor bill outside the match tolerance needs owner approval before posting. Off: it posts with its variance recorded (Q-074).',
+  },
   'qc.finalRequiredForPacking': {
     schema: z.boolean(),
     default: true,
@@ -40,6 +60,11 @@ export const SETTINGS_SCHEMA = {
     schema: z.boolean(),
     default: true,
     description: 'Round the net amount of purchase orders to the nearest rupee, as the desktop software does (Q-066).',
+  },
+  'accounts.billRequiresValidCertificate': {
+    schema: z.boolean(),
+    default: true,
+    description: "A vendor bill cannot be saved or posted when the vendor's certificate is missing or expired on the bill date or today (Q-073).",
   },
   'accounts.feedEnabled': {
     schema: z.boolean(),

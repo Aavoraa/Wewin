@@ -36,24 +36,32 @@ export async function seedDemo(prisma: PrismaClient): Promise<void> {
     proc[p.code] = (await prisma.process.upsert({ where: { code: p.code }, create: p, update: {} })).id;
   }
 
-  const vendors = [
-    { code: 'KNT-SMK', name: 'Sri Murugan Knitting', city: 'Tiruppur', procs: ['KNITTING'], creditDays: 30 },
-    { code: 'KNT-AVK', name: 'Annai Velankanni Knits', city: 'Tiruppur', procs: ['KNITTING'], creditDays: 30 },
-    { code: 'KNT-KPK', name: 'Kongu Power Knitting', city: 'Avinashi', procs: ['KNITTING'], creditDays: 45 },
-    { code: 'DYE-SVD', name: 'Sri Vinayaga Dyeing', city: 'Tiruppur', procs: ['DYEING'], creditDays: 45 },
-    { code: 'DYE-NCP', name: 'Noyyal Colour Processors', city: 'Perundurai', procs: ['DYEING'], creditDays: 45 },
-    { code: 'CMP-RCF', name: 'Royal Compacting & Finishing', city: 'Tiruppur', procs: ['COMPACTING'], creditDays: 30 },
-    { code: 'PRT-ASP', name: 'Arun Screen Printers', city: 'Tiruppur', procs: ['PRINTING'], creditDays: 30 },
-    { code: 'EMB-STE', name: 'Star Embroidery Works', city: 'Tiruppur', procs: ['EMBROIDERY'], creditDays: 30 },
-    { code: 'MIL-KSM', name: 'Kaveri Spinning Mills', city: 'Coimbatore', procs: [], creditDays: 60 },
-    { code: 'TRM-PLA', name: 'Precision Labels & Accessories', city: 'Tiruppur', procs: [], creditDays: 30 },
+  // Demo certificates (Q-073): most valid, KNT-KPK expiring soon, EMB-STE already expired (cannot be billed).
+  const vendors: { code: string; name: string; city: string; procs: string[]; creditDays: number; cert: [string, string] }[] = [
+    { code: 'KNT-SMK', name: 'Sri Murugan Knitting', city: 'Tiruppur', procs: ['KNITTING'], creditDays: 30, cert: ['GOTS-SMK-2026-118', '2027-06-30'] },
+    { code: 'KNT-AVK', name: 'Annai Velankanni Knits', city: 'Tiruppur', procs: ['KNITTING'], creditDays: 30, cert: ['OEKO-TEX-AVK-26-4471', '2027-03-31'] },
+    { code: 'KNT-KPK', name: 'Kongu Power Knitting', city: 'Avinashi', procs: ['KNITTING'], creditDays: 45, cert: ['GOTS-KPK-2025-093', '2026-12-05'] },
+    { code: 'DYE-SVD', name: 'Sri Vinayaga Dyeing', city: 'Tiruppur', procs: ['DYEING'], creditDays: 45, cert: ['ZDHC-SVD-2026-0217', '2027-09-30'] },
+    { code: 'DYE-NCP', name: 'Noyyal Colour Processors', city: 'Perundurai', procs: ['DYEING'], creditDays: 45, cert: ['OEKO-TEX-NCP-26-1290', '2027-01-31'] },
+    { code: 'CMP-RCF', name: 'Royal Compacting & Finishing', city: 'Tiruppur', procs: ['COMPACTING'], creditDays: 30, cert: ['GOTS-RCF-2026-064', '2027-05-31'] },
+    { code: 'PRT-ASP', name: 'Arun Screen Printers', city: 'Tiruppur', procs: ['PRINTING'], creditDays: 30, cert: ['OEKO-TEX-ASP-26-3318', '2027-04-30'] },
+    { code: 'EMB-STE', name: 'Star Embroidery Works', city: 'Tiruppur', procs: ['EMBROIDERY'], creditDays: 30, cert: ['GOTS-STE-2025-201', '2026-10-31'] },
+    { code: 'MIL-KSM', name: 'Kaveri Spinning Mills', city: 'Coimbatore', procs: [], creditDays: 60, cert: ['GOTS-KSM-2026-012', '2027-12-31'] },
+    { code: 'TRM-PLA', name: 'Precision Labels & Accessories', city: 'Tiruppur', procs: [], creditDays: 30, cert: ['OEKO-TEX-PLA-26-5520', '2027-08-31'] },
   ];
   for (const v of vendors) {
     const row = await prisma.vendor.upsert({
       where: { code: v.code },
-      create: { code: v.code, name: v.name, city: v.city, state: 'Tamil Nadu', stateCode: '33', creditDays: v.creditDays },
+      create: {
+        code: v.code, name: v.name, city: v.city, state: 'Tamil Nadu', stateCode: '33', creditDays: v.creditDays,
+        certificateNo: v.cert[0], certificateExpiry: new Date(`${v.cert[1]}T00:00:00Z`),
+      },
       update: {},
     });
+    // Existing demo vendors from before the certificate get the demo one; a certificate already entered is kept.
+    if (!row.certificateNo) {
+      await prisma.vendor.update({ where: { id: row.id }, data: { certificateNo: v.cert[0], certificateExpiry: new Date(`${v.cert[1]}T00:00:00Z`) } });
+    }
     await prisma.location.upsert({
       where: { vendorId: row.id },
       create: { code: `V-${row.code}`, name: row.name, kind: 'VENDOR', vendorId: row.id },

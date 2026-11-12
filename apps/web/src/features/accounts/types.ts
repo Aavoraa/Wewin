@@ -79,7 +79,20 @@ export interface VendorBill {
   version: number;
   postedAt: string | null;
   cancelReason: string | null;
-  vendor: { id: string; code: string; name: string; gstin: string | null; creditDays: number };
+  vendor: {
+    id: string;
+    code: string;
+    name: string;
+    gstin: string | null;
+    creditDays: number;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    state: string | null;
+    stateCode: string | null;
+    certificateNo: string | null;
+    certificateExpiry: string | null;
+  };
   order: { id: string; orderNo: string; styleNo: string } | null;
   lines: {
     id: string;

@@ -12,7 +12,7 @@ export function YarnReceiptPrint({ id }: { id: string }) {
   if (!q.data || company.isLoading) return <LoadingState />;
   const r = q.data;
   return (
-    <PrintLayout size="A5" title={`GRN ${r.docNo ?? ''}`}>
+    <PrintLayout title={`GRN ${r.docNo ?? ''}`}>
       <div className="flex items-start justify-between border-b border-black pb-2">
         <CompanyBlock c={company.data} />
         <div className="text-right">

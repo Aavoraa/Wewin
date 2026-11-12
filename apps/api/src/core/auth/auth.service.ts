@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
-import { type MeResponse } from '@wewin/shared';
+import { type MeResponse, withApprovalSwitches } from '@wewin/shared';
 import { env } from '../../config/env';
 import { withTx } from '../db';
 import { AppError } from '../errors/app-error';
 import { authRepo } from './auth.repo';
+import { approvalSwitches } from '../settings/settings.service';
 import {
   getDummyHash,
   hashPassword,
@@ -173,7 +174,7 @@ export const authService = {
     const u = await authRepo.findUserAccess(userId);
     if (!u?.isActive) throw new AppError('UNAUTHENTICATED', 'User not found or inactive', 401);
     const activeRoles = u.roles.filter((r) => r.role.isActive);
-    const perms = new Set(activeRoles.flatMap((r) => r.role.permissions.map((p) => p.permissionKey)));
+    const perms = withApprovalSwitches(activeRoles.flatMap((r) => r.role.permissions.map((p) => p.permissionKey)), await approvalSwitches());
     return {
       id: u.id,
       username: u.username,

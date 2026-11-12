@@ -256,6 +256,7 @@ export function VendorBillPage() {
         status={status}
         postedAt={doc?.postedAt}
         backHref="/vendor-bills"
+        printHref={doc ? `/print/vendor-bill/${doc.id}` : undefined}
         canEdit={can('accounts.bill.create')}
         canPost={!d.isNew && can('accounts.bill.post')}
         canCancel={can('accounts.bill.cancel')}

@@ -9,7 +9,7 @@ export async function masters() {
   const proc = async (code: string, stage: 'KG' | 'PCS') =>
     prisma.process.upsert({ where: { code }, create: { code, name: code, stage, defaultReturnDays: 15 }, update: {} });
   const vendor = async (name: string, processId?: string) => {
-    const v = await prisma.vendor.create({ data: { code: uid('V'), name, creditDays: 30 } });
+    const v = await prisma.vendor.create({ data: { code: uid('V'), name, creditDays: 30, certificateNo: `CERT-${uid('C')}`, certificateExpiry: new Date('2099-12-31T00:00:00.000Z') } });
     const loc = await prisma.location.create({ data: { code: `V-${v.code}`, name, kind: 'VENDOR', vendorId: v.id } });
     if (processId) await prisma.vendorProcess.create({ data: { vendorId: v.id, processId } });
     return { ...v, locationId: loc.id };

@@ -12,6 +12,7 @@ import {
   type zVendorListQuery,
 } from '@wewin/shared';
 import { type Tx, prisma, withTx } from '../../core/db';
+import { dateOnly, toDbDateOrNull } from '../../core/documents';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
 import { activeFilter, codeNameSearch, orderBy, paging } from '../../core/list';
 import { mastersRepo as repo } from './masters.repo';
@@ -24,8 +25,13 @@ function dec(v: string | null | undefined) {
 }
 
 function vendorFields(v: VendorData) {
-  const { processIds: _p, code: _c, tdsRatePct, debitNoteGstRatePct, ...rest } = v;
-  return { ...rest, tdsRatePct: dec(tdsRatePct), debitNoteGstRatePct: dec(debitNoteGstRatePct) };
+  const { processIds: _p, code: _c, tdsRatePct, debitNoteGstRatePct, certificateExpiry, ...rest } = v;
+  return {
+    ...rest,
+    tdsRatePct: dec(tdsRatePct),
+    debitNoteGstRatePct: dec(debitNoteGstRatePct),
+    certificateExpiry: toDbDateOrNull(certificateExpiry),
+  };
 }
 
 export const mastersService = {
@@ -272,9 +278,14 @@ export const mastersService = {
   },
 };
 
-function shapeVendor<T extends { processes: { process: { id: string; code: string; name: string } }[] }>(v: T) {
-  const { processes, ...rest } = v;
-  return { ...rest, processes: processes.map((p) => p.process), processIds: processes.map((p) => p.process.id) };
+function shapeVendor<T extends { certificateExpiry: Date | null; processes: { process: { id: string; code: string; name: string } }[] }>(v: T) {
+  const { processes, certificateExpiry, ...rest } = v;
+  return {
+    ...rest,
+    certificateExpiry: dateOnly(certificateExpiry),
+    processes: processes.map((p) => p.process),
+    processIds: processes.map((p) => p.process.id),
+  };
 }
 
 export type { VendorData };

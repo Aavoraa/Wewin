@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "sample-data": "tsx --env-file=../../.env scripts/sample-data.ts",
+    "approvals:off": "tsx --env-file=../../.env scripts/approvals-off.ts",
     "sample-docs": "tsx --env-file=../../.env scripts/make-sample-po-dcs.ts",
     "sample-data:more": "tsx --env-file=../../.env scripts/sample-data-more.ts",
     "sample-data:orders": "tsx --env-file=../../.env scripts/sample-data-orders.ts",

@@ -352,7 +352,7 @@ rate limiting on `/auth/*`; secrets in environment variables; database not expos
 | Template | Size | Notes |
 |---|---|---|
 | Delivery challan (job work) | A4 / A5 | Rule 55 fields: GSTIN, HSN, qty, value, purpose "for job work", original / duplicate / triplicate copies |
-| Inward D.C. / GRN | A5 | Rolls, weights, GSM/dia, loss % |
+| Inward D.C. / GRN | A4 (was A5; all prints A4 since 2026-11-12) | Rolls, weights, GSM/dia, loss % |
 | Bundle ticket | Label roll | QR code, order, color, size, component, pcs |
 | Roll / carton label | Label roll | QR code, contents |
 | Export packing list, commercial invoice | A4 | Carton-wise breakdown |

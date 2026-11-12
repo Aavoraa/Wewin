@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { zItemType, zUnit } from './constants';
 import { zDecimal } from './decimal';
+import { daysBetween, zDate } from './dates';
 import { zListQuery, zRef } from './api';
 import { zPasswordPolicy } from './auth';
 import { PERMISSION_KEYS, type PermissionKey } from './permissions';
@@ -73,11 +74,24 @@ const vendorShape = z.object({
   bankName: optText(100),
   bankAccount: optText(40),
   bankIfsc: optText(20),
+  /** Vendor certificate (Q-073). Number and expiry are recorded together. */
+  certificateNo: optText(60),
+  certificateExpiry: zOptional(zDate()),
   processIds: z.array(zRef()).default([]),
 });
 
 type VendorShape = z.output<typeof vendorShape>;
-function vendorRules(v: Pick<VendorShape, 'tdsApplicable' | 'tdsRatePct' | 'debitNoteGstApplicable' | 'debitNoteGstRatePct'>, ctx: z.RefinementCtx) {
+type VendorRuleFields = Pick<
+  VendorShape,
+  'tdsApplicable' | 'tdsRatePct' | 'debitNoteGstApplicable' | 'debitNoteGstRatePct' | 'certificateNo' | 'certificateExpiry'
+>;
+function vendorRules(v: VendorRuleFields, ctx: z.RefinementCtx) {
+  if (v.certificateNo && !v.certificateExpiry) {
+    ctx.addIssue({ code: 'custom', path: ['certificateExpiry'], message: 'Enter the certificate expiry date' });
+  }
+  if (v.certificateExpiry && !v.certificateNo) {
+    ctx.addIssue({ code: 'custom', path: ['certificateNo'], message: 'Enter the certificate number' });
+  }
   if (v.tdsApplicable && !v.tdsRatePct) {
     ctx.addIssue({ code: 'custom', path: ['tdsRatePct'], message: 'TDS rate is required when TDS applies' });
   }
@@ -88,6 +102,37 @@ function vendorRules(v: Pick<VendorShape, 'tdsApplicable' | 'tdsRatePct' | 'debi
 
 export const zVendorInput = vendorShape.superRefine(vendorRules);
 export const zVendorUpdate = vendorShape.extend({ version: z.number().int().min(1) }).superRefine(vendorRules);
+
+/**
+ * The vendor form requires the certificate (Q-073). The API accepts vendors without one so imports,
+ * scans and vendors created before the certificate keep working; the vendor list flags them.
+ */
+function certificateRequired(v: Pick<VendorShape, 'certificateNo' | 'certificateExpiry'>, ctx: z.RefinementCtx) {
+  if (!v.certificateNo) ctx.addIssue({ code: 'custom', path: ['certificateNo'], message: 'Certificate number is required' });
+  if (!v.certificateExpiry) ctx.addIssue({ code: 'custom', path: ['certificateExpiry'], message: 'Certificate expiry date is required' });
+}
+export const zVendorFormInput = vendorShape.superRefine(vendorRules).superRefine(certificateRequired);
+export const zVendorFormUpdate = vendorShape
+  .extend({ version: z.number().int().min(1) })
+  .superRefine(vendorRules)
+  .superRefine(certificateRequired);
+
+/** Days before expiry at which a certificate is shown as "expiring" (Q-073 default). */
+export const CERTIFICATE_EXPIRY_WARN_DAYS = 30;
+export type CertificateStatus = 'MISSING' | 'EXPIRED' | 'EXPIRING' | 'VALID';
+
+/** Certificate state on `today` (YYYY-MM-DD, IST). Valid through the expiry date itself. */
+export function certificateStatus(
+  expiry: string | null | undefined,
+  today: string,
+  warnDays: number = CERTIFICATE_EXPIRY_WARN_DAYS,
+): { status: CertificateStatus; daysLeft: number | null } {
+  if (!expiry) return { status: 'MISSING', daysLeft: null };
+  const daysLeft = daysBetween(today, expiry);
+  if (daysLeft < 0) return { status: 'EXPIRED', daysLeft };
+  if (daysLeft <= warnDays) return { status: 'EXPIRING', daysLeft };
+  return { status: 'VALID', daysLeft };
+}
 export type VendorInput = z.input<typeof zVendorInput>;
 export type VendorOutput = z.output<typeof zVendorInput>;
 export const zVendorListQuery = zMasterListQuery.extend({
@@ -167,3 +212,23 @@ export const zRoleInput = z.object({
   permissions: z.array(z.enum(PERMISSION_KEYS as [PermissionKey, ...PermissionKey[]])),
 });
 export const zRoleUpdate = zRoleInput.omit({ code: true }).extend({ version: z.number().int().min(1) });
+
+/**
+ * Why a bill for this vendor may not be generated (Q-073), or null when it may.
+ * The certificate must exist and be in force on the bill date and on `today` — a back-dated bill
+ * cannot get round an expired certificate.
+ */
+export function billCertificateProblem(
+  vendor: { name: string; certificateNo: string | null; certificateExpiry: string | null },
+  billDate: string,
+  today: string,
+): string | null {
+  if (!vendor.certificateNo || !vendor.certificateExpiry) {
+    return `${vendor.name} has no certificate number and expiry date. Add them in Masters › Vendors before billing.`;
+  }
+  const checkOn = billDate > today ? billDate : today;
+  if (vendor.certificateExpiry < checkOn) {
+    return `${vendor.name}'s certificate ${vendor.certificateNo} expired on ${vendor.certificateExpiry}. Renew it in Masters › Vendors before billing.`;
+  }
+  return null;
+}

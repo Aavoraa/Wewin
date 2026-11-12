@@ -58,8 +58,30 @@
 
 /* ───────── Print ───────── */
 @media print {
+  /* Every print is A4 portrait; a print view may still set its own page box (labels). */
   @page {
+    size: A4;
     margin: 10mm;
+  }
+  /* Wide grids on screen scroll sideways; on paper they shrink to the A4 width instead of being cut off. */
+  .print-fit {
+    overflow: visible !important;
+  }
+  .print-fit table {
+    width: 100% !important;
+  }
+  .print-fit th,
+  .print-fit td {
+    width: auto !important;
+    min-width: 0 !important;
+    font-size: 9px;
+  }
+  .print-fit input,
+  .print-fit select,
+  .print-fit textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 9px;
   }
   body {
     background: #fff;
