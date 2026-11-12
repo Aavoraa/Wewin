@@ -5,10 +5,15 @@ import { type Paging } from '../../core/list';
 type Db = Tx | typeof prisma;
 
 const include = {
-  vendor: { select: { id: true, code: true, name: true } },
+  vendor: {
+    select: {
+      id: true, code: true, name: true, gstin: true, addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, pincode: true,
+      certificateNo: true, certificateExpiry: true,
+    },
+  },
   order: { select: { id: true, orderNo: true, styleNo: true } },
   toOrder: { select: { id: true, orderNo: true, styleNo: true } },
-  lines: { orderBy: { lineNo: 'asc' }, include: { item: { select: { id: true, code: true, name: true, type: true, unit: true } } } },
+  lines: { orderBy: { lineNo: 'asc' }, include: { item: { select: { id: true, code: true, name: true, type: true, unit: true, hsnCode: true } } } },
 } satisfies Prisma.StockDocInclude;
 export type StockDocDetail = Prisma.StockDocGetPayload<{ include: typeof include }>;
 

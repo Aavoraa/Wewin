@@ -297,6 +297,9 @@ describe('management approval of outward D.C.s (Q-048)', () => {
     expect(await bal(m.items.yarn.id, m.vendors.knitter.locationId, lot)).toBe('40.000');
     const print = await owner.get(`/api/v1/outward-dcs/${id}/print`);
     expect(print.body.data.approvedBy.id).toBe(owner.userId);
+    // The challan prints the job worker's certificate (Q-074).
+    expect(print.body.data.vendor.certificateNo).toMatch(/^CERT-/);
+    expect(print.body.data.vendor.certificateExpiry).toMatch(/^2099-12-31/);
     expect((await owner.post(`/api/v1/outward-dcs/${id}/approve`, { note: 'after posting' })).status).toBe(409);
   });
 

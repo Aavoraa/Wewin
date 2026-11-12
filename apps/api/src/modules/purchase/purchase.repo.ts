@@ -5,7 +5,7 @@ import { type Paging } from '../../core/list';
 type Db = Tx | typeof prisma;
 
 const include = {
-  vendor: { select: { id: true, code: true, name: true, gstin: true, addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, pincode: true, phone: true, contactPerson: true } },
+  vendor: { select: { id: true, code: true, name: true, gstin: true, certificateNo: true, certificateExpiry: true, addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, pincode: true, phone: true, contactPerson: true } },
   order: { select: { id: true, orderNo: true, styleNo: true, status: true, buyer: { select: { name: true } } } },
   lines: {
     orderBy: { lineNo: 'asc' },

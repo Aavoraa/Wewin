@@ -44,14 +44,14 @@ const lineRows = (lines: BillLineData[]) =>
   }));
 
 const dnInclude = {
-  vendor: { select: { id: true, code: true, name: true, gstin: true, addressLine1: true, city: true, state: true, stateCode: true } },
+  vendor: { select: { id: true, code: true, name: true, gstin: true, addressLine1: true, city: true, state: true, stateCode: true, certificateNo: true, certificateExpiry: true } },
   bill: { select: { id: true, docNo: true, vendorInvoiceNo: true } },
   lines: { orderBy: { lineNo: 'asc' } },
 } satisfies Prisma.DebitNoteInclude;
 export type DebitNoteDetail = Prisma.DebitNoteGetPayload<{ include: typeof dnInclude }>;
 
 const payInclude = {
-  vendor: { select: { id: true, code: true, name: true, bankName: true, bankAccount: true, bankIfsc: true, tdsApplicable: true, tdsRatePct: true } },
+  vendor: { select: { id: true, code: true, name: true, bankName: true, bankAccount: true, bankIfsc: true, tdsApplicable: true, tdsRatePct: true, certificateNo: true, certificateExpiry: true } },
   allocations: { include: { bill: { select: { id: true, docNo: true, vendorInvoiceNo: true, vendorInvoiceDate: true } } } },
 } satisfies Prisma.PaymentVoucherInclude;
 export type PaymentDetail = Prisma.PaymentVoucherGetPayload<{ include: typeof payInclude }>;

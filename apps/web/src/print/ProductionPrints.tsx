@@ -5,7 +5,7 @@ import { useQr } from '@/lib/qr';
 import { LoadingState } from '@/components/states';
 import { type CutLay } from '@/features/production/CuttingPages';
 import { type PanelDc } from '@/features/production/PanelPages';
-import { CompanyBlock, PrintLayout, Signatures, useCompany } from './PrintLayout';
+import { ChallanCopies, CompanyBlock, JOB_WORK_CHALLAN_COPIES, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
 
 function BundleTicket({ no, order, style, colour, size, component, pcs }: { no: string; order: string; style: string; colour: string; size: string; component: string; pcs: number }) {
   const qr = useQr(no, 130);
@@ -195,8 +195,9 @@ export function PanelDcPrint({ id }: { id: string }) {
   const q = useQuery({ queryKey: ['print', 'panel', id], queryFn: () => api.get<PanelDc>(`/panel-dcs/${id}/print`) });
   if (!q.data || company.isLoading) return <LoadingState />;
   const d = q.data;
-  return (
-    <PrintLayout size="A4" title={`Panel D.C. ${d.docNo ?? ''}`}>
+  // Panels sent out print as a three-copy delivery challan (Q-077); a receipt prints once.
+  const content = (
+    <>
       <div className="flex items-start justify-between border-b-2 border-black pb-2">
         <CompanyBlock c={company.data} />
         <div className="text-right">
@@ -211,6 +212,7 @@ export function PanelDcPrint({ id }: { id: string }) {
           <div className="font-semibold">{d.vendor.name}</div>
           <div>{[d.vendor.addressLine1, d.vendor.city].filter(Boolean).join(', ')}</div>
           <div>GSTIN: {d.vendor.gstin ?? 'Unregistered'}</div>
+          <VendorCertificate v={d.vendor} />
         </div>
         <div>
           <div>Order: {d.order.orderNo} · {d.order.styleNo}</div>
@@ -252,6 +254,11 @@ export function PanelDcPrint({ id }: { id: string }) {
       </table>
       <p className="mt-2 text-[10px]">Cut panels sent for {d.process.name.toLowerCase()} on job-work basis, to be returned after processing. No sale is involved.</p>
       <Signatures labels={['Prepared by', "Receiver's signature", 'Authorised signatory']} />
+    </>
+  );
+  return (
+    <PrintLayout size="A4" title={`Panel D.C. ${d.docNo ?? ''}`}>
+      {d.type === 'OUT' ? <ChallanCopies copies={JOB_WORK_CHALLAN_COPIES}>{() => content}</ChallanCopies> : content}
     </PrintLayout>
   );
 }

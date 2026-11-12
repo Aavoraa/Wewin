@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { formatDate, formatInr } from '@/lib/format';
 import { LoadingState } from '@/components/states';
 import { type PoDoc } from '@/features/purchase/PurchasePages';
-import { CompanyBlock, PrintLayout, Signatures, useCompany } from './PrintLayout';
+import { CompanyBlock, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
 
 const TITLE: Record<PoDoc['kind'], string> = { YARN: 'PURCHASE ORDER — YARN', FABRIC: 'PURCHASE ORDER — FABRIC', ACCESSORY: 'PURCHASE ORDER — ACCESSORIES' };
 const qty = (v: string) => String(Number(v));
@@ -50,6 +50,7 @@ export function PurchaseOrderPrint({ id }: { id: string }) {
               Cont: {v.contactPerson ?? ''} {v.phone ? `· Phone: ${v.phone}` : ''}
             </div>
             <div className="text-[10px] font-semibold">GSTIN: {v.gstin ?? ''}</div>
+            <VendorCertificate v={v} className="text-[10px]" />
             <div className="text-[10px]">State name / code: {[v.state, v.stateCode].filter(Boolean).join(' / ')}</div>
           </div>
         </div>

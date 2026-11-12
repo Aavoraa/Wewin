@@ -5,7 +5,7 @@ import { type Paging } from '../../core/list';
 type Db = Tx | typeof prisma;
 
 const outwardInclude = {
-  vendor: { select: { id: true, code: true, name: true, gstin: true, addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, pincode: true } },
+  vendor: { select: { id: true, code: true, name: true, gstin: true, certificateNo: true, certificateExpiry: true, addressLine1: true, addressLine2: true, city: true, state: true, stateCode: true, pincode: true } },
   process: { select: { id: true, code: true, name: true, defaultReturnDays: true } },
   order: { select: { id: true, orderNo: true, styleNo: true, status: true } },
   fromLocation: { select: { id: true, code: true, name: true, kind: true, vendorId: true } },
@@ -34,7 +34,7 @@ const outwardInclude = {
 export type OutwardDetail = Prisma.OutwardDcGetPayload<{ include: typeof outwardInclude }>;
 
 const inwardInclude = {
-  vendor: { select: { id: true, code: true, name: true, gstin: true } },
+  vendor: { select: { id: true, code: true, name: true, gstin: true, certificateNo: true, certificateExpiry: true } },
   toLocation: { select: { id: true, code: true, name: true, kind: true } },
   lines: { orderBy: { lineNo: 'asc' }, include: { item: { select: { id: true, code: true, name: true, hsnCode: true } }, roll: { select: { id: true, rollNo: true } } } },
   links: {

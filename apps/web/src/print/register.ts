@@ -7,6 +7,7 @@ import { BundleTicketsPrint, CartonLabelPrint, PackingListPrint, PanelDcPrint } 
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 import { ProgrammePrint } from './ProgrammePrint';
 import { AccessoriesDocPrint, SplRequestPrint } from './AccessoriesPrints';
+import { StockDocPrint } from './StockDocPrint';
 
 /** Print templates by document type (A§11). */
 PRINT_TEMPLATES['yarn-receipt'] = YarnReceiptPrint;
@@ -26,3 +27,4 @@ PRINT_TEMPLATES['purchase-order'] = PurchaseOrderPrint;
 PRINT_TEMPLATES['programme'] = ProgrammePrint;
 PRINT_TEMPLATES['accessories-doc'] = AccessoriesDocPrint;
 PRINT_TEMPLATES['spl-request'] = SplRequestPrint;
+PRINT_TEMPLATES['stock-doc'] = StockDocPrint;
