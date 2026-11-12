@@ -47,6 +47,22 @@ describe('voice without AI', () => {
     expect((await say(owner, 'new yarn receipt')).body.data).toMatchObject({ kind: 'navigate', to: '/yarn-receipts/new' });
     expect((await say(owner, 'how much yarn do we have')).body.data.kind).toBe('unknown');
   });
+
+  it('accepts the real menu: paths with capitals, underscores and a query (Transaction / Accessories)', async () => {
+    const menu = [
+      ...screens,
+      { label: 'Yarn Dyeing', to: '/transactions/YARN_DYEING' },
+      { label: 'Yarn/Fabric Other Inw/Del', to: '/stock-docs/OTHER_DELIVERY' },
+      { label: 'Purchase Receipt', to: '/accessories/RECEIPT' },
+      { label: 'Purchase Order', to: '/purchase-orders?kind=ACCESSORY' },
+      ...Array.from({ length: 80 }, (_, i) => ({ label: `Screen ${i}`, to: `/screen-${i}` })),
+    ];
+    const r = await owner.post('/api/v1/voice/interpret', { transcript: 'open purchase receipt', screens: menu });
+    ok(r);
+    expect(r.body.data).toMatchObject({ kind: 'navigate', to: '/accessories/RECEIPT' });
+    // Anything that is not an in-app path is still refused.
+    ok(await owner.post('/api/v1/voice/interpret', { transcript: 'open x', screens: [{ label: 'X', to: 'https://evil.example/' }] }), 400);
+  });
 });
 
 describe('voice with AI (interpreter stubbed)', () => {

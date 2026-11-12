@@ -45,6 +45,18 @@ elif [ "${VERCEL_ENV:-}" = "production" ]; then
     echo "[build] RESET_OWNER_PASSWORD is set — applied once per value (later deploys skip it); remove it when done"
     (cd packages/db && pnpm exec tsx prisma/reset-owner.ts)
   fi
+  # Demonstration data for a presentation (LOAD_SAMPLE_DATA=yes in Vercel): demo masters, then the
+  # sample documents for every module, entered through the app's own API so every rule, number and
+  # stock movement is real. Each step runs once (it skips what is already loaded); a failure is
+  # reported but does not stop the deploy. Remove the variable when the data is in.
+  if [ "${LOAD_SAMPLE_DATA:-}" = "yes" ]; then
+    echo "[build] LOAD_SAMPLE_DATA=yes — loading sample data into the site's database (each step runs once)"
+    for step in seed-demo-masters sample-data sample-data-more sample-data-orders sample-data-modules; do
+      echo "[build]   sample data: ${step}"
+      (cd apps/api && NODE_ENV=development SAMPLE_DATA_LIVE=yes JOBS_ENABLED=false pnpm exec tsx "scripts/${step}.ts") \
+        || { echo "[build] WARNING: sample data step ${step} failed — the deploy continues; see the log above" >&2; break; }
+    done
+  fi
 else
   echo "[build] ${VERCEL_ENV:-local} build: database not touched"
 fi
