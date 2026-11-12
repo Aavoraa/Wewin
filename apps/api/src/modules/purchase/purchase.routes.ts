@@ -25,6 +25,7 @@ export const purchaseController = {
   cancel: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zReason }>) => svc.cancel(params.id, body.reason, user),
   close: ({ params, body, user }: In<{ params: typeof zIdParam; body: typeof zReason }>) => svc.close(params.id, body.reason, user),
   config: () => svc.config(),
+  yarnBalance: ({ params }: In<{ params: typeof zIdParam }>) => svc.yarnBalance(params.id),
 };
 
 /** /api/v1/purchase-orders — yarn, fabric and accessories purchase orders (Q-066). */
@@ -36,6 +37,7 @@ const approve = requirePermission('purchase.approve');
 const cancel = requirePermission('purchase.cancel');
 purchaseRouter.get('/purchase-orders', view, handle({ query: zPoListQuery }, c.list));
 purchaseRouter.get('/purchase-orders/config', view, handle({}, c.config));
+purchaseRouter.get('/orders/:id/yarn-balance', view, handle({ params: zIdParam }, c.yarnBalance));
 purchaseRouter.get('/purchase-orders/:id', view, handle({ params: zIdParam }, c.get));
 purchaseRouter.post('/purchase-orders', create, handle({ body: zPoInput }, c.create, { status: 201 }));
 purchaseRouter.patch('/purchase-orders/:id', create, handle({ params: zIdParam, body: zPoUpdate }, c.update));

@@ -264,6 +264,38 @@ export function programPlan(requiredKg: DecimalLike, processes: { sequence: numb
   return plan;
 }
 
+export interface ProgramYarnNeed {
+  yarnItemId: string | null;
+  counts: string | null;
+  colour: string | null;
+  kg: string;
+}
+
+/**
+ * Yarn to buy for one fabric programme (Q-073): the planned input kg of its first process (losses of
+ * every process added back by programPlan), split by the yarn mix consumption %. Without a yarn mix the
+ * first process's input item takes it all. A programme whose first process takes something other than
+ * yarn (e.g. grey fabric bought in) needs no yarn.
+ */
+export function programYarnNeed(p: {
+  requiredKg: DecimalLike | null;
+  processes: { sequence: number; allowedLossPct: DecimalLike; inputItemId?: string | null; inputIsYarn?: boolean }[];
+  yarnMix: { yarnItemId?: string | null; counts: string; colour?: string | null; consPct: DecimalLike }[];
+}): ProgramYarnNeed[] {
+  if (!p.requiredKg || !D(p.requiredKg).gt(0) || !p.processes.length) return [];
+  const first = [...p.processes].sort((a, b) => a.sequence - b.sequence)[0]!;
+  if (first.inputItemId && first.inputIsYarn === false) return [];
+  const yarnKg = D(programPlan(p.requiredKg, p.processes)[first.sequence]!.inputKg);
+  const firstYarn = first.inputItemId && first.inputIsYarn ? first.inputItemId : null;
+  if (!p.yarnMix.length) return firstYarn ? [{ yarnItemId: firstYarn, counts: null, colour: null, kg: yarnKg.toFixed(3) }] : [];
+  return p.yarnMix.map((m) => ({
+    yarnItemId: m.yarnItemId || (p.yarnMix.length === 1 ? firstYarn : null),
+    counts: m.counts,
+    colour: m.colour?.trim() || null,
+    kg: yarnKg.times(D(m.consPct)).div(100).toFixed(3),
+  }));
+}
+
 /**
  * Programme Calculate (Q-067): finished kg of a portion = Σ over sizes (pieces of the colour in that
  * size × actual piece weight in grams) ÷ 1000. The process losses are then added by programPlan.

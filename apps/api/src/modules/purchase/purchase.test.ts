@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../core/db';
 import { type Client, asUser, uid } from '../../../test/helpers';
-import { type Masters, createOrder, masters } from '../../../test/fixtures';
+import { type Masters, createOrder, createProgram, masters } from '../../../test/fixtures';
 
 let owner: Client;
 let stores: Client; // creates POs, cannot approve, cancel or close them
@@ -100,6 +100,29 @@ describe('purchase orders (Q-066)', () => {
     expect(general.body.data.lines[0].orderId).toBeNull();
     ok(await stores.del(`/api/v1/purchase-orders/${general.body.data.id}`), 204);
     ok(await stores.get(`/api/v1/purchase-orders/${general.body.data.id}`), 404);
+  });
+
+  it('yarn balance (Q-073): approved programme yarn less what is on yarn POs that are not cancelled', async () => {
+    const o = await createOrder(owner, m);
+    const balance = async () => {
+      const r = await stores.get(`/api/v1/orders/${o.id}/yarn-balance`);
+      ok(r);
+      return r.body.data as { itemId: string; requiredKg: string; poKg: string; balance: string; programs: string[] }[];
+    };
+    await createProgram(owner, m, o.id, { approve: false });
+    expect(await balance()).toEqual([]); // draft programmes do not count
+
+    const prog = await createProgram(owner, m, o.id);
+    expect(await balance()).toEqual([expect.objectContaining({ itemId: m.items.yarn.id, requiredKg: '560.171', poKg: '0.000', balance: '560.171', programs: [prog.programNo] })]);
+
+    const po = await stores.post('/api/v1/purchase-orders', yarnPo({ orderId: o.id, lines: [{ itemId: m.items.yarn.id, qty: '200', rate: '300' }] }));
+    ok(po, 201);
+    expect((await balance())[0]).toMatchObject({ poKg: '200.000', balance: '360.171' });
+    ok(await owner.post(`/api/v1/purchase-orders/${po.body.data.id}/approve`, { note: 'Rate as agreed' }));
+    ok(await owner.post(`/api/v1/purchase-orders/${po.body.data.id}/cancel`, { reason: 'Mill could not supply' }));
+    expect((await balance())[0]).toMatchObject({ poKg: '0.000', balance: '560.171' });
+
+    ok(await (await asUser(['orders.view'])).get(`/api/v1/orders/${o.id}/yarn-balance`), 403);
   });
 
   it('lists with filters, and a user without purchase.view is refused', async () => {

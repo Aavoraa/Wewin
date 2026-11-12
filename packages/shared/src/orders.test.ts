@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accessoryQtyDetails, orderTotals, programFinishedKg, programPlan, trimsRequirement, zOrderInput, zProgramInput } from './orders';
+import { accessoryQtyDetails, orderTotals, programFinishedKg, programPlan, programYarnNeed, trimsRequirement, zOrderInput, zProgramInput } from './orders';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const base = {
@@ -87,6 +87,32 @@ describe('programPlan', () => {
   it('handles zero loss and 100% loss safely', () => {
     expect(programPlan('10', [{ sequence: 1, allowedLossPct: '0' }])[1]).toEqual({ outputKg: '10.000', inputKg: '10.000' });
     expect(programPlan('10', [{ sequence: 1, allowedLossPct: '100' }])[1]!.inputKg).toBe('10.000');
+  });
+});
+
+describe('programYarnNeed (Q-073)', () => {
+  const route = [
+    { sequence: 1, allowedLossPct: '2', inputItemId: 'yarn-30s', inputIsYarn: true }, // knitting
+    { sequence: 2, allowedLossPct: '8', inputItemId: 'greige', inputIsYarn: false }, // dyeing
+    { sequence: 3, allowedLossPct: '1', inputItemId: 'dyed', inputIsYarn: false }, // compacting
+  ];
+  it('without a yarn mix: the knitting input kg of the first process yarn', () => {
+    expect(programYarnNeed({ requiredKg: '500', processes: route, yarnMix: [] })).toEqual([{ yarnItemId: 'yarn-30s', counts: null, colour: null, kg: '560.171' }]);
+  });
+  it('splits the yarn kg by the mix %, a single-row mix falling back to the first process yarn', () => {
+    const mix = [
+      { yarnItemId: 'yarn-30s', counts: '30s', colour: 'ecru', consPct: '96' },
+      { counts: '20D lycra', consPct: '4' },
+    ];
+    expect(programYarnNeed({ requiredKg: '100', processes: route, yarnMix: mix })).toEqual([
+      { yarnItemId: 'yarn-30s', counts: '30s', colour: 'ecru', kg: '107.553' },
+      { yarnItemId: null, counts: '20D lycra', colour: null, kg: '4.481' },
+    ]);
+    expect(programYarnNeed({ requiredKg: '100', processes: route, yarnMix: [{ counts: '30s', consPct: '100' }] })[0]).toMatchObject({ yarnItemId: 'yarn-30s', kg: '112.034' });
+  });
+  it('needs no yarn when the first process takes fabric, or with no required kg', () => {
+    expect(programYarnNeed({ requiredKg: '100', processes: route.slice(1), yarnMix: [{ counts: '30s', consPct: '100' }] })).toEqual([]);
+    expect(programYarnNeed({ requiredKg: null, processes: route, yarnMix: [] })).toEqual([]);
   });
 });
 
