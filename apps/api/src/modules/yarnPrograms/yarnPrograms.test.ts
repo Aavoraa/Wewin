@@ -46,10 +46,11 @@ beforeAll(async () => {
 });
 
 describe('Program Defined — yarn programmes (Q-076)', () => {
-  it('validates the mix, numbers per order, plans the kg to send, and only yarn processes', async () => {
+  it('validates the mix, the material in / out per process, numbers per order and plans the kg to send', async () => {
     ok(await owner.post('/api/v1/yarn-programs', programBody({ inputs: [{ itemId: m.items.yarn.id, mixPct: '96' }] })), 400); // mix ≠ 100
-    ok(await owner.post('/api/v1/yarn-programs', programBody({ outputItemId: m.items.dyed.id })), 400); // output must be yarn
-    ok(await owner.post('/api/v1/yarn-programs', programBody({ processId: m.processes.knitting.id })), 400); // not a yarn process
+    ok(await owner.post('/api/v1/yarn-programs', programBody({ outputItemId: m.items.dyed.id })), 400); // yarn dyeing gives yarn
+    ok(await owner.post('/api/v1/yarn-programs', programBody({ processId: m.processes.knitting.id })), 400); // knitting gives fabric
+    ok(await owner.post('/api/v1/yarn-programs', programBody({ processId: m.processes.printing.id })), 400); // pieces process
     const twist = await owner.post('/api/v1/yarn-programs', programBody({
       processId: twisting.id,
       requiredKg: '50',
@@ -143,5 +144,63 @@ describe('Program Defined — yarn programmes (Q-076)', () => {
     ok(list);
     expect(list.body.data.every((r: { processId: string }) => r.processId === yarnDyeing.id)).toBe(true);
     ok(await (await asUser(['orders.view'])).get('/api/v1/yarn-programs'), 403);
+  });
+
+  it('every process: knitting cotton 96 % + lycra 4 % → greige rolls in the fabric store; a fabric programme step still works', async () => {
+    const created = await owner.post('/api/v1/yarn-programs', programBody({
+      processId: m.processes.knitting.id,
+      outputItemId: m.items.greige.id,
+      outputColour: null,
+      requiredKg: '98',
+      allowedLossPct: '2',
+      inputs: [{ itemId: m.items.yarn.id, mixPct: '96' }, { itemId: m.items.lycra.id, mixPct: '4' }],
+    }));
+    ok(created, 201);
+    const pd = created.body.data;
+    expect(pd.programNo).toMatch(/\/PD\d+$/);
+    expect(pd.sendKg).toBe('100.000');
+    ok(await owner.post(`/api/v1/yarn-programs/${pd.id}/approve`));
+
+    const lot = uid('L');
+    const receipt = await owner.post('/api/v1/yarn-receipts', {
+      docDate: '2026-10-01',
+      vendorId: m.vendors.mill.id,
+      lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '96', ratePerKg: '280' }, { itemId: m.items.lycra.id, lot, qtyKg: '4', ratePerKg: '900' }],
+    });
+    ok(receipt, 201);
+    ok(await owner.post(`/api/v1/yarn-receipts/${receipt.body.data.id}/post`));
+    const out = await owner.post('/api/v1/outward-dcs', {
+      docDate: '2026-10-03',
+      vendorId: m.vendors.knitter.id,
+      yarnProgramId: pd.id,
+      lines: [{ itemId: m.items.yarn.id, lot, qtyKg: '96' }, { itemId: m.items.lycra.id, lot, qtyKg: '4' }],
+    });
+    ok(out, 201);
+    expect(out.body.data.program).toMatchObject({ kind: 'FABRIC', programNo: pd.programNo });
+    await approveOutward(owner, out.body.data.id);
+    ok(await owner.post(`/api/v1/outward-dcs/${out.body.data.id}/post`));
+
+    const inw = await owner.post('/api/v1/inward-dcs', {
+      docDate: '2026-10-08',
+      vendorId: m.vendors.knitter.id,
+      lines: [{ itemId: m.items.greige.id, kg: '49', lot }, { itemId: m.items.greige.id, kg: '49', lot }],
+      links: [{ outwardDcId: out.body.data.id, receivedKg: '98' }],
+    });
+    ok(inw, 201);
+    const posted = await owner.post(`/api/v1/inward-dcs/${inw.body.data.id}/post`);
+    ok(posted);
+    expect(posted.body.data.lines.every((l: { roll: { id: string } | null }) => !!l.roll)).toBe(true);
+    expect(await kgAt(m.items.greige.id, lot, 'FABRIC_STORE')).toBe('98.000');
+    const closed = await owner.post(`/api/v1/outward-dcs/${out.body.data.id}/close`, { reason: 'Knitted' });
+    ok(closed);
+    expect(closed.body.data.loss).toMatchObject({ lossPct: '2.0000', excessKg: '0.000' });
+
+    // Knitting is not a yarn process: a fabric programme step is still accepted.
+    const fabric = await createProgram(owner, m, order.id);
+    const lot2 = uid('L');
+    const r2 = await owner.post('/api/v1/yarn-receipts', { docDate: '2026-10-01', vendorId: m.vendors.mill.id, lines: [{ itemId: m.items.yarn.id, lot: lot2, qtyKg: '10', ratePerKg: '280' }] });
+    ok(await owner.post(`/api/v1/yarn-receipts/${r2.body.data.id}/post`));
+    ok(await owner.post('/api/v1/outward-dcs', { docDate: '2026-10-03', vendorId: m.vendors.knitter.id, programProcessId: fabric.processes[0]!.id, lines: [{ itemId: m.items.yarn.id, lot: lot2, qtyKg: '10' }] }), 201);
+    await assertLedgerInvariants();
   });
 });

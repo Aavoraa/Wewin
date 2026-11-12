@@ -140,7 +140,7 @@ interface ProgramOpt {
   programNo: string;
   processes: { id: string; sequence: number; processId: string; inputItemId: string; allowedLossPct: string; materialCostPerKg: string | null; process: { name: string }; inputItem: { name: string } }[];
 }
-/** Approved Program Defined entries (yarn programmes, Q-076) a yarn-process D.C. goes under. */
+/** Approved Program Defined entries (Q-076) a D.C. can go under; yarn processes must. */
 interface YarnProgramOpt {
   id: string;
   programNo: string;
@@ -376,7 +376,7 @@ export function OutwardDcPage() {
                   : 'Select the order first'}
               </option>
               {ypOptions.length ? (
-                <optgroup label="Program Defined (yarn processes)">
+                <optgroup label="Program Defined">
                   {ypOptions.map((y) => (
                     <option key={y.id} value={`y:${y.id}`}>
                       {yarnProgramLabel(y)}

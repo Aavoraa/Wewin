@@ -79,7 +79,7 @@ export interface PendingOutward {
   process: string;
   programNo: string;
   outputItemId: string;
-  /** YARN: a yarn programme (Program Defined, Q-076) — yarn comes back to the yarn store, no rolls. */
+  /** YARN: the programme's output is yarn (Program Defined, Q-076) — it comes back to the yarn store, no rolls. */
   outputKind: 'YARN' | 'FABRIC';
   sentKg: string;
   receivedKg: string;
@@ -112,7 +112,7 @@ export interface InwardDc {
     id: string;
     outwardDcId: string;
     receivedKg: string;
-    outward: { id: string; docNo: string | null; docDate: string | null; status: string; allowedLossPct: string | null; process: { code: string; name: string }; yarnProgram: { outputItemId: string } | null };
+    outward: { id: string; docNo: string | null; docDate: string | null; status: string; allowedLossPct: string | null; process: { code: string; name: string }; yarnProgram: { outputItemId: string; outputItem: { type: string } } | null };
   }[];
   totals: { kg: string; rolls: number };
 }
