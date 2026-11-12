@@ -49,7 +49,7 @@ function readNavOpen(): Record<string, boolean> {
 
 const inGroup = (pathname: string, to: string) => (to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`));
 
-function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () => void; collapsed?: boolean; onToggle?: () => void }) {
+function Sidebar({ onNavigate, collapsed = false, onToggle, transparent }: { onNavigate?: () => void; collapsed?: boolean; onToggle?: () => void; transparent?: boolean }) {
   const { can } = useAuth();
   const { pathname } = useLocation();
   // Each section is a dropdown: the user's choice is remembered; untouched sections open only
@@ -68,7 +68,8 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
   return (
     <nav
       className={cn(
-        'sidebar-scroll flex h-full flex-col overflow-y-auto overflow-x-hidden bg-sidebar py-3 text-sidebar-foreground',
+        'sidebar-scroll flex h-full flex-col overflow-y-auto overflow-x-hidden py-3 text-sidebar-foreground',
+        transparent ? 'bg-transparent' : 'bg-sidebar',
         collapsed ? 'px-2.5' : 'px-2',
       )}
     >
@@ -92,7 +93,7 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
         const hasActive = items.some((i) => inGroup(pathname, i.to));
         const open = collapsed || (navOpen[g.label] ?? hasActive);
         return (
-          <div key={g.label} className={collapsed ? 'mb-3' : 'mb-1'}>
+          <div key={g.label} className={collapsed ? 'mb-3' : 'mb-2'}>
             {collapsed ? (
               <div className="mx-2 mb-1 border-t border-slate-800" />
             ) : (
@@ -101,13 +102,13 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
                 onClick={() => toggleGroup(g.label, open)}
                 aria-expanded={open}
                 className={cn(
-                  'flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover:bg-sidebar-active hover:text-white',
-                  hasActive ? 'text-brand' : 'text-slate-400',
+                  'group/h flex w-full items-center gap-1 rounded-md px-2.5 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em] hover:text-white',
+                  hasActive ? 'text-[#b7c7a6]' : 'text-slate-400',
                 )}
               >
                 <span className="flex-1 text-left">{g.label}</span>
                 {!open && hasActive ? <span className="size-1.5 rounded-full bg-blue-400" aria-hidden /> : null}
-                <ChevronDown className={cn('size-3.5 transition-transform', !open && '-rotate-90')} />
+                <ChevronDown className={cn('size-3.5 opacity-0 transition group-hover/h:opacity-100', !open && '-rotate-90 opacity-100')} />
               </button>
             )}
             {open ? items.map((i) => (
@@ -120,13 +121,13 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
                 aria-label={collapsed ? i.label : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-2 rounded-md py-1.5 text-[13px] hover:bg-sidebar-active hover:text-white',
-                    collapsed ? 'justify-center px-0 py-2.5' : 'px-2',
-                    isActive && 'bg-sidebar-active font-medium text-white shadow-[inset_3px_0_0_var(--color-brand)]',
+                    'flex items-center gap-3 rounded-lg py-2 text-[14px] text-slate-200 transition hover:bg-white/5 hover:text-white',
+                    collapsed ? 'justify-center px-0 py-2.5' : 'px-2.5',
+                    isActive && 'bg-white/10 font-medium text-white hover:bg-white/10',
                   )
                 }
               >
-                <i.icon className={cn('shrink-0', collapsed ? 'size-5' : 'size-4')} />
+                <i.icon className={cn('shrink-0', collapsed ? 'size-5' : 'size-[18px]')} />
                 {collapsed ? null : i.label}
               </NavLink>
             )) : null}
@@ -238,8 +239,8 @@ export function AppShell() {
     <VoiceProvider>
     <div className="flex h-full">
       <aside className={cn('no-print hidden shrink-0 transition-[width] lg:block', collapsed ? 'w-[72px]' : 'w-60')}>
-        <div className={cn('fixed inset-y-0 transition-[width]', collapsed ? 'w-[72px]' : 'w-60')}>
-          <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+        <div className={cn('sidebar-decor fixed inset-y-0 bg-sidebar transition-[width]', collapsed ? 'w-[72px]' : 'w-60')}>
+          <Sidebar transparent collapsed={collapsed} onToggle={toggleCollapsed} />
         </div>
       </aside>
       {mobileOpen ? (
