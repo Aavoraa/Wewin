@@ -3,6 +3,7 @@ import { type z } from 'zod';
 import {
   D,
   addDays,
+  isYarnProgramProcess,
   todayIst,
   type zInwardDcInput,
   type zInwardListQuery,
@@ -23,6 +24,7 @@ import { settingsService } from '../../core/settings/settings.service';
 import { mastersService } from '../masters/masters.service';
 import { ordersService } from '../orders/orders.service';
 import { programsService, registerProgramDependencyCounter } from '../programs/programs.service';
+import { yarnProgramsService } from '../yarnPrograms/yarnPrograms.service';
 import { closingResidual, consumptionForLink, lossBand, pendingKg, processLoss } from './jobwork.loss';
 import { type InwardDetail, type OutwardDetail, type OutwardLineData, jobworkRepo as repo } from './jobwork.repo';
 
@@ -47,6 +49,19 @@ registerProgramDependencyCounter((programId, tx) => repo.outwardCountForProgram(
 
 const sumKg = (xs: { toString(): string }[]) => xs.reduce<ReturnType<typeof D>>((a, x) => a.plus(D(x.toString())), D(0));
 
+/**
+ * The programme an outward D.C. was sent under: a fabric programme step, or a yarn programme
+ * (Program Defined, Q-076). The database holds exactly one of the two.
+ */
+function programOf(o: Pick<OutwardDetail, 'programProcess' | 'yarnProgram'>) {
+  if (o.programProcess) {
+    const pp = o.programProcess;
+    return { programNo: pp.program.programNo, allowedLossPct: pp.allowedLossPct, outputItemId: pp.outputItemId, inputItemId: pp.inputItemId, materialCostPerKg: pp.materialCostPerKg, outputIsYarn: false };
+  }
+  const y = o.yarnProgram!;
+  return { programNo: y.programNo, allowedLossPct: y.allowedLossPct, outputItemId: y.outputItemId, inputItemId: y.inputs[0]?.itemId ?? null, materialCostPerKg: y.materialCostPerKg, outputIsYarn: true };
+}
+
 /** Management approval state (Q-048). A draft needs it only while the setting is on. */
 function outwardApproval(o: Pick<OutwardDetail, 'status' | 'approvedAt'>, required: boolean) {
   if (o.approvedAt) return 'APPROVED' as const;
@@ -55,7 +70,8 @@ function outwardApproval(o: Pick<OutwardDetail, 'status' | 'approvedAt'>, requir
 
 function shapeOutward(o: OutwardDetail, receivedKg: string, consumed: Map<string, string>, nearPct: string, approvalRequired: boolean) {
   const sent = sumKg(o.lines.map((l) => l.qtyKg)).toFixed(3);
-  const allowed = (o.allowedLossPct ?? o.programProcess.allowedLossPct).toString();
+  const program = programOf(o);
+  const allowed = (o.allowedLossPct ?? program.allowedLossPct).toString();
   const running = processLoss({ sentKg: sent, receivedKg, allowedPct: allowed });
   const closed = o.status === 'CLOSED';
   const loss = closed
@@ -75,6 +91,7 @@ function shapeOutward(o: OutwardDetail, receivedKg: string, consumed: Map<string
     docDate: dateOnly(o.docDate)!,
     expectedReturnDate: dateOnly(o.expectedReturnDate),
     allowedLossPct: allowed,
+    program: { programNo: program.programNo, outputItemId: program.outputItemId, kind: program.outputIsYarn ? ('YARN' as const) : ('FABRIC' as const) },
     approvalStatus: outwardApproval(o, approvalRequired),
     lines: o.lines.map((l) => {
       const c = consumed.get(l.id) ?? '0.000';
@@ -115,7 +132,20 @@ function shapeInward(i: InwardDetail) {
 async function validateOutward(input: OutInput, db: Tx | typeof prisma) {
   const vendor = await mastersService.vendorById(input.vendorId, db);
   if (!vendor.isActive) throw new AppError('VALIDATION_ERROR', `Vendor ${vendor.name} is inactive`, 400);
-  const pp = await programsService.processForDc(input.programProcessId, db);
+  // The programme the D.C. goes under: a yarn programme (Program Defined, Q-076) or a fabric programme step.
+  let pp: { processId: string; processCode: string; orderId: string; allowedLossPct: string; programNo: string };
+  let yarnInputs: Set<string> | null = null;
+  if (input.yarnProgramId) {
+    const y = await yarnProgramsService.forDc(input.yarnProgramId, db);
+    pp = y;
+    yarnInputs = new Set(y.inputItemIds);
+  } else {
+    const f = await programsService.processForDc(input.programProcessId!, db);
+    if (isYarnProgramProcess(f.processCode)) {
+      throw new AppError('VALIDATION_ERROR', `${f.processCode} deliveries go under an approved Program Defined entry (the process screen's Program Defined tab), not a fabric programme step`, 400);
+    }
+    pp = { processId: f.processId, processCode: f.processCode, orderId: f.orderId, allowedLossPct: f.allowedLossPct, programNo: f.programNo };
+  }
   if (!(await repo.vendorHasProcess(input.vendorId, pp.processId, db))) {
     throw new AppError('VALIDATION_ERROR', `${vendor.name} is not set up for ${pp.processCode} (Masters › Vendors › processes)`, 400);
   }
@@ -126,6 +156,7 @@ async function validateOutward(input: OutInput, db: Tx | typeof prisma) {
     const it = items.get(l.itemId);
     if (!it || (it.type !== 'YARN' && it.type !== 'FABRIC')) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: only yarn or fabric can go on a job-work D.C.`, 400);
     if (!it.isActive) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: item ${it.code} is inactive`, 400);
+    if (yarnInputs && !yarnInputs.has(it.id)) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: ${it.code} is not a yarn going in on programme ${pp.programNo}`, 400);
     types.add(it.type);
   });
   // Rolls: lot / colour come from the roll itself.
@@ -153,6 +184,7 @@ function outwardInputFrom(o: OutwardDetail): OutInput {
     docDate: dateOnly(o.docDate)!,
     vendorId: o.vendorId,
     programProcessId: o.programProcessId,
+    yarnProgramId: o.yarnProgramId,
     fromVendorId: o.fromLocation.kind === 'VENDOR' ? o.fromLocation.vendorId : null,
     expectedReturnDate: dateOnly(o.expectedReturnDate),
     purpose: o.purpose,
@@ -176,22 +208,29 @@ async function validateInward(input: InInput, db: Tx | typeof prisma) {
   const items = new Map((await repo.itemsByIds(input.lines.map((l) => l.itemId), db)).map((i) => [i.id, i]));
   const outwards = await Promise.all(input.links.map((k) => repo.getOutward(k.outwardDcId, db)));
   const allowedOutputs = new Set<string>();
+  const kinds = new Set<'YARN' | 'FABRIC'>();
   const processes = new Set<string>();
   const orders = new Set<string>();
   outwards.forEach((o, n) => {
     if (!o) throw new AppError('VALIDATION_ERROR', `Link ${n + 1}: unknown outward D.C.`, 400);
     if (o.status !== 'POSTED') throw new AppError('INVALID_STATE', `Outward D.C. ${o.docNo ?? '(draft)'} is ${o.status.toLowerCase()}; only open posted D.C.s can receive`, 409);
     if (o.vendorId !== input.vendorId) throw new AppError('VALIDATION_ERROR', `Outward D.C. ${o.docNo} was sent to a different vendor`, 400);
-    if (o.programProcess.outputItemId) allowedOutputs.add(o.programProcess.outputItemId);
+    const program = programOf(o);
+    if (program.outputItemId) allowedOutputs.add(program.outputItemId);
+    kinds.add(program.outputIsYarn ? 'YARN' : 'FABRIC');
     processes.add(o.processId);
     orders.add(o.orderId);
   });
   if (processes.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s are for different processes', 400);
   if (orders.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s belong to different orders', 400);
+  if (kinds.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s return different materials (yarn and fabric)', 400);
+  // A yarn programme (Program Defined, Q-076) returns yarn to the yarn store, without rolls; otherwise fabric rolls.
+  const outputType = kinds.has('YARN') ? 'YARN' : 'FABRIC';
+  const what = outputType === 'YARN' ? 'Line' : 'Roll';
   input.lines.forEach((l, n) => {
     const it = items.get(l.itemId);
-    if (!it || it.type !== 'FABRIC') throw new AppError('VALIDATION_ERROR', `Roll ${n + 1}: output must be a FABRIC item`, 400);
-    if (!allowedOutputs.has(l.itemId)) throw new AppError('VALIDATION_ERROR', `Roll ${n + 1}: ${it.code} is not the output of the linked program process`, 400);
+    if (!it || it.type !== outputType) throw new AppError('VALIDATION_ERROR', `${what} ${n + 1}: output must be a ${outputType} item`, 400);
+    if (!allowedOutputs.has(l.itemId)) throw new AppError('VALIDATION_ERROR', `${what} ${n + 1}: ${it.code} is not the output of the linked programme`, 400);
   });
   const received = await repo.receivedByOutward(input.links.map((k) => k.outwardDcId), db);
   const over: unknown[] = [];
@@ -204,10 +243,11 @@ async function validateInward(input: InInput, db: Tx | typeof prisma) {
   if (over.length) {
     throw new AppError('QTY_EXCEEDS_PENDING', 'Received kg exceeds what is pending at the vendor for the linked D.C.(s)', 409, over);
   }
+  const store = outputType === 'YARN' ? 'YARN_STORE' : 'FABRIC_STORE';
   const toLocationId = input.holdAtVendor
     ? await mastersService.vendorLocationId(input.vendorId, db)
-    : (await mastersService.systemLocations(['FABRIC_STORE'], db)).FABRIC_STORE;
-  return { outwards: outwards as OutwardDetail[], toLocationId, orderId: [...orders][0]! };
+    : (await mastersService.systemLocations([store], db))[store];
+  return { outwards: outwards as OutwardDetail[], toLocationId, orderId: [...orders][0]!, outputType };
 }
 
 function inwardInputFrom(i: InwardDetail): InInput {
@@ -344,7 +384,8 @@ export const jobworkService = {
         {
           docDate: toDbDate(input.docDate),
           vendorId: input.vendorId,
-          programProcessId: input.programProcessId,
+          programProcessId: input.yarnProgramId ? null : input.programProcessId,
+          yarnProgramId: input.yarnProgramId ?? null,
           processId: v.pp.processId,
           orderId: v.pp.orderId,
           fromLocationId: v.fromLocationId,
@@ -380,7 +421,8 @@ export const jobworkService = {
         {
           docDate: toDbDate(input.docDate),
           vendorId: input.vendorId,
-          programProcessId: input.programProcessId,
+          programProcessId: input.yarnProgramId ? null : input.programProcessId,
+          yarnProgramId: input.yarnProgramId ?? null,
           processId: v.pp.processId,
           orderId: v.pp.orderId,
           fromLocationId: v.fromLocationId,
@@ -544,7 +586,7 @@ export const jobworkService = {
       }
       const received = (await repo.receivedByOutward([id], tx)).get(id) ?? '0';
       const sent = sumKg(o.lines.map((l) => l.qtyKg)).toFixed(3);
-      const allowed = (o.allowedLossPct ?? o.programProcess.allowedLossPct).toString();
+      const allowed = (o.allowedLossPct ?? programOf(o).allowedLossPct).toString();
       const loss = processLoss({ sentKg: sent, receivedKg: received, allowedPct: allowed });
       await repo.updateOutwardState(tx, id, {
         status: 'CLOSED',
@@ -585,8 +627,9 @@ export const jobworkService = {
         expectedReturnDate: o.expectedReturnDate,
         orderNo: o.order.orderNo,
         process: o.process.name,
-        programNo: o.programProcess.program.programNo,
-        outputItemId: o.programProcess.outputItemId,
+        programNo: o.program.programNo,
+        outputItemId: o.program.outputItemId,
+        outputKind: o.program.kind,
         sentKg: o.totals.sentKg,
         receivedKg: o.loss.receivedKg,
         pendingKg: o.pendingKg,
@@ -709,13 +752,29 @@ export const jobworkService = {
       const loc = await mastersService.systemLocations(['PRODUCTION', 'CONSUMED'], tx);
       const vendorLoc = await mastersService.vendorLocationId(i.vendorId, tx);
 
-      // Roll numbers: entered ones are kept; blanks become <INW no>/<line>.
+      // Roll numbers: entered ones are kept; blanks become <INW no>/<line>. Yarn (Program Defined,
+      // Q-076) comes back as lot / colour stock in the yarn store, without rolls.
+      const yarn = v.outputType === 'YARN';
       const rollNos = i.lines.map((l) => (l.rollNo.startsWith('#') ? `${docNo}/${l.lineNo}` : l.rollNo));
-      const taken = await repo.rollNoTaken(tx, rollNos);
+      const taken = yarn ? [] : await repo.rollNoTaken(tx, rollNos);
       if (taken.length) throw new AppError('VALIDATION_ERROR', `Roll number(s) already exist: ${taken.map((t) => t.rollNo).join(', ')}`, 400);
 
       const movements: MovementInput[] = [];
       for (const [n, l] of i.lines.entries()) {
+        if (yarn) {
+          movements.push({
+            itemId: l.itemId,
+            qty: l.kg.toFixed(3),
+            unit: 'KG',
+            lot: l.lot,
+            colour: l.colour,
+            orderId: v.orderId,
+            fromLocationId: loc.PRODUCTION,
+            toLocationId: i.toLocationId,
+            lineKey: `out:${l.id}`,
+          });
+          continue;
+        }
         const rollNo = rollNos[n]!;
         if (rollNo !== l.rollNo) await repo.renameRoll(tx, l.id, rollNo);
         const roll = await repo.createRoll(tx, {
@@ -835,8 +894,8 @@ export const jobworkService = {
       excessKg: o.finalExcessKg!.toFixed(3),
       lossPct: o.finalLossPct!.toFixed(4),
       allowedPct: (o.allowedLossPct ?? new Prisma.Decimal(0)).toString(),
-      materialCostPerKg: o.programProcess.materialCostPerKg?.toString() ?? null,
-      inputItemId: o.programProcess.inputItemId,
+      materialCostPerKg: (o.programProcess?.materialCostPerKg ?? o.yarnProgram?.materialCostPerKg)?.toString() ?? null,
+      inputItemId: o.programProcess?.inputItemId ?? o.yarnProgram?.inputs[0]?.itemId ?? null,
     }));
   },
   billedInwardOf: (tx: Tx, outwardId: string) => repo.billedInwardOf(tx, outwardId),

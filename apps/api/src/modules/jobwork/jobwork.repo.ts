@@ -13,6 +13,18 @@ const outwardInclude = {
   programProcess: {
     select: { id: true, sequence: true, allowedLossPct: true, materialCostPerKg: true, inputItemId: true, outputItemId: true, program: { select: { id: true, programNo: true } } },
   },
+  /** Program Defined (Q-076): the yarn programme a yarn-process D.C. is sent under. */
+  yarnProgram: {
+    select: {
+      id: true,
+      programNo: true,
+      allowedLossPct: true,
+      materialCostPerKg: true,
+      outputItemId: true,
+      outputColour: true,
+      inputs: { select: { itemId: true }, orderBy: { lineNo: 'asc' } },
+    },
+  },
   lines: {
     orderBy: { lineNo: 'asc' },
     include: { item: { select: { id: true, code: true, name: true, hsnCode: true, type: true } }, roll: { select: { id: true, rollNo: true } } },
@@ -38,6 +50,7 @@ const inwardInclude = {
           allowedLossPct: true,
           process: { select: { code: true, name: true } },
           programProcess: { select: { outputItemId: true, allowedLossPct: true } },
+          yarnProgram: { select: { outputItemId: true, allowedLossPct: true } },
         },
       },
     },
@@ -265,6 +278,7 @@ export const jobworkRepo = {
         vendor: { select: { name: true } },
         process: { select: { name: true } },
         programProcess: { select: { materialCostPerKg: true, inputItemId: true } },
+        yarnProgram: { select: { materialCostPerKg: true, inputs: { select: { itemId: true }, orderBy: { lineNo: 'asc' }, take: 1 } } },
       },
     });
   },

@@ -6,6 +6,7 @@ import {
   addDays,
   groupOpeningOrders,
   groupVendorStock,
+  isYarnProgramProcess,
   zOpeningBalanceRow,
   zOpeningComponentRow,
   zOpeningOrderRow,
@@ -25,6 +26,7 @@ import { type CurrentUser } from '../../core/auth/auth.types';
 import { mastersService } from '../masters/masters.service';
 import { ordersService } from '../orders/orders.service';
 import { programsService } from '../programs/programs.service';
+import { yarnProgramsService } from '../yarnPrograms/yarnPrograms.service';
 import { jobworkService } from '../jobwork/jobwork.service';
 import { billsService } from '../accounts/bills.service';
 import { type RawRow, readWorkbook } from './opening.excel';
@@ -120,7 +122,7 @@ async function validateVendorStock(sheets: Record<string, RawRow[]>, asOfDate: s
   const rows = parseRows('At vendors', sheets['At vendors'] ?? [], zOpeningVendorStockRow, problems);
   const m = await mastersService.byCodes({ vendors: rows.map((r) => r.vendorCode), items: rows.map((r) => r.itemCode), processes: rows.map((r) => r.processCode) });
   const orders = await ordersService.byOrderNos(rows.map((r) => r.orderNo));
-  const ppCache = new Map<string, Awaited<ReturnType<typeof programsService.approvedProcessesFor>>>();
+  const ppCache = new Map<string, { id: string }[]>();
   const out = [];
   for (const r of rows) {
     const at = (field: string, message: string) => problems.push({ sheet: 'At vendors', row: r.row, field, message });
@@ -136,10 +138,13 @@ async function validateVendorStock(sheets: Record<string, RawRow[]>, asOfDate: s
     if (r.sentDate > asOfDate) at('sentDate', 'Sent after the opening date');
     if (!vendor || !item || !proc || !order) continue;
     const key = `${order.id}|${proc.id}`;
-    if (!ppCache.has(key)) ppCache.set(key, await programsService.approvedProcessesFor(order.id, proc.id));
+    // Yarn processes go under a yarn programme (Program Defined, Q-076); others under a fabric programme step.
+    const yarnProcess = isYarnProgramProcess(r.processCode);
+    if (!ppCache.has(key)) ppCache.set(key, yarnProcess ? await yarnProgramsService.approvedFor(order.id, proc.id) : await programsService.approvedProcessesFor(order.id, proc.id));
     const pps = ppCache.get(key)!;
     if (pps.length !== 1) {
-      at('processCode', pps.length ? `Order ${r.orderNo} has ${pps.length} approved programs with ${r.processCode}; enter this D.C. by hand` : `Approve the fabric program of ${r.orderNo} with process ${r.processCode} first`);
+      const kind = yarnProcess ? 'Program Defined entries' : 'programs';
+      at('processCode', pps.length ? `Order ${r.orderNo} has ${pps.length} approved ${kind} with ${r.processCode}; enter this D.C. by hand` : yarnProcess ? `Approve a Program Defined entry for ${r.orderNo} on ${r.processCode} first` : `Approve the fabric program of ${r.orderNo} with process ${r.processCode} first`);
       continue;
     }
     out.push({
@@ -149,7 +154,8 @@ async function validateVendorStock(sheets: Record<string, RawRow[]>, asOfDate: s
       orderNo: r.orderNo,
       orderId: order.id,
       processCode: r.processCode,
-      programProcessId: pps[0]!.id,
+      programProcessId: yarnProcess ? null : pps[0]!.id,
+      yarnProgramId: yarnProcess ? pps[0]!.id : null,
       itemId: item.id,
       itemType: item.type,
       itemCode: item.code,
@@ -306,6 +312,7 @@ export const openingService = {
                 docDate: asOfDate,
                 vendorId: f.vendorId,
                 programProcessId: f.programProcessId,
+                yarnProgramId: f.yarnProgramId ?? null,
                 fromVendorId: null,
                 expectedReturnDate: null,
                 purpose: 'For job work',

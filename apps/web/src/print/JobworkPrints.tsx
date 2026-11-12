@@ -50,7 +50,7 @@ export function OutwardDcPrint({ id }: { id: string }) {
               <div>
                 <div>Purpose: {o.purpose}</div>
                 <div>Process: {o.process.name}</div>
-                <div>Order: {o.order.orderNo} · Program {o.programProcess.program.programNo}</div>
+                <div>Order: {o.order.orderNo} · Program {o.program.programNo}</div>
                 <div>Dispatched from: {o.fromLocation.name}</div>
                 <div>Vehicle no.: {o.vehicleNo ?? '—'}</div>
                 <div>Expected return: {formatDate(o.expectedReturnDate)}</div>

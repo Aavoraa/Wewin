@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { RatesPage } from '../accounts/RatesPage';
 import { InwardDcsPage } from './InwardPages';
 import { OutwardDcsPage } from './OutwardPages';
+import { YarnProgramsPage } from './YarnProgramPages';
+import { isYarnProgramProcess } from '@wewin/shared';
 
 /**
  * Desktop Transaction menu (Q-071): one screen per process with the desktop's four entries —
@@ -29,7 +31,7 @@ export const TRANSACTION_PROCESSES: { code: string; label: string; material: 'Ya
   { code: 'FABRIC_TO_YARN', label: 'Fabric to Yarn', material: 'Fabric' },
 ];
 
-type Tab = 'rate' | 'delivery' | 'inward' | 'close';
+type Tab = 'rate' | 'program' | 'delivery' | 'inward' | 'close';
 
 export function TransactionPage() {
   const { code } = useParams();
@@ -48,8 +50,11 @@ export function TransactionPage() {
   if (!def || !process)
     return <ErrorState error={new Error(`Process ${code ?? ''} is not set up in Masters › Processes`)} />;
 
+  // Yarn processes define their programme (yarn mix, loss %) here before the delivery (Q-076).
+  const programTab = isYarnProgramProcess(def.code);
   const tabs: [Tab, string][] = [
     ['rate', 'Rate Quotation'],
+    ...(programTab ? ([['program', 'Program Defined']] as [Tab, string][]) : []),
     ['delivery', `${def.material} Delivery`],
     ['inward', `${def.material} Inward/Return`],
     ['close', 'Job Close'],
@@ -95,6 +100,8 @@ export function TransactionPage() {
       </div>
       {tab === 'rate' ? (
         <RatesPage key={process.id} processId={process.id} title={`Rate Quotation — ${def.label}`} />
+      ) : tab === 'program' && programTab ? (
+        <YarnProgramsPage key={process.id} processId={process.id} processLabel={def.label} embedded />
       ) : tab === 'delivery' ? (
         <OutwardDcsPage key={process.id} processId={process.id} embedded />
       ) : tab === 'inward' ? (

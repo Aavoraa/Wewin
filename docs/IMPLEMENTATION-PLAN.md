@@ -107,6 +107,11 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-12 — Program Defined: yarn programmes on the yarn process screens (Q-076)
+- Migration `20261112130000_yarn_programs`: `yarn_programs`, `yarn_program_inputs` (audited); `outward_dcs.yarn_program_id`, `program_process_id` now nullable with CHECK exactly one of the two.
+- API `/yarn-programs` (list / get / create / update / delete draft / approve / cancel; `programs.*` permissions). Outward D.C. takes `yarnProgramId` or `programProcessId`; yarn processes need an approved yarn programme and its input yarns; inward against it receives yarn into YARN_STORE without rolls; opening import picks the yarn programme for yarn processes. Shared `zYarnProgramInput`, `yarnProgramPlan`, `isYarnProgramProcess`.
+- Web: Program Defined tab on Yarn Dyeing / Yarn Twisting / Yarn Other Process; programme form (yarn in + mixing %, yarn out, loss %, kg to send) with Approve and a Yarn Delivery button; outward form lists Program Defined entries alongside fabric programme steps and fills the lines with the planned yarns; inward form switches to yarn (no roll no. / GSM / dia).
+- Verified: shared `yarnPrograms.test.ts` (3), API `yarnPrograms.test.ts` (3: mix / item / process validation and plan, approve permission + double approve + edit lock, fabric step / non-mix yarn / no programme refused, post → pending → yarn inward to YARN_STORE → double post → close loss, cancel guarded, yarn inward cancel reverses, permission denied); jobwork, accounts, opening and scans suites unchanged and passing.
 ### 2026-11-12 — Only purchase orders need owner approval (Q-075)
 - New settings `programs.approvalRequired`, `qc.approvalRequired`, `trims.splApprovalRequired`, `accounts.billVarianceApprovalRequired` (default on). `withApprovalSwitches` (shared) grants the approve permission to whoever holds the create permission while a switch is off — applied to request permissions and `/auth/me`; changing a switch drops the permission cache. Bill variance off → NOT_REQUIRED and posting skips the approval check.
 - Script `approvals:off` (apps/api) switched Wewin's local database off for all six approvals; the live database needs the same (run it there, or Settings › Business settings).

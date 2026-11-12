@@ -21,7 +21,9 @@ export const zOutwardDcLine = z.object({
 const outwardShape = z.object({
   docDate: zDate(),
   vendorId: zRef(),
-  programProcessId: zRef(),
+  /** Exactly one: the fabric programme step, or the yarn programme (Program Defined, Q-076). */
+  programProcessId: zOptional(zRef()),
+  yarnProgramId: zOptional(zRef()),
   /** Set for a direct vendor → vendor transfer (A§6); otherwise material leaves our store. */
   fromVendorId: zOptional(zRef()),
   expectedReturnDate: zOptional(zDate()),
@@ -30,7 +32,11 @@ const outwardShape = z.object({
   remarks: zOptional(text(500)),
   lines: z.array(zOutwardDcLine).min(1, 'Add at least one line').max(300),
 });
-function outwardRules(v: { vendorId: string; fromVendorId: string | null; docDate: string; expectedReturnDate: string | null }, ctx: z.RefinementCtx) {
+function outwardRules(
+  v: { vendorId: string; fromVendorId: string | null; docDate: string; expectedReturnDate: string | null; programProcessId?: string | null; yarnProgramId?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (!v.programProcessId === !v.yarnProgramId) ctx.addIssue({ code: 'custom', path: ['programProcessId'], message: 'Pick the programme this D.C. is sent under' });
   if (v.fromVendorId && v.fromVendorId === v.vendorId) ctx.addIssue({ code: 'custom', path: ['fromVendorId'], message: 'Source and destination vendor are the same' });
   if (v.expectedReturnDate && v.expectedReturnDate < v.docDate) ctx.addIssue({ code: 'custom', path: ['expectedReturnDate'], message: 'Expected return is before the D.C. date' });
 }

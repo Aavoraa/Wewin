@@ -55,6 +55,8 @@ const TrimsDocPage = lazy(() => import('@/features/production/FloorPages').then(
 const TrimsDocsPage = lazy(() => import('@/features/production/FloorPages').then((m) => ({ default: m.TrimsDocsPage })));
 const RatesPage = lazy(() => import('@/features/accounts/RatesPage').then((m) => ({ default: m.RatesPage })));
 const TransactionPage = lazy(() => import('@/features/jobwork/TransactionPage').then((m) => ({ default: m.TransactionPage })));
+const YarnProgramsPage = lazy(() => import('@/features/jobwork/YarnProgramPages').then((m) => ({ default: m.YarnProgramsPage })));
+const YarnProgramPage = lazy(() => import('@/features/jobwork/YarnProgramPages').then((m) => ({ default: m.YarnProgramPage })));
 const AccessoriesListPage = lazy(() => import('@/features/accessories/AccessoriesPages').then((m) => ({ default: m.AccessoriesListPage })));
 const AccessoryDocPage = lazy(() => import('@/features/accessories/AccessoriesPages').then((m) => ({ default: m.AccessoryDocPage })));
 const AccessoryPoStatusPage = lazy(() => import('@/features/accessories/AccessoriesPages').then((m) => ({ default: m.AccessoryPoStatusPage })));
@@ -108,6 +110,8 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'yarn-receipts/:id', perm: 'yarn.view', element: <YarnReceiptPage /> },
   { path: 'outward-dcs', perm: 'jobwork.view', element: <OutwardDcsPage /> },
   { path: 'transactions/:code', perm: 'jobwork.view', element: <TransactionPage /> },
+  { path: 'yarn-programs', perm: 'programs.view', element: <YarnProgramsPage /> },
+  { path: 'yarn-programs/:id', perm: 'programs.view', element: <YarnProgramPage /> },
   { path: 'direct-delivery', perm: 'jobwork.view', element: <DirectDeliveryPage /> },
   { path: 'accessories/po-cancel', perm: 'trims.view', element: <AccessoryPoStatusPage mode="cancel" /> },
   { path: 'accessories/po-close', perm: 'trims.view', element: <AccessoryPoStatusPage mode="close" /> },

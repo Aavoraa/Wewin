@@ -144,6 +144,8 @@ export function InwardDcPage() {
   const rollsKg = lines.reduce((a, l) => (/^\d+(\.\d+)?$/.test(l.kg) ? a.plus(D(l.kg)) : a), D(0));
   const linkedKg = links.reduce((a, l) => (/^\d+(\.\d+)?$/.test(l.receivedKg) ? a.plus(D(l.receivedKg)) : a), D(0));
   const pendingById = useMemo(() => new Map((pending.data ?? []).map((p) => [p.id, p])), [pending.data]);
+  // Yarn programmes (Program Defined, Q-076) return yarn: picked from yarn items, no roll no. / GSM / dia.
+  const yarnOut = links.some((l) => pendingById.get(l.outwardDcId)?.outputKind === 'YARN') || !!doc?.links.some((k) => k.outward.yarnProgram);
 
   if (!d.isNew && d.query.isLoading) return <LoadingState />;
   if (!d.isNew && d.query.isError) return <ErrorState error={d.query.error} />;
@@ -364,7 +366,7 @@ export function InwardDcPage() {
                 rows={field.value}
                 onChange={field.onChange}
                 readOnly={!editable}
-                addLabel="Add roll"
+                addLabel={yarnOut ? 'Add line' : 'Add roll'}
                 newRow={() => {
                   const last = field.value.at(-1);
                   return blankRoll(last?.itemId ?? '', last?.lot ?? '', last?.colour ?? '');
@@ -373,13 +375,13 @@ export function InwardDcPage() {
                 columns={[
                   {
                     key: 'itemId',
-                    header: 'Fabric',
+                    header: yarnOut ? 'Yarn' : 'Fabric',
                     width: '220px',
                     display: !editable ? (r) => labels[r.itemId] ?? '—' : undefined,
                     render: (r, i, update) => (
                       <EntityPicker
                         endpoint="/items"
-                        query={{ type: 'FABRIC' }}
+                        query={{ type: yarnOut ? 'YARN' : 'FABRIC' }}
                         map={pickers.item}
                         value={r.itemId}
                         valueLabel={labels[r.itemId]}
@@ -391,12 +393,11 @@ export function InwardDcPage() {
                       />
                     ),
                   },
-                  { key: 'rollNo', header: 'Roll no.', width: '130px', placeholder: 'auto', display: !editable ? (r) => doc?.lines.find((l) => l.id === r._key)?.rollNo ?? r.rollNo : undefined },
+                  ...(yarnOut ? [] : [{ key: 'rollNo' as const, header: 'Roll no.', width: '130px', placeholder: 'auto', display: !editable ? (r: RollRow) => doc?.lines.find((l) => l.id === r._key)?.rollNo ?? r.rollNo : undefined }]),
                   { key: 'kg', header: 'Kg', type: 'kg', width: '100px', total: true },
                   { key: 'lot', header: 'Lot / dye lot', width: '120px' },
                   { key: 'colour', header: 'Colour', width: '100px' },
-                  { key: 'gsm', header: 'GSM', type: 'pcs', width: '70px' },
-                  { key: 'dia', header: 'Dia', width: '80px' },
+                  ...(yarnOut ? [] : [{ key: 'gsm' as const, header: 'GSM', type: 'pcs' as const, width: '70px' }, { key: 'dia' as const, header: 'Dia', width: '80px' }]),
                 ]}
               />
             )}
