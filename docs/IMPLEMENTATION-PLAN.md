@@ -107,6 +107,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-12 — Program Defined on every process screen (Q-076)
+- Wewin asked to keep Program Defined for all processes. The tab is on all ten Transaction process screens; a programme may be for any active kilo process, with in / out items of the process's material (`PROCESS_MATERIAL`, shared); numbered `/PD<n>` outside the yarn processes.
+- Deliveries for knitting and the fabric processes may go under Program Defined or a fabric programme step (yarn processes still need Program Defined). Returns follow the programme's output item: yarn to YARN_STORE without rolls, fabric as rolls in FABRIC_STORE.
+- Web: form labels and item pickers switch to yarn / fabric by process; the D.C. picker group is "Program Defined".
+- Verified: API `yarnPrograms.test.ts` (4: + knitting cotton 96 % / lycra 4 % → greige rolls in FABRIC_STORE, loss on close, fabric programme step still accepted for knitting; material per process and pieces process refused).
+
 ### 2026-11-12 — Program Defined: yarn programmes on the yarn process screens (Q-076)
 - Migration `20261112130000_yarn_programs`: `yarn_programs`, `yarn_program_inputs` (audited); `outward_dcs.yarn_program_id`, `program_process_id` now nullable with CHECK exactly one of the two.
 - API `/yarn-programs` (list / get / create / update / delete draft / approve / cancel; `programs.*` permissions). Outward D.C. takes `yarnProgramId` or `programProcessId`; yarn processes need an approved yarn programme and its input yarns; inward against it receives yarn into YARN_STORE without rolls; opening import picks the yarn programme for yarn processes. Shared `zYarnProgramInput`, `yarnProgramPlan`, `isYarnProgramProcess`.

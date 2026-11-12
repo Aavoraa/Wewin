@@ -13,7 +13,7 @@ const outwardInclude = {
   programProcess: {
     select: { id: true, sequence: true, allowedLossPct: true, materialCostPerKg: true, inputItemId: true, outputItemId: true, program: { select: { id: true, programNo: true } } },
   },
-  /** Program Defined (Q-076): the yarn programme a yarn-process D.C. is sent under. */
+  /** Program Defined (Q-076): the process programme a D.C. is sent under (instead of a fabric programme step). */
   yarnProgram: {
     select: {
       id: true,
@@ -22,6 +22,7 @@ const outwardInclude = {
       materialCostPerKg: true,
       outputItemId: true,
       outputColour: true,
+      outputItem: { select: { type: true } },
       inputs: { select: { itemId: true }, orderBy: { lineNo: 'asc' } },
     },
   },
@@ -50,7 +51,7 @@ const inwardInclude = {
           allowedLossPct: true,
           process: { select: { code: true, name: true } },
           programProcess: { select: { outputItemId: true, allowedLossPct: true } },
-          yarnProgram: { select: { outputItemId: true, allowedLossPct: true } },
+          yarnProgram: { select: { outputItemId: true, allowedLossPct: true, outputItem: { select: { type: true } } } },
         },
       },
     },

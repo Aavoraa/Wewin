@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Truck } from 'lucide-react';
-import { D, YARN_PROGRAM_PROCESSES, yarnProgramPlan, zYarnProgramInput } from '@wewin/shared';
+import { D, PROCESS_MATERIAL, type ProgramMaterial, yarnProgramPlan, zYarnProgramInput } from '@wewin/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useDocument } from '@/lib/documents';
@@ -19,7 +19,7 @@ import { Input, Select } from '@/components/ui/input';
 import { pickers } from '../orders/api';
 import { StatusFilter } from '../yarn/YarnPages';
 
-/** A yarn process programme — Program Defined on the yarn process screens (Q-076). */
+/** A process programme — Program Defined on every process screen (Q-076). */
 export interface YarnProgram {
   id: string;
   programNo: string;
@@ -48,8 +48,8 @@ const columns: DTColumn<YarnProgram>[] = [
   { key: 'programNo', header: 'Programme', sort: 'programNo', cell: (r) => <span className="font-mono">{r.programNo}</span> },
   { key: 'order.orderNo', header: 'Order', cell: (r) => `${r.order.orderNo} · ${r.order.styleNo}` },
   { key: 'process.name', header: 'Process' },
-  { key: 'inputs', header: 'Yarn in (mixing)', cell: mixText },
-  { key: 'outputItem.name', header: 'Yarn out', cell: (r) => `${r.outputItem.name}${r.outputColour ? ` · ${r.outputColour}` : ''}` },
+  { key: 'inputs', header: 'In (mixing)', cell: mixText },
+  { key: 'outputItem.name', header: 'Out', cell: (r) => `${r.outputItem.name}${r.outputColour ? ` · ${r.outputColour}` : ''}` },
   { key: 'allowedLossPct', header: 'Loss %', cell: (r) => pct(r.allowedLossPct) },
   { key: 'sendKg', header: 'Kg to send', type: 'kg' },
   { key: 'status', header: 'Status', type: 'status', sort: 'status' },
@@ -65,7 +65,7 @@ export function YarnProgramsPage({ processId, processLabel, embedded }: { proces
       {embedded ? (
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            Define the yarn going in (with mixing %), the yarn coming out and the allowed loss %. Approve it, then make the Yarn Delivery under it.
+            Define what goes in (with mixing %), what comes out and the allowed loss %. Approve it, then make the delivery under it.
           </p>
           {can('programs.edit') ? (
             <Button size="sm" asChild>
@@ -78,7 +78,7 @@ export function YarnProgramsPage({ processId, processLabel, embedded }: { proces
       ) : (
         <PageHeader
           title="Program Defined"
-          description="Yarn process programmes: yarn in with mixing %, yarn out and allowed loss % — approved before yarn is delivered."
+          description="Process programmes: material in with mixing %, material out and allowed loss % — approved before the delivery."
           actions={
             can('programs.edit') ? (
               <Button asChild>
@@ -145,8 +145,9 @@ export function YarnProgramPage() {
     queryFn: () => api.list<{ id: string; code: string; name: string }>('/processes', { pageSize: 100, active: 'all' }),
     staleTime: 5 * 60_000,
   });
+  // The kilo processes on the Transaction screens, each with its material in and out.
   const yarnProcesses = useMemo(
-    () => (processes.data?.data ?? []).filter((x) => (YARN_PROGRAM_PROCESSES as readonly string[]).includes(x.code)),
+    () => (processes.data?.data ?? []).filter((x) => x.code in PROCESS_MATERIAL),
     [processes.data],
   );
 
@@ -181,6 +182,9 @@ export function YarnProgramPage() {
     ? yarnProgramPlan(v.requiredKg, v.allowedLossPct || '0', v.inputs.map((l) => ({ mixPct: num(l.mixPct) ? l.mixPct : '0' })))
     : null;
   const processName = yarnProcesses.find((x) => x.id === v.processId)?.name ?? p?.process.name;
+  const processCode = yarnProcesses.find((x) => x.id === v.processId)?.code ?? p?.process.code ?? '';
+  const material: { input: ProgramMaterial; output: ProgramMaterial } = PROCESS_MATERIAL[processCode] ?? { input: 'YARN', output: 'YARN' };
+  const word = (m: ProgramMaterial) => (m === 'YARN' ? 'Yarn' : 'Fabric');
 
   const save = async () => {
     setError(null);
@@ -220,7 +224,7 @@ export function YarnProgramPage() {
       canEdit={can('programs.edit')}
       canPost={!d.isNew && can('programs.approve')}
       postLabel="Approve"
-      postDescription="Approving locks the yarn mix and the allowed loss %; yarn is then delivered under this programme and the loss is measured against it."
+      postDescription="Approving locks the mix and the allowed loss %; the delivery is then made under this programme and the loss is measured against it."
       onSave={save}
       onPost={async () => {
         if (form.formState.isDirty) await save();
@@ -235,7 +239,7 @@ export function YarnProgramPage() {
         p && status === 'APPROVED' && can('jobwork.create') ? (
           <Button asChild>
             <Link to={`/outward-dcs/new?orderId=${p.orderId}&yarnProgramId=${p.id}`}>
-              <Truck /> Yarn Delivery
+              <Truck /> {word(material.input)} Delivery
             </Link>
           </Button>
         ) : null
@@ -272,14 +276,14 @@ export function YarnProgramPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Yarn out *">
+          <Field label={`${word(material.output)} out *`}>
             <Controller
               control={form.control}
               name="outputItemId"
               render={({ field }) => (
                 <EntityPicker
                   endpoint="/items"
-                  query={{ type: 'YARN' }}
+                  query={{ type: material.output }}
                   map={pickers.item}
                   value={field.value}
                   valueLabel={labels[field.value]}
@@ -292,10 +296,10 @@ export function YarnProgramPage() {
               )}
             />
           </Field>
-          <Field label="Yarn out colour">
+          <Field label={`${word(material.output)} out colour`}>
             <Input disabled={!editable} placeholder="e.g. NAVY" {...form.register('outputColour')} />
           </Field>
-          <Field label="Yarn out kg wanted">
+          <Field label={`${word(material.output)} out kg wanted`}>
             <Input inputMode="decimal" className="text-right" disabled={!editable} {...form.register('requiredKg')} />
           </Field>
           <Field label="Allowed loss % *">
@@ -313,7 +317,7 @@ export function YarnProgramPage() {
       lines={
         <Card>
           <CardHeader>
-            <CardTitle>Yarn in — mixing</CardTitle>
+            <CardTitle>{word(material.input)} in — mixing</CardTitle>
           </CardHeader>
           <CardContent>
             <Controller
@@ -324,18 +328,18 @@ export function YarnProgramPage() {
                   rows={field.value}
                   onChange={field.onChange}
                   readOnly={!editable}
-                  addLabel="Add yarn"
+                  addLabel={`Add ${word(material.input).toLowerCase()}`}
                   newRow={() => blankInput()}
                   columns={[
                     {
                       key: 'itemId',
-                      header: 'Yarn',
+                      header: word(material.input),
                       width: '260px',
                       display: !editable ? (r) => labels[r.itemId] ?? '—' : undefined,
                       render: (r, i, update) => (
                         <EntityPicker
                           endpoint="/items"
-                          query={{ type: 'YARN' }}
+                          query={{ type: material.input }}
                           map={pickers.item}
                           value={r.itemId}
                           valueLabel={labels[r.itemId]}
@@ -371,7 +375,7 @@ export function YarnProgramPage() {
               <span className={mixTotal.equals(100) ? 'font-mono' : 'font-mono text-destructive'}>{mixTotal.toString()}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Yarn out wanted</span>
+              <span className="text-muted-foreground">{word(material.output)} out wanted</span>
               <span className="font-mono">{num(v.requiredKg) ? D(v.requiredKg).toFixed(3) : '—'}</span>
             </div>
             <div className="flex justify-between">
@@ -382,7 +386,7 @@ export function YarnProgramPage() {
               <span className="text-muted-foreground">Kg to send</span>
               <span className="text-lg font-semibold">{plan ? plan.sendKg : '—'}</span>
             </div>
-            <div className="text-xs text-muted-foreground">Kg to send = yarn out ÷ (1 − loss %), split by the mixing %.</div>
+            <div className="text-xs text-muted-foreground">Kg to send = kg out ÷ (1 − loss %), split by the mixing %.</div>
             {p?.approvedAt ? <div className="mt-2 text-xs text-blue-800">Approved {formatDateTimeIst(p.approvedAt)}</div> : null}
           </CardContent>
         </Card>

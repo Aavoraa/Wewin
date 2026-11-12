@@ -50,8 +50,9 @@ registerProgramDependencyCounter((programId, tx) => repo.outwardCountForProgram(
 const sumKg = (xs: { toString(): string }[]) => xs.reduce<ReturnType<typeof D>>((a, x) => a.plus(D(x.toString())), D(0));
 
 /**
- * The programme an outward D.C. was sent under: a fabric programme step, or a yarn programme
- * (Program Defined, Q-076). The database holds exactly one of the two.
+ * The programme an outward D.C. was sent under: a fabric programme step, or a Program Defined
+ * entry (Q-076). The database holds exactly one of the two. A Program Defined entry whose output is
+ * yarn returns yarn (yarn store, no rolls); a fabric output returns rolls as a fabric step does.
  */
 function programOf(o: Pick<OutwardDetail, 'programProcess' | 'yarnProgram'>) {
   if (o.programProcess) {
@@ -59,7 +60,7 @@ function programOf(o: Pick<OutwardDetail, 'programProcess' | 'yarnProgram'>) {
     return { programNo: pp.program.programNo, allowedLossPct: pp.allowedLossPct, outputItemId: pp.outputItemId, inputItemId: pp.inputItemId, materialCostPerKg: pp.materialCostPerKg, outputIsYarn: false };
   }
   const y = o.yarnProgram!;
-  return { programNo: y.programNo, allowedLossPct: y.allowedLossPct, outputItemId: y.outputItemId, inputItemId: y.inputs[0]?.itemId ?? null, materialCostPerKg: y.materialCostPerKg, outputIsYarn: true };
+  return { programNo: y.programNo, allowedLossPct: y.allowedLossPct, outputItemId: y.outputItemId, inputItemId: y.inputs[0]?.itemId ?? null, materialCostPerKg: y.materialCostPerKg, outputIsYarn: y.outputItem.type === 'YARN' };
 }
 
 /** Management approval state (Q-048). A draft needs it only while the setting is on. */
@@ -132,7 +133,7 @@ function shapeInward(i: InwardDetail) {
 async function validateOutward(input: OutInput, db: Tx | typeof prisma) {
   const vendor = await mastersService.vendorById(input.vendorId, db);
   if (!vendor.isActive) throw new AppError('VALIDATION_ERROR', `Vendor ${vendor.name} is inactive`, 400);
-  // The programme the D.C. goes under: a yarn programme (Program Defined, Q-076) or a fabric programme step.
+  // The programme the D.C. goes under: a Program Defined entry (Q-076) or a fabric programme step.
   let pp: { processId: string; processCode: string; orderId: string; allowedLossPct: string; programNo: string };
   let yarnInputs: Set<string> | null = null;
   if (input.yarnProgramId) {
@@ -156,7 +157,7 @@ async function validateOutward(input: OutInput, db: Tx | typeof prisma) {
     const it = items.get(l.itemId);
     if (!it || (it.type !== 'YARN' && it.type !== 'FABRIC')) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: only yarn or fabric can go on a job-work D.C.`, 400);
     if (!it.isActive) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: item ${it.code} is inactive`, 400);
-    if (yarnInputs && !yarnInputs.has(it.id)) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: ${it.code} is not a yarn going in on programme ${pp.programNo}`, 400);
+    if (yarnInputs && !yarnInputs.has(it.id)) throw new AppError('VALIDATION_ERROR', `Line ${n + 1}: ${it.code} is not an input of programme ${pp.programNo}`, 400);
     types.add(it.type);
   });
   // Rolls: lot / colour come from the roll itself.
@@ -224,7 +225,7 @@ async function validateInward(input: InInput, db: Tx | typeof prisma) {
   if (processes.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s are for different processes', 400);
   if (orders.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s belong to different orders', 400);
   if (kinds.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s return different materials (yarn and fabric)', 400);
-  // A yarn programme (Program Defined, Q-076) returns yarn to the yarn store, without rolls; otherwise fabric rolls.
+  // A programme whose output is yarn (Program Defined, Q-076) returns yarn to the yarn store, without rolls; otherwise fabric rolls.
   const outputType = kinds.has('YARN') ? 'YARN' : 'FABRIC';
   const what = outputType === 'YARN' ? 'Line' : 'Roll';
   input.lines.forEach((l, n) => {

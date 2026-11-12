@@ -81,7 +81,7 @@ export const yarnProgramsRepo = {
     return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, type: true, isActive: true } });
   },
   process(id: string, db: Db = prisma) {
-    return db.process.findUnique({ where: { id }, select: { id: true, code: true, name: true, isActive: true } });
+    return db.process.findUnique({ where: { id }, select: { id: true, code: true, name: true, isActive: true, stage: true } });
   },
   /** Approved programmes of open orders whose process the vendor does (delivery picker). */
   forVendor(vendorId: string) {
