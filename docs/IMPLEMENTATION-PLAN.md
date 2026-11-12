@@ -107,6 +107,11 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-12 — Yarn PO lines filled from the order (Q-073)
+- `GET /orders/:id/yarn-balance` (`purchase.view`): yarn the order's approved fabric programmes need (first-process input kg, losses added back, split by yarn mix %), less yarn PO lines not cancelled. Shared `programYarnNeed`.
+- Yarn PO form: picking the header order fills empty lines (yarn, order, balance kg); "Load yarn requirement" button re-loads.
+- Verified: shared `orders.test.ts` (+3: no mix, mix split, fabric-first / no kg), API `purchase.test.ts` (+1: draft programme ignored, PO reduces balance, cancelled PO restores it, permission denied); in the browser, picking WW-2627-001 filled 30s Combed Cotton Yarn, 470.544 kg.
+
 ### 2026-11-11 — Desktop Accessories menu (Q-072) and Print on every page
 - Accessories sidebar group: Purchase Order (accessories POs with **BalanceReqQty** and "Load BalanceReqQty"), Purchase Receipt (GRN against approved PO lines, `TRR`), Purchase Return (`APR`), Purchase Replacement Inward (`ARI`), Purchase Order Cancel / Close, Transfer Between Order (`ATR`), SPL.Request (`SPR`, approval `trims.spl.approve`). Migration `20261111200000_accessories_purchase_chain` (trims doc types RETURN / REPLACEMENT / TRANSFER, PO / return line links, colour / size / reason, D.C. no. / date, spl_requests).
 - Ledger: `assertOrderStock` — order transfers (yarn `OTR` and accessories `ATR`) and cancelling accessories documents now refuse to take an order's own stock below zero (the location-level check let a transfer of stock the from order did not hold through).

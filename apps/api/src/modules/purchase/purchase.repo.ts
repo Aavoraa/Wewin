@@ -87,6 +87,13 @@ export const purchaseRepo = {
       },
     });
   },
+  /** Yarn PO lines of an order (line order, else the PO's) on POs that are not cancelled (Q-073). */
+  yarnLinesForOrder(orderId: string, db: Db = prisma) {
+    return db.purchaseOrderLine.findMany({
+      where: { po: { kind: 'YARN', status: { not: 'CANCELLED' } }, OR: [{ orderId }, { orderId: null, po: { orderId } }] },
+      select: { itemId: true, colour: true, qty: true },
+    });
+  },
   pendingCount(db: Db = prisma) {
     return db.purchaseOrder.count({ where: { status: 'DRAFT' } });
   },

@@ -5,9 +5,13 @@ import {
   type zProgramListQuery,
   type zProgramUpdate,
   type zTrimsBomInput,
+  type Dec,
+  type YarnMixLine,
+  D,
   accessoryQtyDetails,
   programMissing,
   programPlan,
+  programYarnNeed,
   trimsRequirement,
 } from '@wewin/shared';
 import { type Tx, prisma, withTx } from '../../core/db';
@@ -257,6 +261,35 @@ export const programsService = {
       allowedLossPct: row.allowedLossPct.toString(),
       materialCostPerKg: row.materialCostPerKg?.toString() ?? null,
     };
+  },
+
+  /**
+   * Yarn an order needs (Q-073), from its approved fabric programmes, per yarn item × yarn colour.
+   * Yarn-mix rows with no yarn item picked are returned with itemId null so the caller can name them.
+   */
+  async yarnRequirement(orderId: string) {
+    const programs = await repo.approvedForYarn(orderId);
+    const cells = new Map<string, { itemId: string | null; counts: string | null; colour: string | null; kg: Dec; programs: string[] }>();
+    for (const p of programs) {
+      const needs = programYarnNeed({
+        requiredKg: p.requiredKg?.toString() ?? null,
+        processes: p.processes.map((x) => ({ sequence: x.sequence, allowedLossPct: x.allowedLossPct.toString(), inputItemId: x.inputItemId, inputIsYarn: x.inputItem ? x.inputItem.type === 'YARN' : undefined })),
+        yarnMix: Array.isArray(p.yarnMix) ? (p.yarnMix as unknown as YarnMixLine[]) : [],
+      });
+      for (const n of needs) {
+        const key = `${n.yarnItemId ?? `?${n.counts ?? ''}`}|${(n.colour ?? '').toUpperCase()}`;
+        const c = cells.get(key) ?? { itemId: n.yarnItemId, counts: n.counts, colour: n.colour, kg: D(0), programs: [] };
+        c.kg = c.kg.plus(D(n.kg));
+        if (!c.programs.includes(p.programNo)) c.programs.push(p.programNo);
+        cells.set(key, c);
+      }
+    }
+    const ids = [...new Set([...cells.values()].map((c) => c.itemId).filter((x): x is string => !!x))];
+    const items = new Map((await repo.itemNames(ids)).map((i) => [i.id, i]));
+    return [...cells.values()].map((c) => {
+      const item = c.itemId ? items.get(c.itemId) : undefined;
+      return { itemId: item?.type === 'YARN' ? item.id : null, item: item ? { code: item.code, name: item.name } : null, counts: c.counts, colour: c.colour, requiredKg: c.kg.toFixed(3), programs: c.programs };
+    });
   },
 
   // ── Trims BOM ──
