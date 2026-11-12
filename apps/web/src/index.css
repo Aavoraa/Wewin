@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+/*
+ * The app has one (light) theme. Tailwind's `dark:` variant would otherwise follow the OS dark-mode
+ * setting and darken only the backgrounds that carry a `dark:` class, leaving dark text on dark
+ * surfaces. Tie it to an explicit `.dark` class instead (not set anywhere today).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Design tokens (shadcn/ui convention). Minimal, enterprise palette: navy primary, neutral surfaces. */
 @theme {
   --color-background: #f6f7f9;
@@ -35,6 +42,10 @@
   body,
   #root {
     height: 100%;
+  }
+  html {
+    /* Native controls (date pickers, selects, scrollbars) stay light with the app theme. */
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground antialiased;
