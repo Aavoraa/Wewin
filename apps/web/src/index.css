@@ -184,3 +184,11 @@
 .sidebar-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Diagonal green stripes at the foot of the sidebar (decorative) */
+.sidebar-decor {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 280'%3E%3Cpolygon points='0,280 0,170 150,20 210,20' fill='%236f9348' fill-opacity='0.10'/%3E%3Cpolygon points='0,280 60,280 240,100 240,40' fill='%236f9348' fill-opacity='0.16'/%3E%3Cpolygon points='90,280 130,280 240,170 240,130' fill='%236f9348' fill-opacity='0.09'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 240px 280px;
+}

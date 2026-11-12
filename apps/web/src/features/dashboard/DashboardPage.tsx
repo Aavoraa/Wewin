@@ -18,7 +18,6 @@ import {
   FileMinus,
   FileText,
   Layers,
-  Lightbulb,
   MapPin,
   MoreHorizontal,
   Network,
@@ -96,13 +95,13 @@ const KPI: Record<string, { icon: Icon; chip: string }> = {
 };
 const PRIORITY: Record<string, string> = {
   High: 'bg-red-50 text-red-600 ring-red-200',
-  Medium: 'bg-sky-50 text-sky-700 ring-sky-200',
+  Medium: 'bg-amber-50 text-amber-700 ring-amber-200',
   Low: 'bg-blue-50 text-blue-700 ring-blue-200',
 };
 const TASK_STATUS: Record<string, string> = {
-  Pending: 'bg-sky-50 text-sky-700 ring-sky-200',
+  Pending: 'bg-amber-50 text-amber-700 ring-amber-200',
   Overdue: 'bg-red-50 text-red-600 ring-red-200',
-  Due: 'bg-sky-50 text-sky-700 ring-sky-200',
+  Due: 'bg-amber-50 text-amber-700 ring-amber-200',
 };
 
 const longDate = (iso: string) =>
@@ -140,8 +139,9 @@ export function DashboardPage() {
   const o = q.data;
 
   return (
-    <div className="-m-3 min-h-full bg-gradient-to-b from-blue-50/60 via-background to-background p-3 sm:-m-5 sm:p-6">
-      <div className="mx-auto grid max-w-[1500px] grid-cols-[minmax(0,1fr)] gap-6">
+    <div className="relative -m-3 min-h-full overflow-hidden bg-[#f6f7f4] p-3 sm:-m-5 sm:p-6">
+      <DiagonalLines tone="light" className="right-0 top-0 h-[260px] w-[620px]" />
+      <div className="relative mx-auto grid max-w-[1500px] grid-cols-[minmax(0,1fr)] gap-5">
         <Header
           o={o}
           name={user?.fullName}
@@ -172,13 +172,13 @@ function Header({ o, canCreate, name }: { o: Overview; canCreate: boolean; name?
   return (
     <div className="grid items-center gap-5 xl:grid-cols-[auto_minmax(0,1fr)_auto]">
       <div className="min-w-0 xl:pr-4">
-        <div className="text-[13px] text-muted-foreground">
+        <div className="text-[15px] text-[#3f483e]">
           {greeting()}
-          {name ? <span className="font-medium text-foreground">, {name.split(' ')[0]}</span> : null}
+          {name ? <span className="font-semibold text-[#3e6328]">, {name.split(' ')[0]}</span> : null}
         </div>
-        <h1 className="mt-0.5 text-[26px] font-semibold leading-tight text-[#1b201d]">Operations Overview</h1>
-        <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[12px] text-muted-foreground">
-          <Calendar className="size-3.5" /> {longDate(o.asOf)}
+        <h1 className="mt-1 text-[28px] font-semibold leading-tight text-[#1b201d]">Operations Overview</h1>
+        <div className="mt-2 flex items-center gap-2 whitespace-nowrap text-[13px] text-[#3f483e]">
+          <Calendar className="size-4" /> {longDate(o.asOf)}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -190,20 +190,19 @@ function Header({ o, canCreate, name }: { o: Overview; canCreate: boolean; name?
               key={k.key}
               to={k.to}
               className={cn(
-                'group flex min-w-0 flex-col justify-between gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 transition hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(16,24,20,0.08)]',
+                'group flex min-w-0 flex-col justify-between gap-4 rounded-2xl bg-white px-4 pb-3.5 pt-4 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 transition hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(16,24,20,0.08)]',
                 alert ? 'bg-gradient-to-br from-red-50/80 to-white ring-red-100' : 'ring-[#eef1ec]',
               )}
             >
               <span className="flex items-center justify-between gap-3">
                 <span
                   className={cn(
-                    'grid size-8 place-items-center rounded-full',
-                    alert ? 'bg-red-100 text-red-600' : 'bg-[#e6efe7] text-[#24543a]',
+                    'grid size-9 place-items-center rounded-lg',
+                    alert ? 'bg-red-50 text-red-600' : 'bg-[#eef2ea] text-[#3e5a46]',
                   )}
                 >
                   <t.icon className="size-4" />
                 </span>
-                <ArrowRight className="size-3.5 text-[#b3bab0] opacity-0 transition group-hover:opacity-100" />
               </span>
               <span className="grid">
                 <span
@@ -263,9 +262,9 @@ const ITEM_ICON: Record<string, Icon> = {
 
 const STAGE_PILL: Record<Overview['stages'][number]['status'], { label: string; cls: string; dot: string }> =
   {
-    ON_TRACK: { label: 'On Track', cls: 'bg-[#e6efe7] text-[#24543a]', dot: 'bg-[#2f6b47]' },
-    IN_PROGRESS: { label: 'In Progress', cls: 'bg-[#e6efe7] text-[#24543a]', dot: 'bg-[#2f6b47]' },
-    PENDING: { label: 'Pending', cls: 'bg-[#e6efe7] text-[#24543a]', dot: 'bg-[#2f6b47]' },
+    ON_TRACK: { label: 'On Track', cls: 'text-[#2f6b47]', dot: 'bg-[#3f8f4f]' },
+    IN_PROGRESS: { label: 'In Progress', cls: 'text-[#2f6b47]', dot: 'bg-[#3f8f4f]' },
+    PENDING: { label: 'Pending', cls: 'text-[#8a5a12]', dot: 'bg-amber-500' },
     ATTENTION: { label: 'Needs Attention', cls: 'bg-red-50 text-red-700', dot: '' },
   };
 
@@ -286,11 +285,10 @@ function Pipeline({ stages }: { stages: Overview['stages'] }) {
           <div key={s.key} className="contents xl:flex xl:min-w-0 xl:flex-1 xl:items-stretch">
             <StageCard stage={s} n={i + 1} />
             {i < stages.length - 1 ? (
-              <div
-                className="hidden w-7 shrink-0 items-center justify-center text-[#9aa397] xl:flex"
-                aria-hidden
-              >
-                <ArrowRight className="size-4" />
+              <div className="hidden w-9 shrink-0 items-center justify-center xl:flex" aria-hidden>
+                <span className="grid size-6 place-items-center rounded-full bg-white text-[#1b201d] shadow-[0_1px_3px_rgba(16,24,20,0.15)]">
+                  <ArrowRight className="size-3.5" />
+                </span>
               </div>
             ) : null}
           </div>
@@ -304,14 +302,18 @@ function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number 
   const t = STAGE_THEME[stage.key] ?? STAGE_THEME.orders!;
   const pill = STAGE_PILL[stage.status];
   return (
-    <section className="flex min-w-0 flex-1 flex-col rounded-2xl bg-white p-3 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 ring-[#eef1ec]">
-      <header className="flex items-center gap-2.5 px-1.5 pb-3 pt-1">
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#24543a] text-white">
-          <t.icon className="size-4" />
+    <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white p-3.5 pb-10 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 ring-[#eef1ec]">
+      <svg className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full" viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden>
+        <path d="M0 38 C 70 18, 140 52, 210 34 S 290 22, 300 30 L 300 60 L 0 60 Z" fill="#eef3ea" />
+        <path d="M0 48 C 80 34, 150 60, 230 44 S 290 40, 300 44 L 300 60 L 0 60 Z" fill="#e3ecdc" opacity="0.7" />
+      </svg>
+      <header className="relative flex items-center gap-3 px-1 pb-3.5 pt-1">
+        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#24543a] text-white shadow-sm">
+          <t.icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
           <h3
-            className="text-[13.5px] font-semibold leading-tight text-[#1b201d]"
+            className="text-[14.5px] font-semibold leading-tight text-[#1b201d]"
             title={stage.title}
           >
             <span className="text-[#8a9387]">{n}.</span> {stage.title}
@@ -319,7 +321,7 @@ function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number 
           <span
             className={cn(
               'mt-1 inline-flex items-center gap-1 text-[11px] font-medium',
-              stage.status === 'ATTENTION' ? 'text-red-700' : 'text-[#2f6b47]',
+              stage.status === 'ATTENTION' ? 'text-red-700' : pill.cls,
             )}
           >
             {stage.status === 'ATTENTION' ? (
@@ -331,7 +333,7 @@ function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number 
           </span>
         </div>
       </header>
-      <div className="grid gap-0.5 border-t border-[#f0f2ef] pt-2">
+      <div className="relative grid divide-y divide-[#eef1ec] border-t border-[#eef1ec] pt-1">
         {stage.items.map((it) => {
           const I = ITEM_ICON[it.key] ?? FileText;
           const value = groupDigits(it.value);
@@ -342,8 +344,8 @@ function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number 
               title={`${it.label} — ${value}`}
               className="group flex min-w-0 items-start gap-2.5 rounded-lg px-1.5 py-2 transition hover:bg-[#f4f6f3]"
             >
-              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-[#f1f4f0] text-[#3e5a46]">
-                <I className="size-3.5" />
+              <span className="mt-0.5 grid size-7 shrink-0 place-items-center text-[#5a6758]">
+                <I className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium leading-tight text-[#1b201d]">
@@ -383,12 +385,12 @@ function Card({
   className?: string;
 }) {
   return (
-    <section className={cn('min-w-0 rounded-xl border bg-card shadow-sm', className)}>
+    <section className={cn('min-w-0 rounded-2xl bg-white shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 ring-[#eef1ec]', className)}>
       <header className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
         <div className="flex items-start gap-3">
-          <I className="mt-0.5 size-5 text-slate-700" />
+          <I className="mt-0.5 size-5 text-[#3e6328]" />
           <div>
-            <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
+            <h2 className="text-[16px] font-semibold text-[#1b201d]">{title}</h2>
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
         </div>
@@ -419,7 +421,7 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
       <div className="overflow-x-auto px-2 pb-2">
         <table className="w-full min-w-[760px] text-[13px]">
           <thead>
-            <tr className="border-b text-left text-xs font-medium text-slate-600">
+            <tr className="bg-[#f4f6f2] text-left text-xs font-medium text-slate-600">
               <th className="px-3 py-2.5 font-medium">#</th>
               <th className="px-3 py-2.5 font-medium">Task</th>
               <th className="px-3 py-2.5 font-medium">Module</th>
@@ -442,7 +444,7 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
                   <td className="px-3 py-3">
                     <span
                       className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium ring-1',
+                        'rounded-md px-2.5 py-1 text-xs font-medium ring-1',
                         PRIORITY[t.priority],
                       )}
                     >
@@ -453,7 +455,7 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
                   <td className="px-3 py-3">
                     <span
                       className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium ring-1',
+                        'rounded-md px-2.5 py-1 text-xs font-medium ring-1',
                         TASK_STATUS[t.status],
                       )}
                     >
@@ -464,7 +466,7 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 min-w-[64px] rounded-md px-3 text-xs"
+                      className="h-7 min-w-[64px] rounded-md border-[#d5dfca] px-3 text-xs font-medium text-[#1b201d] hover:bg-[#f1f4ee]"
                       onClick={() => navigate(t.to)}
                     >
                       {t.action}
@@ -576,69 +578,55 @@ function QuickActions() {
   );
 }
 
-/** Today's summary at the top of the side panel: the Wewin mark, the date and a few live figures. */
+/** Faint diagonal lines for dark brand panels (decorative). */
+function DiagonalLines({ className, tone = 'dark' }: { className?: string; tone?: 'dark' | 'light' }) {
+  const stroke = tone === 'dark' ? 'rgba(183,199,166,0.10)' : 'rgba(71,122,10,0.10)';
+  return (
+    <svg className={cn('pointer-events-none absolute', className)} viewBox="0 0 400 300" preserveAspectRatio="none" aria-hidden>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <line key={i} x1={160 + i * 46} y1="300" x2={360 + i * 46} y2="0" stroke={stroke} strokeWidth={i % 2 ? 18 : 6} />
+      ))}
+    </svg>
+  );
+}
+
+/** Today's summary: the Wewin logo, the date and the live headline figures. */
 function TodaySummary({ o }: { o: Overview }) {
   const kpi = (key: string) => o.kpis.find((k) => k.key === key);
   const active = kpi('activeOrders');
   const inProd = kpi('inProduction');
   const overdue = kpi('overdue');
   const figures: { label: string; value: string; to?: string; alert?: boolean }[] = [
-    ...(active
-      ? [{ label: 'Active orders', value: active.value.toLocaleString('en-IN'), to: active.to }]
-      : []),
-    ...(inProd
-      ? [{ label: 'In production', value: inProd.value.toLocaleString('en-IN'), to: inProd.to }]
-      : []),
+    ...(active ? [{ label: 'Active orders', value: active.value.toLocaleString('en-IN'), to: active.to }] : []),
+    ...(inProd ? [{ label: 'In production', value: inProd.value.toLocaleString('en-IN'), to: inProd.to }] : []),
     ...(o.progress
-      ? [
-          {
-            label: 'Pieces packed',
-            value: `${o.progress.packedPcs.toLocaleString('en-IN')} / ${o.progress.orderedPcs.toLocaleString('en-IN')}`,
-            to: '/reports?report=order-progress&run=1',
-          },
-        ]
+      ? [{ label: 'Pieces packed', value: `${o.progress.packedPcs.toLocaleString('en-IN')} / ${o.progress.orderedPcs.toLocaleString('en-IN')}`, to: '/reports?report=order-progress&run=1' }]
       : []),
-    ...(overdue
-      ? [
-          {
-            label: 'Overdue items',
-            value: overdue.value.toLocaleString('en-IN'),
-            to: overdue.to,
-            alert: overdue.value > 0,
-          },
-        ]
-      : []),
+    ...(overdue ? [{ label: 'Overdue items', value: overdue.value.toLocaleString('en-IN'), to: overdue.to, alert: overdue.value > 0 }] : []),
   ];
   return (
-    <div className="rounded-t-xl bg-[#1b201d] px-5 pb-5 pt-4 text-white">
-      <div className="flex items-center justify-between gap-3">
+    <div className="relative overflow-hidden rounded-2xl bg-[#1b201d] px-5 pb-5 pt-4 text-white shadow-[0_6px_20px_rgba(16,24,20,0.18)]">
+      <DiagonalLines className="inset-0 size-full" />
+      <div className="relative flex items-center justify-between gap-3">
         <WewinBrand onDark tight />
-        <span className="shrink-0 text-[11px] text-slate-400">{shortDate(o.asOf)}</span>
+        <span className="shrink-0 text-[12px] text-slate-300">{shortDate(o.asOf)}</span>
       </div>
-      <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
-        Today’s summary
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-white/10">
-        {figures.map((f) => {
+      <div className="relative mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#b7c7a6]">Today’s summary</div>
+      <div className="relative mt-2 grid grid-cols-2">
+        {figures.map((f, i) => {
           const body = (
             <>
-              <div
-                className={cn(
-                  'font-[family-name:var(--font-display)] text-xl font-semibold tabular-nums',
-                  f.alert ? 'text-red-300' : 'text-white',
-                )}
-              >
-                {f.value}
-              </div>
-              <div className="mt-0.5 text-[11px] text-slate-400">{f.label}</div>
+              <div className={cn('font-[family-name:var(--font-display)] text-[22px] font-semibold leading-tight tabular-nums', f.alert ? 'text-red-300' : 'text-white')}>{f.value}</div>
+              <div className="mt-0.5 text-[12px] text-slate-300">{f.label}</div>
             </>
           );
+          const cls = cn('px-1 py-2.5', i % 2 === 1 && 'border-l border-white/10 pl-4', i >= 2 && 'border-t border-white/10');
           return f.to ? (
-            <Link key={f.label} to={f.to} className="bg-[#1b201d] px-3 py-2.5 transition hover:bg-[#232a25]">
+            <Link key={f.label} to={f.to} className={cn(cls, 'rounded-sm transition hover:bg-white/5')}>
               {body}
             </Link>
           ) : (
-            <div key={f.label} className="bg-[#1b201d] px-3 py-2.5">
+            <div key={f.label} className={cls}>
               {body}
             </div>
           );
@@ -650,62 +638,25 @@ function TodaySummary({ o }: { o: Overview }) {
 
 function SidePanel({ o }: { o: Overview }) {
   return (
-    <aside className="grid content-start gap-4 rounded-xl border bg-card p-0 shadow-sm">
+    <aside className="grid content-start gap-3">
       <TodaySummary o={o} />
-      <div className="px-5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-          Wewin ERP · {o.company}
-        </div>
-        <div className="mt-2 h-0.5 w-8 rounded bg-brand" aria-hidden />
-        <h2 className="mt-3 text-xl font-semibold leading-snug text-foreground">
-          Precision begins with every stitch.
-        </h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-          Orders, yarn, job work, production, export and accounts — from order to dispatch, in one place.
-        </p>
-      </div>
-      {o.progress ? (
-        <Link
-          to="/reports?report=order-progress&run=1"
-          className="mx-4 flex items-center gap-4 rounded-xl border bg-white p-4 shadow-sm hover:shadow"
-        >
-          <span className="grid size-11 place-items-center rounded-full bg-blue-50 text-blue-600">
-            <Network className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center justify-between text-[13px] font-medium text-slate-900">
-              Production Progress <span className="text-sm font-semibold">{o.progress.pct}%</span>
-            </span>
-            <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <span
-                className="block h-full rounded-full bg-blue-600"
-                style={{ width: `${o.progress.pct}%` }}
-              />
-            </span>
-            <span className="mt-1.5 block text-[11px] text-muted-foreground">
-              {o.progress.packedPcs.toLocaleString('en-IN')} of{' '}
-              {o.progress.orderedPcs.toLocaleString('en-IN')} ordered pieces packed
-            </span>
-          </span>
-        </Link>
-      ) : null}
-      {o.headsUp ? (
-        <div className="mx-4 mb-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
-          <div className="flex items-start gap-3">
-            <Lightbulb className="mt-0.5 size-5 shrink-0 text-blue-500" />
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Heads up!</div>
-              <p className="mt-1 text-[13px] text-slate-600">{o.headsUp.text}</p>
-              <Link
-                to={o.headsUp.link}
-                className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-900 hover:underline"
-              >
-                {o.headsUp.linkLabel} <ArrowRight className="size-3.5" />
-              </Link>
-            </div>
+      <Link
+        to="/reports"
+        className="group flex items-center gap-3 rounded-2xl bg-white px-5 py-4 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 ring-[#eef1ec] transition hover:shadow-[0_4px_12px_rgba(16,24,20,0.08)]"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#3e6328]">
+            Wewin ERP <span className="mx-1 text-[#93a97c]">•</span> {o.company}
+          </div>
+          <div className="mt-2 flex items-center gap-2.5">
+            <BarChart3 className="size-5 shrink-0 text-[#3e6328]" />
+            <span className="text-[15px] font-medium text-[#1b201d]">Precision begins with every stitch.</span>
           </div>
         </div>
-      ) : null}
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#f1f4f0] text-[#1b201d] transition group-hover:bg-[#e6efe7]">
+          <ArrowRight className="size-4" />
+        </span>
+      </Link>
     </aside>
   );
 }
