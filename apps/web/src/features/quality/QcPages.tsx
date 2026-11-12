@@ -333,6 +333,7 @@ export function QcPage() {
       <DocumentForm
         voice={voice}
         title={QC_KIND_NAMES[kind]}
+        printHref={qc ? `/print/qc/${qc.id}` : undefined}
         docNo={qc?.docNo}
         status={status === 'POSTED' ? 'APPROVED' : status}
         postedAt={qc?.postedAt}

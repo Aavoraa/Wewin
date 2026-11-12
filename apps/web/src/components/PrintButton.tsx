@@ -12,7 +12,12 @@ export function PrintButton({ label = 'Print', compact }: { label?: string; comp
       variant={compact ? 'ghost' : 'outline'}
       size={compact ? 'icon' : 'default'}
       className="no-print"
-      onClick={() => window.print()}
+      onClick={() => {
+        // On a document, print its bill layout (the document form's Print); elsewhere the page as shown.
+        const doc = document.querySelector<HTMLElement>('[data-doc-print]');
+        if (doc) doc.click();
+        else window.print();
+      }}
       aria-label={compact ? 'Print this page' : undefined}
       title="Print this page (Ctrl+P)"
     >

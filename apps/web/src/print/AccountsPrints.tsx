@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { formatDate, formatInr } from '@/lib/format';
 import { LoadingState } from '@/components/states';
 import { type DebitNote, type Payment, type VendorBill } from '@/features/accounts/types';
-import { CompanyBlock, PrintLayout, Signatures, useCompany } from './PrintLayout';
+import { CompanyBlock, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
 
 const REASON: Record<string, string> = { EXCESS_LOSS: 'Excess process loss', PANEL_REJECT: 'Rejected panels', PANEL_MISSING: 'Missing panels', MANUAL: '' };
 
@@ -31,6 +31,7 @@ export function DebitNotePrint({ id }: { id: string }) {
           <div className="font-semibold">{n.vendor.name}</div>
           <div>{[n.vendor.addressLine1, n.vendor.city, n.vendor.state].filter(Boolean).join(', ')}</div>
           {n.vendor.gstin ? <div>GSTIN: {n.vendor.gstin}</div> : null}
+          <VendorCertificate v={n.vendor} />
         </div>
         <div>
           {n.bill ? (
@@ -120,6 +121,7 @@ export function PaymentVoucherPrint({ id }: { id: string }) {
         <div>
           <div className="text-[10px] font-semibold uppercase">Paid to</div>
           <div className="font-semibold">{p.vendor.name}</div>
+          <VendorCertificate v={p.vendor} />
           {p.vendor.bankAccount ? (
             <div>
               {p.vendor.bankName} A/c {p.vendor.bankAccount} {p.vendor.bankIfsc ? `IFSC ${p.vendor.bankIfsc}` : ''}
@@ -208,8 +210,7 @@ export function VendorBillPrint({ id }: { id: string }) {
           <div className="font-semibold">{v.name}</div>
           <div>{[v.addressLine1, v.addressLine2, v.city, v.state].filter(Boolean).join(', ')}</div>
           {v.gstin ? <div>GSTIN: {v.gstin}</div> : null}
-          <div>Certificate no.: {v.certificateNo ?? '—'}</div>
-          <div>Certificate valid till: {v.certificateExpiry ? formatDate(v.certificateExpiry) : '—'}</div>
+          <VendorCertificate v={v} />
         </div>
         <div>
           <div>

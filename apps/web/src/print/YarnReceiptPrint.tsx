@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { formatDate, formatInr, formatKg } from '@/lib/format';
 import { LoadingState } from '@/components/states';
 import { type YarnReceipt } from '@/features/yarn/YarnPages';
-import { CompanyBlock, PrintLayout, Signatures, useCompany } from './PrintLayout';
+import { CompanyBlock, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
 
 /** Goods receipt note for yarn (A5). */
 export function YarnReceiptPrint({ id }: { id: string }) {
@@ -27,6 +27,7 @@ export function YarnReceiptPrint({ id }: { id: string }) {
           <div className="font-semibold">Received from</div>
           <div>{r.vendor.name}</div>
           {r.vendor.gstin ? <div>GSTIN: {r.vendor.gstin}</div> : null}
+          <VendorCertificate v={r.vendor} />
         </div>
         <div>
           <div>Invoice: {r.supplierInvoiceNo ?? '—'} {r.supplierInvoiceDate ? `dt ${formatDate(r.supplierInvoiceDate)}` : ''}</div>

@@ -168,3 +168,36 @@ export function rupeesInWords(amount: DecimalLike): string {
   if (n) parts.push(three(n));
   return `${parts.join(' ')}${paise ? ` and ${two(paise)} Paise` : ''} Only`.trim();
 }
+
+const CURRENCY_WORDS: Record<string, [string, string]> = {
+  USD: ['US Dollars', 'Cents'],
+  EUR: ['Euros', 'Cents'],
+  GBP: ['Pounds Sterling', 'Pence'],
+  AUD: ['Australian Dollars', 'Cents'],
+  CAD: ['Canadian Dollars', 'Cents'],
+};
+
+/**
+ * Amount in words for a buyer document: rupees in Indian numbering (lakh, crore); other currencies in
+ * international numbering (thousand, million, billion), e.g. "Euros Four Thousand Two Hundred and Thirty Only".
+ */
+export function amountInWords(amount: DecimalLike, currency: string): string {
+  if (currency === 'INR') return `Rupees ${rupeesInWords(amount)}`;
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const two = (n: number) => (n < 20 ? ones[n]! : `${tens[Math.floor(n / 10)]}${n % 10 ? ` ${ones[n % 10]}` : ''}`);
+  const three = (n: number) => [n >= 100 ? `${ones[Math.floor(n / 100)]} Hundred` : '', n % 100 ? two(n % 100) : ''].filter(Boolean).join(' and ');
+  const [main, minor] = CURRENCY_WORDS[currency] ?? [currency, 'Cents'];
+  const d = D(amount).toDecimalPlaces(2, Dec.ROUND_HALF_UP);
+  let n = d.floor().toNumber();
+  const cents = d.minus(d.floor()).times(100).toNumber();
+  const parts: string[] = [];
+  for (const [size, name] of [[1_000_000_000, 'Billion'], [1_000_000, 'Million'], [1000, 'Thousand']] as const) {
+    const chunk = Math.floor(n / size);
+    n %= size;
+    if (chunk) parts.push(`${three(chunk)} ${name}`);
+  }
+  if (n) parts.push(three(n));
+  const whole = parts.join(' ') || 'Zero';
+  return `${main} ${whole}${cents ? ` and ${two(cents)} ${minor}` : ''} Only`;
+}

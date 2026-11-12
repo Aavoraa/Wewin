@@ -96,5 +96,10 @@ describe('Rejection Entry (Q-071)', () => {
     expect(dn).toMatchObject({ status: 'DRAFT', vendorId: m.vendors.mill.id });
     expect(dn.lines[0]!.description).toContain('Uneven count, slubs');
     expect(dn.lines[0]!.qty.toFixed(3)).toBe('3.000');
+    // The challan print reads the document itself: vendor details, certificate and HSN come with it (Q-077).
+    const got = (await owner.get(`/api/v1/stock-docs/${d.id}`)).body.data;
+    expect(got.vendor).toMatchObject({ name: 'Test Mill', certificateNo: expect.stringMatching(/^CERT-/) });
+    expect(got.vendor.certificateExpiry).toMatch(/^2099-12-31/);
+    expect(got.lines[0].item).toHaveProperty('hsnCode');
   });
 });

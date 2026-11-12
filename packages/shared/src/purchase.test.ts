@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInterState, poLineAmount, poTotals, rupeesInWords, zPoInput } from './purchase';
+import { amountInWords, isInterState, poLineAmount, poTotals, rupeesInWords, zPoInput } from './purchase';
 
 describe('purchase order maths (Q-066)', () => {
   it('line amount = qty × rate ÷ per', () => {
@@ -44,5 +44,17 @@ describe('purchase order maths (Q-066)', () => {
     const base = { kind: 'YARN', docDate: '2026-11-10', vendorId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', lines: [{ itemId: '1b4e28ba-2fa1-11d2-883f-0016d3cca427', qty: '10', rate: '300' }] };
     expect(zPoInput.safeParse(base).success).toBe(false);
     expect(zPoInput.safeParse({ ...base, purpose: 'GENERAL' }).success).toBe(true);
+  });
+});
+
+describe('amount in words for buyer documents', () => {
+  it('foreign currencies use thousand / million and cents', () => {
+    expect(amountInWords('4230.00', 'EUR')).toBe('Euros Four Thousand Two Hundred and Thirty Only');
+    expect(amountInWords('1250000.75', 'USD')).toBe('US Dollars One Million Two Hundred and Fifty Thousand and Seventy Five Cents Only');
+    expect(amountInWords('0.50', 'GBP')).toBe('Pounds Sterling Zero and Fifty Pence Only');
+    expect(amountInWords('12', 'SEK')).toBe('SEK Twelve Only');
+  });
+  it('rupees keep Indian numbering', () => {
+    expect(amountInWords('247968.00', 'INR')).toBe('Rupees Two Lakhs Forty Seven Thousand Nine Hundred and Sixty Eight Only');
   });
 });

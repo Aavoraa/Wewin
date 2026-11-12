@@ -401,6 +401,7 @@ export function StockDocPage() {
       status={status}
       postedAt={doc?.postedAt}
       backHref={`/stock-docs/${kind}`}
+      printHref={doc ? `/print/stock-doc/${doc.id}` : undefined}
       canEdit={can('stockdocs.create')}
       canPost={!!doc && can('stockdocs.post')}
       canCancel={can('stockdocs.cancel')}

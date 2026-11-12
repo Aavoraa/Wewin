@@ -474,6 +474,7 @@ export function PanelInPage() {
     <DocumentForm
       voice={voice}
       title="Panel inward"
+      printHref={dc ? `/print/panel-inward/${dc.id}` : undefined}
       docNo={dc?.docNo}
       status={status}
       postedAt={dc?.postedAt}
@@ -590,7 +591,7 @@ export function PanelInPage() {
 }
 
 // ───────── Recut slips ─────────
-interface RecutSlip {
+export interface RecutSlip {
   id: string;
   docNo: string | null;
   docDate: string;
@@ -669,6 +670,7 @@ export function RecutPage() {
     <DocumentForm
       voice={voice}
       title="Recut slip"
+      printHref={r ? `/print/recut-slip/${r.id}` : undefined}
       docNo={r?.docNo}
       status={status}
       backHref="/recut-slips"

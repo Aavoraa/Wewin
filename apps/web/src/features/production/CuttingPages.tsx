@@ -243,6 +243,7 @@ export function CutLayPage() {
     <DocumentForm
       voice={voice}
       title="Cutting lay"
+      printHref={lay ? `/print/cut-lay/${lay.id}` : undefined}
       docNo={lay?.docNo}
       status={status}
       postedAt={lay?.postedAt}

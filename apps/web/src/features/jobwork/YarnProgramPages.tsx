@@ -218,6 +218,7 @@ export function YarnProgramPage() {
     <DocumentForm
       title={`Program Defined${processName ? ` — ${processName}` : ''}`}
       docNo={p?.programNo}
+      printHref={p ? `/print/yarn-program/${p.id}` : undefined}
       status={status}
       postedAt={p?.approvedAt}
       backHref="/yarn-programs"
