@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
@@ -684,24 +684,27 @@ export function PurchaseOrderPage() {
             <CardContent className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="w-8 py-1">#</th>
+                  <tr className="border-b text-left text-xs font-medium text-muted-foreground [&>th]:whitespace-nowrap [&>th]:px-1 [&>th]:py-2">
+                    <th className="w-8">#</th>
                     <th className="min-w-44">{kind === 'YARN' ? 'Yarn counts' : kind === 'FABRIC' ? 'Fabric type' : 'Accessory'}</th>
                     {multiOrder ? <th className="min-w-36">Order</th> : null}
-                    {cols.map((c) => (
-                      <th key={c.k} className={cn(c.num && 'text-right')}>
-                        {c.k === 'qty' && kind === 'ACCESSORY' ? (
-                          <>
-                            <span className="mr-3 inline-block w-20 text-right">BalanceReqQty</span>P.O.Qty
-                          </>
-                        ) : (
-                          c.label
-                        )}
-                      </th>
-                    ))}
+                    {cols.map((c) =>
+                      c.k === 'qty' && kind === 'ACCESSORY' ? (
+                        <Fragment key={c.k}>
+                          <th className="text-right" title="Requirement + approved SPL − already on POs">
+                            BalanceReqQty
+                          </th>
+                          <th className="text-right">P.O.Qty</th>
+                        </Fragment>
+                      ) : (
+                        <th key={c.k} className={cn(c.num && 'text-right')}>
+                          {c.label}
+                        </th>
+                      ),
+                    )}
                     <th className="text-right">Rate</th>
                     <th className="text-right">Per</th>
-                    <th className="text-right">Amount</th>
+                    <th className="min-w-24 !pl-4 text-right">Amount</th>
                     <th className="w-8" />
                   </tr>
                 </thead>
@@ -754,14 +757,16 @@ export function PurchaseOrderPage() {
                           </td>
                         ) : null}
                         {cols.map((c) => (
-                          <td key={c.k} className="pr-1">
+                          <Fragment key={c.k}>
                             {c.k === 'qty' && kind === 'ACCESSORY' ? (
-                              <span className="mr-3 inline-block w-20 text-right font-mono text-xs text-muted-foreground" title="Requirement + approved SPL − already on POs">
+                              <td className="px-1 py-1.5 text-right align-middle tabular-nums text-muted-foreground" title="Requirement + approved SPL − already on POs">
                                 {balanceFor(l) ?? '—'}
-                              </span>
+                              </td>
                             ) : null}
-                            <Input className={cn(c.w, c.num && 'text-right', c.k === 'qty' && kind === 'ACCESSORY' && 'inline-flex')} inputMode={c.num ? 'decimal' : undefined} disabled={!editable} {...form.register(`lines.${i}.${c.k}` as const)} />
-                          </td>
+                            <td className="px-1">
+                              <Input className={cn(c.w, c.num && 'text-right')} inputMode={c.num ? 'decimal' : undefined} disabled={!editable} {...form.register(`lines.${i}.${c.k}` as const)} />
+                            </td>
+                          </Fragment>
                         ))}
                         <td className="pr-1">
                           <Input className="w-24 text-right" inputMode="decimal" disabled={!editable} {...form.register(`lines.${i}.rate`)} />
@@ -769,7 +774,7 @@ export function PurchaseOrderPage() {
                         <td className="pr-1">
                           <Input className="w-16 text-right" inputMode="decimal" disabled={!editable} {...form.register(`lines.${i}.per`)} />
                         </td>
-                        <td className="py-1.5 text-right font-mono">{formatInr(poLineAmount(safe(l.qty), safe(l.rate), safe(l.per, '1') === '0' ? '1' : safe(l.per, '1')), { symbol: false })}</td>
+                        <td className="py-1.5 pl-4 text-right align-middle font-mono tabular-nums">{formatInr(poLineAmount(safe(l.qty), safe(l.rate), safe(l.per, '1') === '0' ? '1' : safe(l.per, '1')), { symbol: false })}</td>
                         <td>
                           {editable && lines.fields.length > 1 ? (
                             <Button type="button" size="icon" variant="ghost" aria-label={`Remove line ${i + 1}`} onClick={() => lines.remove(i)}>
