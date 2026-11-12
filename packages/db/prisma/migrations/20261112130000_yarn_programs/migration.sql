@@ -1,4 +1,4 @@
--- Program Defined (Q-074): yarn process programmes, and outward D.C.s sent under one.
+-- Program Defined (Q-076): yarn process programmes, and outward D.C.s sent under one.
 
 -- AlterTable
 ALTER TABLE "outward_dcs" ADD COLUMN     "yarn_program_id" UUID,
@@ -68,7 +68,7 @@ ALTER TABLE "yarn_program_inputs" ADD CONSTRAINT "yarn_program_inputs_item_id_fk
 -- AddForeignKey
 ALTER TABLE "outward_dcs" ADD CONSTRAINT "outward_dcs_yarn_program_id_fkey" FOREIGN KEY ("yarn_program_id") REFERENCES "yarn_programs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Reviewed additions (Q-074)
+-- Reviewed additions (Q-076)
 -- An outward D.C. goes under exactly one programme: a fabric programme step or a yarn programme.
 ALTER TABLE outward_dcs ADD CONSTRAINT outward_dcs_one_program CHECK (num_nonnulls(program_process_id, yarn_program_id) = 1);
 ALTER TABLE yarn_programs ADD CONSTRAINT yarn_programs_loss_range CHECK (allowed_loss_pct >= 0 AND allowed_loss_pct < 100);

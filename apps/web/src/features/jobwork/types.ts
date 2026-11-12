@@ -17,7 +17,7 @@ export interface OutwardDc {
   docNo: string | null;
   docDate: string;
   vendorId: string;
-  /** Exactly one: a fabric programme step, or a yarn programme (Program Defined, Q-074). */
+  /** Exactly one: a fabric programme step, or a yarn programme (Program Defined, Q-076). */
   programProcessId: string | null;
   yarnProgramId: string | null;
   processId: string;
@@ -79,7 +79,7 @@ export interface PendingOutward {
   process: string;
   programNo: string;
   outputItemId: string;
-  /** YARN: a yarn programme (Program Defined, Q-074) — yarn comes back to the yarn store, no rolls. */
+  /** YARN: a yarn programme (Program Defined, Q-076) — yarn comes back to the yarn store, no rolls. */
   outputKind: 'YARN' | 'FABRIC';
   sentKg: string;
   receivedKg: string;

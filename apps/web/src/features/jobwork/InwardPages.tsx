@@ -144,7 +144,7 @@ export function InwardDcPage() {
   const rollsKg = lines.reduce((a, l) => (/^\d+(\.\d+)?$/.test(l.kg) ? a.plus(D(l.kg)) : a), D(0));
   const linkedKg = links.reduce((a, l) => (/^\d+(\.\d+)?$/.test(l.receivedKg) ? a.plus(D(l.receivedKg)) : a), D(0));
   const pendingById = useMemo(() => new Map((pending.data ?? []).map((p) => [p.id, p])), [pending.data]);
-  // Yarn programmes (Program Defined, Q-074) return yarn: picked from yarn items, no roll no. / GSM / dia.
+  // Yarn programmes (Program Defined, Q-076) return yarn: picked from yarn items, no roll no. / GSM / dia.
   const yarnOut = links.some((l) => pendingById.get(l.outwardDcId)?.outputKind === 'YARN') || !!doc?.links.some((k) => k.outward.yarnProgram);
 
   if (!d.isNew && d.query.isLoading) return <LoadingState />;

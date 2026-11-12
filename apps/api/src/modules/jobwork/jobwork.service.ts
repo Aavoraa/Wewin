@@ -51,7 +51,7 @@ const sumKg = (xs: { toString(): string }[]) => xs.reduce<ReturnType<typeof D>>(
 
 /**
  * The programme an outward D.C. was sent under: a fabric programme step, or a yarn programme
- * (Program Defined, Q-074). The database holds exactly one of the two.
+ * (Program Defined, Q-076). The database holds exactly one of the two.
  */
 function programOf(o: Pick<OutwardDetail, 'programProcess' | 'yarnProgram'>) {
   if (o.programProcess) {
@@ -132,7 +132,7 @@ function shapeInward(i: InwardDetail) {
 async function validateOutward(input: OutInput, db: Tx | typeof prisma) {
   const vendor = await mastersService.vendorById(input.vendorId, db);
   if (!vendor.isActive) throw new AppError('VALIDATION_ERROR', `Vendor ${vendor.name} is inactive`, 400);
-  // The programme the D.C. goes under: a yarn programme (Program Defined, Q-074) or a fabric programme step.
+  // The programme the D.C. goes under: a yarn programme (Program Defined, Q-076) or a fabric programme step.
   let pp: { processId: string; processCode: string; orderId: string; allowedLossPct: string; programNo: string };
   let yarnInputs: Set<string> | null = null;
   if (input.yarnProgramId) {
@@ -224,7 +224,7 @@ async function validateInward(input: InInput, db: Tx | typeof prisma) {
   if (processes.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s are for different processes', 400);
   if (orders.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s belong to different orders', 400);
   if (kinds.size > 1) throw new AppError('VALIDATION_ERROR', 'Linked outward D.C.s return different materials (yarn and fabric)', 400);
-  // A yarn programme (Program Defined, Q-074) returns yarn to the yarn store, without rolls; otherwise fabric rolls.
+  // A yarn programme (Program Defined, Q-076) returns yarn to the yarn store, without rolls; otherwise fabric rolls.
   const outputType = kinds.has('YARN') ? 'YARN' : 'FABRIC';
   const what = outputType === 'YARN' ? 'Line' : 'Roll';
   input.lines.forEach((l, n) => {
@@ -753,7 +753,7 @@ export const jobworkService = {
       const vendorLoc = await mastersService.vendorLocationId(i.vendorId, tx);
 
       // Roll numbers: entered ones are kept; blanks become <INW no>/<line>. Yarn (Program Defined,
-      // Q-074) comes back as lot / colour stock in the yarn store, without rolls.
+      // Q-076) comes back as lot / colour stock in the yarn store, without rolls.
       const yarn = v.outputType === 'YARN';
       const rollNos = i.lines.map((l) => (l.rollNo.startsWith('#') ? `${docNo}/${l.lineNo}` : l.rollNo));
       const taken = yarn ? [] : await repo.rollNoTaken(tx, rollNos);

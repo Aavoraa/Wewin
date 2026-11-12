@@ -28,8 +28,8 @@ import {
   Receipt,
   Ribbon,
   Scissors,
-  Shirt,
   Ship,
+  Shirt,
   Truck,
   Upload,
   Wallet,
@@ -40,60 +40,52 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { SewingIllustration } from './SewingIllustration';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { WewinBrand } from '@/components/Brand';
 
 type Tone = 'green' | 'amber' | 'red' | 'blue';
 interface Overview {
   asOf: string;
   company: string;
   kpis: { key: string; label: string; value: number; to: string }[];
-  stages: { key: string; title: string; status: 'ON_TRACK' | 'IN_PROGRESS' | 'PENDING' | 'ATTENTION'; items: { key: string; label: string; value: string; tone: Tone; to: string }[] }[];
-  tasks: { total: number; rows: { id: string; task: string; module: string; reference: string; priority: 'High' | 'Medium' | 'Low'; due: string; status: 'Pending' | 'Overdue' | 'Due'; action: string; to: string }[] };
+  stages: {
+    key: string;
+    title: string;
+    status: 'ON_TRACK' | 'IN_PROGRESS' | 'PENDING' | 'ATTENTION';
+    items: { key: string; label: string; value: string; tone: Tone; to: string }[];
+  }[];
+  tasks: {
+    total: number;
+    rows: {
+      id: string;
+      task: string;
+      module: string;
+      reference: string;
+      priority: 'High' | 'Medium' | 'Low';
+      due: string;
+      status: 'Pending' | 'Overdue' | 'Due';
+      action: string;
+      to: string;
+    }[];
+  };
   activity: { id: string; kind: string; title: string; link: string | null; at: string }[];
   progress: { orderedPcs: number; packedPcs: number; pct: number } | null;
   headsUp: { text: string; link: string; linkLabel: string } | null;
 }
 type Icon = ComponentType<{ className?: string }>;
 
-/** Colour theme per pipeline stage (border, icon tile, item icon chip). */
-const STAGE_THEME: Record<string, { icon: Icon; border: string; tile: string; chip: string; wash: string }> = {
-  orders: { icon: FileText, border: 'border-blue-300', tile: 'bg-blue-600', chip: 'bg-blue-50 text-blue-600', wash: 'from-blue-50/80' },
-  materials: { icon: Boxes, border: 'border-blue-300', tile: 'bg-blue-600', chip: 'bg-blue-50 text-blue-600', wash: 'from-blue-50/80' },
-  production: { icon: Factory, border: 'border-sky-300', tile: 'bg-sky-600', chip: 'bg-sky-50 text-sky-600', wash: 'from-sky-50/80' },
-  dispatch: { icon: Truck, border: 'border-blue-300', tile: 'bg-blue-500', chip: 'bg-blue-50 text-blue-600', wash: 'from-blue-50/80' },
-  finance: { icon: Wallet, border: 'border-sky-300', tile: 'bg-sky-600', chip: 'bg-sky-50 text-sky-600', wash: 'from-sky-50/80' },
-};
-const ITEM_ICON: Record<string, Icon> = {
-  orders: FileText,
-  costing: BadgeIndianRupee,
-  programs: Layers,
-  yarn: Network,
-  fabric: Package,
-  vendorStock: Boxes,
-  trims: Ribbon,
-  receipts: ClipboardCheck,
-  cutting: Scissors,
-  panels: Layers,
-  sewing: Shirt,
-  packing: PackageCheck,
-  progress: BarChart3,
-  fg: PackageCheck,
-  exportDocs: FileText,
-  shipments: Ship,
-  tracking: MapPin,
-  vendorInvoices: Receipt,
-  billVerification: FileCheck2,
-  debitNotes: FileMinus,
-  payments: Wallet,
-  ageing: BarChart3,
-};
-const DOT: Record<Tone, string> = { green: 'bg-blue-500', amber: 'bg-sky-500', red: 'bg-red-500', blue: 'bg-sky-500' };
-const STATUS: Record<Overview['stages'][number]['status'], [string, string]> = {
-  ON_TRACK: ['On Track', 'bg-blue-100 text-blue-700'],
-  IN_PROGRESS: ['In Progress', 'bg-sky-100 text-sky-700'],
-  PENDING: ['Pending', 'bg-blue-100 text-blue-700'],
-  ATTENTION: ['Needs Attention', 'bg-red-100 text-red-700'],
+/** Icon per pipeline stage. */
+const STAGE_THEME: Record<string, { icon: Icon }> = {
+  orders: { icon: FileText },
+  materials: { icon: Boxes },
+  production: { icon: Factory },
+  dispatch: { icon: Truck },
+  finance: { icon: Wallet },
 };
 const KPI: Record<string, { icon: Icon; chip: string }> = {
   activeOrders: { icon: FileText, chip: 'bg-blue-50 text-blue-600' },
@@ -102,11 +94,30 @@ const KPI: Record<string, { icon: Icon; chip: string }> = {
   invoicesReview: { icon: FileCheck2, chip: 'bg-blue-50 text-blue-600' },
   overdue: { icon: AlertTriangle, chip: 'bg-red-50 text-red-600' },
 };
-const PRIORITY: Record<string, string> = { High: 'bg-red-50 text-red-600 ring-red-200', Medium: 'bg-sky-50 text-sky-700 ring-sky-200', Low: 'bg-blue-50 text-blue-700 ring-blue-200' };
-const TASK_STATUS: Record<string, string> = { Pending: 'bg-sky-50 text-sky-700 ring-sky-200', Overdue: 'bg-red-50 text-red-600 ring-red-200', Due: 'bg-sky-50 text-sky-700 ring-sky-200' };
+const PRIORITY: Record<string, string> = {
+  High: 'bg-red-50 text-red-600 ring-red-200',
+  Medium: 'bg-sky-50 text-sky-700 ring-sky-200',
+  Low: 'bg-blue-50 text-blue-700 ring-blue-200',
+};
+const TASK_STATUS: Record<string, string> = {
+  Pending: 'bg-sky-50 text-sky-700 ring-sky-200',
+  Overdue: 'bg-red-50 text-red-600 ring-red-200',
+  Due: 'bg-sky-50 text-sky-700 ring-sky-200',
+};
 
-const longDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-const shortDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const longDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 function ago(iso: string) {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 60) return `${mins || 1}m ago`;
@@ -119,7 +130,11 @@ function ago(iso: string) {
 /** Operations overview: the order-to-cash pipeline, work waiting for people, and recent activity. */
 export function DashboardPage() {
   const { user } = useAuth();
-  const q = useQuery({ queryKey: ['dashboard-overview'], queryFn: () => api.get<Overview>('/dashboard/overview'), refetchInterval: 60_000 });
+  const q = useQuery({
+    queryKey: ['dashboard-overview'],
+    queryFn: () => api.get<Overview>('/dashboard/overview'),
+    refetchInterval: 60_000,
+  });
   if (q.isLoading) return <LoadingState />;
   if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   const o = q.data;
@@ -127,7 +142,11 @@ export function DashboardPage() {
   return (
     <div className="-m-3 min-h-full bg-gradient-to-b from-blue-50/60 via-background to-background p-3 sm:-m-5 sm:p-6">
       <div className="mx-auto grid max-w-[1500px] grid-cols-[minmax(0,1fr)] gap-6">
-        <Header o={o} canCreate={!!user && user.permissions.includes('orders.create')} />
+        <Header
+          o={o}
+          name={user?.fullName}
+          canCreate={!!user && user.permissions.includes('orders.create')}
+        />
         <Pipeline stages={o.stages} />
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="grid min-w-0 gap-5">
@@ -144,102 +163,202 @@ export function DashboardPage() {
   );
 }
 
-function Header({ o, canCreate }: { o: Overview; canCreate: boolean }) {
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+};
+
+function Header({ o, canCreate, name }: { o: Overview; canCreate: boolean; name?: string }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-5 min-[1440px]:flex-nowrap">
-      <div className="min-w-0 min-[1440px]:max-w-[320px]">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Wewin ERP</div>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Operations Overview</h1>      </div>
-      <div className="flex flex-wrap items-center justify-end gap-2.5 min-[1440px]:flex-nowrap">
-        <span className="mr-1 flex items-center gap-2 whitespace-nowrap text-[13px] text-slate-600">
-          <Calendar className="size-4" /> {longDate(o.asOf)}
-        </span>
+    <div className="grid items-center gap-5 xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="min-w-0 xl:pr-4">
+        <div className="text-[13px] text-muted-foreground">
+          {greeting()}
+          {name ? <span className="font-medium text-foreground">, {name.split(' ')[0]}</span> : null}
+        </div>
+        <h1 className="mt-0.5 text-[26px] font-semibold leading-tight text-[#1b201d]">Operations Overview</h1>
+        <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[12px] text-muted-foreground">
+          <Calendar className="size-3.5" /> {longDate(o.asOf)}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {o.kpis.map((k) => {
           const t = KPI[k.key] ?? KPI.activeOrders!;
+          const alert = k.key === 'overdue' && k.value > 0;
           return (
-            <Link key={k.key} to={k.to} className="flex min-w-[124px] items-center gap-2.5 rounded-xl border bg-card px-3 py-2.5 shadow-sm transition hover:shadow-md">
-              <span className={cn('grid size-9 place-items-center rounded-lg', t.chip)}>
-                <t.icon className="size-4" />
+            <Link
+              key={k.key}
+              to={k.to}
+              className={cn(
+                'group flex min-w-0 flex-col justify-between gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 transition hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(16,24,20,0.08)]',
+                alert ? 'bg-gradient-to-br from-red-50/80 to-white ring-red-100' : 'ring-[#eef1ec]',
+              )}
+            >
+              <span className="flex items-center justify-between gap-3">
+                <span
+                  className={cn(
+                    'grid size-8 place-items-center rounded-full',
+                    alert ? 'bg-red-100 text-red-600' : 'bg-[#e6efe7] text-[#24543a]',
+                  )}
+                >
+                  <t.icon className="size-4" />
+                </span>
+                <ArrowRight className="size-3.5 text-[#b3bab0] opacity-0 transition group-hover:opacity-100" />
               </span>
               <span className="grid">
-                <span className="whitespace-nowrap text-[11px] text-muted-foreground">{k.label}</span>
-                <span className="text-lg font-semibold leading-tight text-slate-900">{k.value}</span>
+                <span
+                  className={cn(
+                    'font-[family-name:var(--font-display)] text-[22px] font-semibold leading-none tabular-nums',
+                    alert ? 'text-red-700' : 'text-[#1b201d]',
+                  )}
+                >
+                  {k.value.toLocaleString('en-IN')}
+                </span>
+                <span className="mt-1 text-[11.5px] leading-snug text-muted-foreground">{k.label}</span>
               </span>
             </Link>
           );
         })}
-        {canCreate ? (
-          <Button asChild className="h-11 rounded-lg bg-slate-900 px-4 hover:bg-slate-800">
-            <Link to="/orders/new">
-              <Plus /> Create Order
-            </Link>
-          </Button>
-        ) : null}
       </div>
+      {canCreate ? (
+        <Button
+          asChild
+          className="h-auto min-h-11 rounded-xl bg-[#24543a] px-4 py-3 shadow-[0_2px_8px_rgba(36,84,58,0.25)] hover:bg-[#1c4430]"
+        >
+          <Link to="/orders/new">
+            <Plus /> Create Order
+          </Link>
+        </Button>
+      ) : null}
     </div>
   );
 }
 
+/** Icon per pipeline row. */
+const ITEM_ICON: Record<string, Icon> = {
+  orders: FileText,
+  costing: BadgeIndianRupee,
+  programs: Layers,
+  yarn: Network,
+  fabric: Package,
+  vendorStock: Boxes,
+  trims: Ribbon,
+  receipts: ClipboardCheck,
+  cutting: Scissors,
+  panels: Layers,
+  sewing: Shirt,
+  qc: FileCheck2,
+  packing: PackageCheck,
+  progress: BarChart3,
+  fg: PackageCheck,
+  exportDocs: FileText,
+  shipments: Ship,
+  tracking: MapPin,
+  vendorInvoices: Receipt,
+  billVerification: FileCheck2,
+  debitNotes: FileMinus,
+  payments: Wallet,
+  ageing: BarChart3,
+};
+
+const STAGE_PILL: Record<Overview['stages'][number]['status'], { label: string; cls: string; dot: string }> =
+  {
+    ON_TRACK: { label: 'On Track', cls: 'bg-[#e6efe7] text-[#24543a]', dot: 'bg-[#2f6b47]' },
+    IN_PROGRESS: { label: 'In Progress', cls: 'bg-[#e6efe7] text-[#24543a]', dot: 'bg-[#2f6b47]' },
+    PENDING: { label: 'Pending', cls: 'bg-[#e6efe7] text-[#24543a]', dot: 'bg-[#2f6b47]' },
+    ATTENTION: { label: 'Needs Attention', cls: 'bg-red-50 text-red-700', dot: '' },
+  };
+
+/** Indian digit grouping for whole numbers of 4+ digits inside a figure ("3094 kg" → "3,094 kg"). */
+const groupDigits = (v: string) =>
+  v.replace(
+    /(^|[^\d.,₹])(\d{4,})(?![\d.,])/g,
+    (_m, p: string, n: string) => p + Number(n).toLocaleString('en-IN'),
+  );
+
+/** Order-to-cash pipeline: five stage cards in a flow, joined by slim arrows. */
 function Pipeline({ stages }: { stages: Overview['stages'] }) {
   if (!stages.length) return null;
   return (
-    <div className="relative">
-      <div className="grid gap-4 md:grid-cols-2 xl:flex xl:items-stretch xl:gap-0 xl:px-5">
-        <span className="absolute left-0 top-24 hidden items-center xl:flex" aria-hidden>
-          <span className="size-2.5 rounded-full border-2 border-blue-500 bg-white" />
-          <span className="h-px w-3 bg-blue-500" />
-        </span>
+    <section className="min-w-0">
+      <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
         {stages.map((s, i) => (
           <div key={s.key} className="contents xl:flex xl:min-w-0 xl:flex-1 xl:items-stretch">
             <StageCard stage={s} n={i + 1} />
             {i < stages.length - 1 ? (
-              <div className="hidden w-8 shrink-0 items-center justify-center text-slate-500 xl:flex" aria-hidden>
-                <ArrowRight className="size-5" />
+              <div
+                className="hidden w-7 shrink-0 items-center justify-center text-[#9aa397] xl:flex"
+                aria-hidden
+              >
+                <ArrowRight className="size-4" />
               </div>
             ) : null}
           </div>
         ))}
-        <span className="absolute right-0 top-24 hidden items-center xl:flex" aria-hidden>
-          <span className="h-px w-3 bg-sky-500" />
-          <span className="size-2.5 rounded-full border-2 border-sky-500 bg-sky-100" />
-        </span>
       </div>
-    </div>
+    </section>
   );
 }
 
 function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number }) {
   const t = STAGE_THEME[stage.key] ?? STAGE_THEME.orders!;
-  const [label, pill] = STATUS[stage.status];
+  const pill = STAGE_PILL[stage.status];
   return (
-    <section className={cn('flex min-w-0 flex-1 flex-col rounded-xl border-2 bg-gradient-to-b to-white p-3.5 shadow-sm', t.border, t.wash)}>
-      <header className="mb-3 flex items-center gap-3 px-1">
-        <span className={cn('grid size-11 shrink-0 place-items-center rounded-xl text-white shadow-sm', t.tile)}>
-          <t.icon className="size-5" />
+    <section className="flex min-w-0 flex-1 flex-col rounded-2xl bg-white p-3 shadow-[0_1px_3px_rgba(16,24,20,0.06)] ring-1 ring-[#eef1ec]">
+      <header className="flex items-center gap-2.5 px-1.5 pb-3 pt-1">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#24543a] text-white">
+          <t.icon className="size-4" />
         </span>
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-slate-900">
-            {n}. {stage.title}
-          </h2>
-          <span className={cn('mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', pill)}>{label}</span>
+        <div className="min-w-0 flex-1">
+          <h3
+            className="text-[13.5px] font-semibold leading-tight text-[#1b201d]"
+            title={stage.title}
+          >
+            <span className="text-[#8a9387]">{n}.</span> {stage.title}
+          </h3>
+          <span
+            className={cn(
+              'mt-1 inline-flex items-center gap-1 text-[11px] font-medium',
+              stage.status === 'ATTENTION' ? 'text-red-700' : 'text-[#2f6b47]',
+            )}
+          >
+            {stage.status === 'ATTENTION' ? (
+              <AlertTriangle className="size-3" />
+            ) : (
+              <span className={cn('size-1.5 rounded-full', pill.dot)} />
+            )}
+            {pill.label}
+          </span>
         </div>
       </header>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+      <div className="grid gap-0.5 border-t border-[#f0f2ef] pt-2">
         {stage.items.map((it) => {
           const I = ITEM_ICON[it.key] ?? FileText;
+          const value = groupDigits(it.value);
           return (
-            <Link key={it.key} to={it.to} title={`${it.label} — ${it.value}`} className="group flex min-w-0 items-center gap-3 rounded-lg border bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:shadow-sm">
-              <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', t.chip)}>
-                <I className="size-4" />
+            <Link
+              key={it.key}
+              to={it.to}
+              title={`${it.label} — ${value}`}
+              className="group flex min-w-0 items-start gap-2.5 rounded-lg px-1.5 py-2 transition hover:bg-[#f4f6f3]"
+            >
+              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-[#f1f4f0] text-[#3e5a46]">
+                <I className="size-3.5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium text-slate-900">{it.label}</span>
-                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className={cn('size-1.5 shrink-0 rounded-full', DOT[it.tone])} />
-                  <span className="truncate">{it.value}</span>
+                <span className="block truncate text-[13px] font-medium leading-tight text-[#1b201d]">
+                  {it.label}
+                </span>
+                <span
+                  className={cn(
+                    'mt-0.5 block text-[11.5px] leading-snug',
+                    it.tone === 'red' ? 'font-medium text-red-700' : 'text-[#6b7368]',
+                  )}
+                >
+                  {value}
                 </span>
               </span>
-              <ChevronRight className="size-4 shrink-0 text-slate-400 group-hover:text-slate-700" />
+              <ChevronRight className="mt-1.5 size-3.5 shrink-0 text-[#b3bab0] opacity-0 transition group-hover:opacity-100" />
             </Link>
           );
         })}
@@ -248,7 +367,21 @@ function StageCard({ stage, n }: { stage: Overview['stages'][number]; n: number 
   );
 }
 
-function Card({ icon: I, title, subtitle, action, children, className }: { icon: Icon; title: string; subtitle: string; action?: ReactNode; children: ReactNode; className?: string }) {
+function Card({
+  icon: I,
+  title,
+  subtitle,
+  action,
+  children,
+  className,
+}: {
+  icon: Icon;
+  title: string;
+  subtitle: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <section className={cn('min-w-0 rounded-xl border bg-card shadow-sm', className)}>
       <header className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
@@ -274,8 +407,12 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
       title="Pending Tasks"
       subtitle="Your most important actions across all modules."
       action={
-        <Link to="/alerts" className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:underline">
-          View all {tasks.total > tasks.rows.length ? `(${tasks.total})` : ''} <ArrowRight className="size-3.5" />
+        <Link
+          to="/alerts"
+          className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:underline"
+        >
+          View all {tasks.total > tasks.rows.length ? `(${tasks.total})` : ''}{' '}
+          <ArrowRight className="size-3.5" />
         </Link>
       }
     >
@@ -303,21 +440,43 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
                   <td className="whitespace-nowrap px-3 py-3 text-slate-600">{t.module}</td>
                   <td className="whitespace-nowrap px-3 py-3 text-slate-600">{t.reference}</td>
                   <td className="px-3 py-3">
-                    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium ring-1', PRIORITY[t.priority])}>{t.priority}</span>
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-xs font-medium ring-1',
+                        PRIORITY[t.priority],
+                      )}
+                    >
+                      {t.priority}
+                    </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-slate-600">{shortDate(t.due)}</td>
                   <td className="px-3 py-3">
-                    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium ring-1', TASK_STATUS[t.status])}>{t.status}</span>
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-xs font-medium ring-1',
+                        TASK_STATUS[t.status],
+                      )}
+                    >
+                      {t.status}
+                    </span>
                   </td>
                   <td className="px-3 py-3">
-                    <Button size="sm" variant="outline" className="h-7 min-w-[64px] rounded-md px-3 text-xs" onClick={() => navigate(t.to)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 min-w-[64px] rounded-md px-3 text-xs"
+                      onClick={() => navigate(t.to)}
+                    >
                       {t.action}
                     </Button>
                   </td>
                   <td className="px-1 py-3">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="rounded p-1 text-slate-500 hover:bg-accent" aria-label={`More for ${t.task}`}>
+                        <button
+                          className="rounded p-1 text-slate-500 hover:bg-accent"
+                          aria-label={`More for ${t.task}`}
+                        >
                           <MoreHorizontal className="size-4" />
                         </button>
                       </DropdownMenuTrigger>
@@ -343,7 +502,13 @@ function PendingTasks({ tasks }: { tasks: Overview['tasks'] }) {
   );
 }
 
-const ACTIVITY_DOT: Record<string, string> = { PAYMENT_DUE: 'bg-red-500', DC_OVERDUE: 'bg-red-400', GST_DEADLINE: 'bg-sky-500', EXCESS_LOSS: 'bg-red-500', REPORT_READY: 'bg-sky-500' };
+const ACTIVITY_DOT: Record<string, string> = {
+  PAYMENT_DUE: 'bg-red-500',
+  DC_OVERDUE: 'bg-red-400',
+  GST_DEADLINE: 'bg-sky-500',
+  EXCESS_LOSS: 'bg-red-500',
+  REPORT_READY: 'bg-sky-500',
+};
 
 function RecentActivity({ rows }: { rows: Overview['activity'] }) {
   return (
@@ -361,7 +526,10 @@ function RecentActivity({ rows }: { rows: Overview['activity'] }) {
             return (
               <li key={a.id}>
                 {a.link ? (
-                  <Link to={a.link} className="flex items-center gap-3 rounded-md px-1 py-1.5 text-[13px] hover:bg-accent">
+                  <Link
+                    to={a.link}
+                    className="flex items-center gap-3 rounded-md px-1 py-1.5 text-[13px] hover:bg-accent"
+                  >
                     {body}
                   </Link>
                 ) : (
@@ -393,7 +561,11 @@ function QuickActions() {
     <Card icon={Zap} title="Quick Actions" subtitle="Jump into common tasks.">
       <div className="grid gap-2.5 px-5 pb-5 sm:grid-cols-2">
         {shown.map((a) => (
-          <Link key={a.label} to={a.to} className="group flex items-center gap-3 rounded-lg border bg-white px-3.5 py-2.5 text-[13px] text-slate-800 transition hover:border-slate-300 hover:shadow-sm">
+          <Link
+            key={a.label}
+            to={a.to}
+            className="group flex items-center gap-3 rounded-lg border bg-white px-3.5 py-2.5 text-[13px] text-slate-800 transition hover:border-slate-300 hover:shadow-sm"
+          >
             <a.icon className="size-4 text-slate-700" />
             <span className="flex-1">{a.label}</span>
             <ChevronRight className="size-4 text-slate-400 group-hover:text-slate-700" />
@@ -404,24 +576,99 @@ function QuickActions() {
   );
 }
 
+/** Today's summary at the top of the side panel: the Wewin mark, the date and a few live figures. */
+function TodaySummary({ o }: { o: Overview }) {
+  const kpi = (key: string) => o.kpis.find((k) => k.key === key);
+  const active = kpi('activeOrders');
+  const inProd = kpi('inProduction');
+  const overdue = kpi('overdue');
+  const figures: { label: string; value: string; to?: string; alert?: boolean }[] = [
+    ...(active
+      ? [{ label: 'Active orders', value: active.value.toLocaleString('en-IN'), to: active.to }]
+      : []),
+    ...(inProd
+      ? [{ label: 'In production', value: inProd.value.toLocaleString('en-IN'), to: inProd.to }]
+      : []),
+    ...(o.progress
+      ? [
+          {
+            label: 'Pieces packed',
+            value: `${o.progress.packedPcs.toLocaleString('en-IN')} / ${o.progress.orderedPcs.toLocaleString('en-IN')}`,
+            to: '/reports?report=order-progress&run=1',
+          },
+        ]
+      : []),
+    ...(overdue
+      ? [
+          {
+            label: 'Overdue items',
+            value: overdue.value.toLocaleString('en-IN'),
+            to: overdue.to,
+            alert: overdue.value > 0,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <div className="rounded-t-xl bg-[#1b201d] px-5 pb-5 pt-4 text-white">
+      <div className="flex items-center justify-between gap-3">
+        <WewinBrand onDark tight />
+        <span className="shrink-0 text-[11px] text-slate-400">{shortDate(o.asOf)}</span>
+      </div>
+      <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+        Today’s summary
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-white/10">
+        {figures.map((f) => {
+          const body = (
+            <>
+              <div
+                className={cn(
+                  'font-[family-name:var(--font-display)] text-xl font-semibold tabular-nums',
+                  f.alert ? 'text-red-300' : 'text-white',
+                )}
+              >
+                {f.value}
+              </div>
+              <div className="mt-0.5 text-[11px] text-slate-400">{f.label}</div>
+            </>
+          );
+          return f.to ? (
+            <Link key={f.label} to={f.to} className="bg-[#1b201d] px-3 py-2.5 transition hover:bg-[#232a25]">
+              {body}
+            </Link>
+          ) : (
+            <div key={f.label} className="bg-[#1b201d] px-3 py-2.5">
+              {body}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SidePanel({ o }: { o: Overview }) {
   return (
     <aside className="grid content-start gap-4 rounded-xl border bg-card p-0 shadow-sm">
-      <div className="overflow-hidden rounded-t-xl">
-        <SewingIllustration className="h-48 w-full" />
-      </div>
+      <TodaySummary o={o} />
       <div className="px-5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Wewin ERP · {o.company}</div>
-        <h2 className="mt-2 text-lg font-semibold leading-snug text-slate-900">
-          Better visibility. Smoother production.
-          <br />
-          Higher performance.
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
+          Wewin ERP · {o.company}
+        </div>
+        <div className="mt-2 h-0.5 w-8 rounded bg-brand" aria-hidden />
+        <h2 className="mt-3 text-xl font-semibold leading-snug text-foreground">
+          Precision begins with every stitch.
         </h2>
-        <p className="mt-2 text-[13px] text-muted-foreground">From order to dispatch, everything you need, in one place.</p>
-        <div className="mt-3 h-0.5 w-8 rounded bg-blue-500" />
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          Orders, yarn, job work, production, export and accounts — from order to dispatch, in one place.
+        </p>
       </div>
       {o.progress ? (
-        <Link to="/reports?report=order-progress&run=1" className="mx-4 flex items-center gap-4 rounded-xl border bg-white p-4 shadow-sm hover:shadow">
+        <Link
+          to="/reports?report=order-progress&run=1"
+          className="mx-4 flex items-center gap-4 rounded-xl border bg-white p-4 shadow-sm hover:shadow"
+        >
           <span className="grid size-11 place-items-center rounded-full bg-blue-50 text-blue-600">
             <Network className="size-5" />
           </span>
@@ -430,10 +677,14 @@ function SidePanel({ o }: { o: Overview }) {
               Production Progress <span className="text-sm font-semibold">{o.progress.pct}%</span>
             </span>
             <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <span className="block h-full rounded-full bg-blue-600" style={{ width: `${o.progress.pct}%` }} />
+              <span
+                className="block h-full rounded-full bg-blue-600"
+                style={{ width: `${o.progress.pct}%` }}
+              />
             </span>
             <span className="mt-1.5 block text-[11px] text-muted-foreground">
-              {o.progress.packedPcs.toLocaleString('en-IN')} of {o.progress.orderedPcs.toLocaleString('en-IN')} ordered pieces packed
+              {o.progress.packedPcs.toLocaleString('en-IN')} of{' '}
+              {o.progress.orderedPcs.toLocaleString('en-IN')} ordered pieces packed
             </span>
           </span>
         </Link>
@@ -445,7 +696,10 @@ function SidePanel({ o }: { o: Overview }) {
             <div>
               <div className="text-sm font-semibold text-slate-900">Heads up!</div>
               <p className="mt-1 text-[13px] text-slate-600">{o.headsUp.text}</p>
-              <Link to={o.headsUp.link} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-900 hover:underline">
+              <Link
+                to={o.headsUp.link}
+                className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-900 hover:underline"
+              >
                 {o.headsUp.linkLabel} <ArrowRight className="size-3.5" />
               </Link>
             </div>

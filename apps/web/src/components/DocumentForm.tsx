@@ -174,7 +174,7 @@ export function DocumentForm(p: DocumentFormProps) {
         {p.aside ? <div className="flex flex-col gap-3">{p.aside}</div> : null}
       </div>
 
-      <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur lg:left-60">
+      <div className="no-print fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur lg:left-[var(--sidebar-w,240px)]">
         <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-2.5">
           {isDraft && p.onDelete ? (
             <Button variant="ghost" className="mr-auto text-destructive" onClick={() => setConfirm('delete')}>

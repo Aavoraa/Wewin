@@ -45,7 +45,7 @@ beforeAll(async () => {
   dyedYarn = await prisma.item.create({ data: { code: uid('YRN'), name: '30s Dyed Navy', type: 'YARN', unit: 'KG' } });
 });
 
-describe('Program Defined — yarn programmes (Q-074)', () => {
+describe('Program Defined — yarn programmes (Q-076)', () => {
   it('validates the mix, numbers per order, plans the kg to send, and only yarn processes', async () => {
     ok(await owner.post('/api/v1/yarn-programs', programBody({ inputs: [{ itemId: m.items.yarn.id, mixPct: '96' }] })), 400); // mix ≠ 100
     ok(await owner.post('/api/v1/yarn-programs', programBody({ outputItemId: m.items.dyed.id })), 400); // output must be yarn

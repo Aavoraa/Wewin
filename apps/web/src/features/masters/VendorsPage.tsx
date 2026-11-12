@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Controller } from 'react-hook-form';
-import { zVendorInput, zVendorUpdate } from '@wewin/shared';
+import { certificateStatus, todayIst, zVendorFormInput, zVendorFormUpdate } from '@wewin/shared';
 import { api } from '@/lib/api';
 import { type DTColumn } from '@/components/DataTable';
 import { CheckboxField, TextField } from '@/components/form-fields';
 import { Checkbox, Label } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/format';
 import { MasterCrudPage, type MasterRow } from './MasterCrudPage';
 
 export interface VendorRow extends MasterRow {
@@ -20,6 +22,8 @@ export interface VendorRow extends MasterRow {
   debitNoteGstRatePct: string | null;
   processes: { id: string; code: string; name: string }[];
   processIds: string[];
+  certificateNo: string | null;
+  certificateExpiry: string | null;
   [k: string]: unknown;
 }
 
@@ -37,12 +41,27 @@ const columns: DTColumn<VendorRow>[] = [
   { key: 'city', header: 'City', sort: 'city' },
   { key: 'phone', header: 'Phone', hidden: true },
   { key: 'creditDays', header: 'Credit days', type: 'int', sort: 'creditDays' },
+  { key: 'certificateNo', header: 'Certificate no.', cell: (r) => r.certificateNo ?? '—' },
+  { key: 'certificateExpiry', header: 'Certificate expiry', cell: (r) => <CertificateExpiry expiry={r.certificateExpiry} /> },
 ];
+
+/** Expiry date with its state: expired, expiring within CERTIFICATE_EXPIRY_WARN_DAYS, or missing (Q-074). */
+function CertificateExpiry({ expiry }: { expiry: string | null }) {
+  const { status, daysLeft } = certificateStatus(expiry, todayIst());
+  if (status === 'MISSING') return <Badge variant="danger">Missing</Badge>;
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      {formatDate(expiry)}
+      {status === 'EXPIRED' ? <Badge variant="danger">Expired</Badge> : null}
+      {status === 'EXPIRING' ? <Badge variant="warning">{daysLeft === 0 ? 'Expires today' : `${daysLeft} days left`}</Badge> : null}
+    </span>
+  );
+}
 
 const FIELDS = [
   'code', 'name', 'gstin', 'pan', 'addressLine1', 'addressLine2', 'city', 'state', 'stateCode', 'pincode', 'contactPerson',
   'phone', 'email', 'whatsappNumber', 'creditDays', 'tdsApplicable', 'tdsRatePct', 'debitNoteGstApplicable',
-  'debitNoteGstRatePct', 'bankName', 'bankAccount', 'bankIfsc', 'processIds',
+  'debitNoteGstRatePct', 'bankName', 'bankAccount', 'bankIfsc', 'certificateNo', 'certificateExpiry', 'processIds',
 ] as const;
 
 const empty = Object.fromEntries(FIELDS.map((f) => [f, ''])) as Record<string, unknown>;
@@ -62,8 +81,8 @@ export function VendorsPage() {
       description="Knitters, dyers, compactors, printers, embroiderers, mills and suppliers. Creating a vendor creates its stock location."
       endpoint="/vendors"
       columns={columns}
-      schema={zVendorInput}
-      updateSchema={zVendorUpdate}
+      schema={zVendorFormInput}
+      updateSchema={zVendorFormUpdate}
       emptyForm={empty}
       toForm={(r) => Object.fromEntries(FIELDS.map((f) => [f, r[f] ?? (f === 'processIds' ? [] : '')]))}
       dialogClassName="max-w-3xl"
@@ -73,6 +92,8 @@ export function VendorsPage() {
           <TextField form={form} name="name" label="Name" required />
           <TextField form={form} name="gstin" label="GSTIN" />
           <TextField form={form} name="pan" label="PAN" />
+          <TextField form={form} name="certificateNo" label="Certificate no." required />
+          <TextField form={form} name="certificateExpiry" label="Certificate expiry date" type="date" required />
           <TextField form={form} name="addressLine1" label="Address line 1" className="sm:col-span-2" />
           <TextField form={form} name="addressLine2" label="Address line 2" className="sm:col-span-2" />
           <TextField form={form} name="city" label="City" />

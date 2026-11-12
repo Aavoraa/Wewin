@@ -140,7 +140,7 @@ interface ProgramOpt {
   programNo: string;
   processes: { id: string; sequence: number; processId: string; inputItemId: string; allowedLossPct: string; materialCostPerKg: string | null; process: { name: string }; inputItem: { name: string } }[];
 }
-/** Approved Program Defined entries (yarn programmes, Q-074) a yarn-process D.C. goes under. */
+/** Approved Program Defined entries (yarn programmes, Q-076) a yarn-process D.C. goes under. */
 interface YarnProgramOpt {
   id: string;
   programNo: string;

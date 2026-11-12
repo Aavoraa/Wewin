@@ -126,7 +126,7 @@ export function InwardDcPrint({ id }: { id: string }) {
   if (!q.data || company.isLoading || outwards.isLoading) return <LoadingState />;
   const i = q.data;
   return (
-    <PrintLayout size="A5" title={`GRN ${i.docNo ?? ''}`}>
+    <PrintLayout title={`GRN ${i.docNo ?? ''}`}>
       <div className="flex items-start justify-between border-b border-black pb-1">
         <CompanyBlock c={company.data} />
         <div className="text-right">

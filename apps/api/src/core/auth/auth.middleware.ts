@@ -1,11 +1,12 @@
 import { type RequestHandler } from 'express';
-import { type PermissionKey } from '@wewin/shared';
+import { type PermissionKey, withApprovalSwitches } from '@wewin/shared';
 import { AppError } from '../errors/app-error';
 import { setContextUser } from '../context';
 import { authRepo } from './auth.repo';
 import { verifyAccessToken } from './tokens';
 import { type CurrentUser } from './auth.types';
 import { tagPermission } from '../openapi';
+import { approvalSwitches, onApprovalSwitchChanged } from '../settings/settings.service';
 
 /** Short cache of user permissions; invalidated when roles/users change in this process. */
 const CACHE_MS = 10_000;
@@ -15,6 +16,7 @@ export function invalidateAccessCache(userId?: string): void {
   if (userId) cache.delete(userId);
   else cache.clear();
 }
+onApprovalSwitchChanged(() => invalidateAccessCache());
 
 async function loadAccess(userId: string): Promise<Omit<CurrentUser, 'sessionId'> | null> {
   const hit = cache.get(userId);
@@ -27,9 +29,11 @@ async function loadAccess(userId: string): Promise<Omit<CurrentUser, 'sessionId'
           username: u.username,
           fullName: u.fullName,
           roles: u.roles.filter((r) => r.role.isActive).map((r) => r.role.code),
-          permissions: new Set(
+          // Approvals switched off (Q-075) grant the approve permission to whoever creates the document.
+          permissions: withApprovalSwitches(
             u.roles.filter((r) => r.role.isActive).flatMap((r) => r.role.permissions.map((p) => p.permissionKey)),
-          ),
+            await approvalSwitches(),
+          ) as Set<PermissionKey>,
         }
       : null;
   cache.set(userId, { at: Date.now(), user });

@@ -21,7 +21,7 @@ export const zOutwardDcLine = z.object({
 const outwardShape = z.object({
   docDate: zDate(),
   vendorId: zRef(),
-  /** Exactly one: the fabric programme step, or the yarn programme (Program Defined, Q-074). */
+  /** Exactly one: the fabric programme step, or the yarn programme (Program Defined, Q-076). */
   programProcessId: zOptional(zRef()),
   yarnProgramId: zOptional(zRef()),
   /** Set for a direct vendor → vendor transfer (A§6); otherwise material leaves our store. */

@@ -19,7 +19,7 @@ import { Input, Select } from '@/components/ui/input';
 import { pickers } from '../orders/api';
 import { StatusFilter } from '../yarn/YarnPages';
 
-/** A yarn process programme — Program Defined on the yarn process screens (Q-074). */
+/** A yarn process programme — Program Defined on the yarn process screens (Q-076). */
 export interface YarnProgram {
   id: string;
   programNo: string;

@@ -502,6 +502,9 @@ model Vendor {
   bankAccount            String?          @map("bank_account")
   bankIfsc               String?          @map("bank_ifsc")
   whatsappNumber         String?          @map("whatsapp_number")
+  /// Vendor certificate (Q-074): required on the vendor form; nullable for vendors created before it and by imports.
+  certificateNo          String?          @map("certificate_no")
+  certificateExpiry      DateTime?        @map("certificate_expiry") @db.Date
   isActive               Boolean          @default(true) @map("is_active")
   version                Int              @default(1)
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -756,7 +759,7 @@ model FabricProgramProcess {
   @@map("fabric_program_processes")
 }
 
-/// Program Defined (Q-074): a yarn process programme for one order — the yarns going in with their
+/// Program Defined (Q-076): a yarn process programme for one order — the yarns going in with their
 /// mixing %, the yarn coming out, and the allowed loss %. Approved before yarn is delivered under it.
 model YarnProgram {
   id                String             @id @default(uuid()) @db.Uuid
@@ -883,7 +886,7 @@ model OutwardDc {
   docNo              String?               @unique @map("doc_no")
   docDate            DateTime              @map("doc_date") @db.Date
   vendorId           String                @map("vendor_id") @db.Uuid
-  /// Exactly one of programProcessId (a fabric programme step) and yarnProgramId (Program Defined, Q-074).
+  /// Exactly one of programProcessId (a fabric programme step) and yarnProgramId (Program Defined, Q-076).
   programProcessId   String?               @map("program_process_id") @db.Uuid
   yarnProgramId      String?               @map("yarn_program_id") @db.Uuid
   processId          String                @map("process_id") @db.Uuid

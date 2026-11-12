@@ -24,7 +24,7 @@ export const yarnProgramsController = {
   },
 };
 
-/** /api/v1/yarn-programs — Program Defined on the yarn process screens (Q-074). Same permissions as fabric programmes. */
+/** /api/v1/yarn-programs — Program Defined on the yarn process screens (Q-076). Same permissions as fabric programmes. */
 export const yarnProgramsRouter = Router();
 const c = yarnProgramsController;
 const view = requirePermission('programs.view');

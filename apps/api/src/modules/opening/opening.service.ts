@@ -138,7 +138,7 @@ async function validateVendorStock(sheets: Record<string, RawRow[]>, asOfDate: s
     if (r.sentDate > asOfDate) at('sentDate', 'Sent after the opening date');
     if (!vendor || !item || !proc || !order) continue;
     const key = `${order.id}|${proc.id}`;
-    // Yarn processes go under a yarn programme (Program Defined, Q-074); others under a fabric programme step.
+    // Yarn processes go under a yarn programme (Program Defined, Q-076); others under a fabric programme step.
     const yarnProcess = isYarnProgramProcess(r.processCode);
     if (!ppCache.has(key)) ppCache.set(key, yarnProcess ? await yarnProgramsService.approvedFor(order.id, proc.id) : await programsService.approvedProcessesFor(order.id, proc.id));
     const pps = ppCache.get(key)!;

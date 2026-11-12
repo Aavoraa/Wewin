@@ -50,7 +50,7 @@ export function TransactionPage() {
   if (!def || !process)
     return <ErrorState error={new Error(`Process ${code ?? ''} is not set up in Masters › Processes`)} />;
 
-  // Yarn processes define their programme (yarn mix, loss %) here before the delivery (Q-074).
+  // Yarn processes define their programme (yarn mix, loss %) here before the delivery (Q-076).
   const programTab = isYarnProgramProcess(def.code);
   const tabs: [Tab, string][] = [
     ['rate', 'Rate Quotation'],

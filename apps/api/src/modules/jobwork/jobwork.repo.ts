@@ -13,7 +13,7 @@ const outwardInclude = {
   programProcess: {
     select: { id: true, sequence: true, allowedLossPct: true, materialCostPerKg: true, inputItemId: true, outputItemId: true, program: { select: { id: true, programNo: true } } },
   },
-  /** Program Defined (Q-074): the yarn programme a yarn-process D.C. is sent under. */
+  /** Program Defined (Q-076): the yarn programme a yarn-process D.C. is sent under. */
   yarnProgram: {
     select: {
       id: true,

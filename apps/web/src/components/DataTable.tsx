@@ -224,7 +224,7 @@ export function DataTable<T extends object>(props: DataTableProps<T>) {
         </div>
       </div>
 
-      <div className="overflow-auto rounded-lg border bg-card">
+      <div className="print-fit overflow-auto rounded-lg border bg-card">
         <Table>
           <THead>
             {table.getHeaderGroups().map((hg) => (
