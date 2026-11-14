@@ -1,6 +1,6 @@
 import { type Prisma } from '@wewin/db';
 import { type z } from 'zod';
-import { D, type zProductionListQuery, type zSplRequestInput, type zSplRequestUpdate } from '@wewin/shared';
+import { D, SPL_ITEM_TYPE, SPL_KIND_NAMES, type SplKind, type zSplListQuery, type zSplRequestInput, type zSplRequestUpdate } from '@wewin/shared';
 import { type Tx, prisma, withTx } from '../../core/db';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
 import { orderBy, paging } from '../../core/list';
@@ -25,23 +25,33 @@ const shape = (d: SplDetail) => ({
   totals: { qty: d.lines.reduce((a, l) => a.plus(D(l.qty.toString())), D(0)).toFixed(3) },
 });
 
-async function validate(orderId: string, lines: Input['lines'], db: Tx | typeof prisma) {
+/**
+ * Items must be of the request's kind (accessories = TRIM, yarn, fabric). Accessories colour / size
+ * must be on the order; a yarn or fabric colour may be any (e.g. a yarn dyed to match), sizes do not apply.
+ */
+async function validate(kind: SplKind, orderId: string, lines: Input['lines'], db: Tx | typeof prisma) {
   const o = await ordersService.requireOpen(orderId, db);
+  const want = SPL_ITEM_TYPE[kind];
   const items = new Map((await repo.itemsByIds(lines.map((l) => l.itemId), db)).map((i) => [i.id, i]));
   lines.forEach((l, i) => {
     const it = items.get(l.itemId);
-    if (!it || it.type !== 'TRIM') throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: item must be an accessories (TRIM) item`, 400);
+    if (!it || it.type !== want) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: item must be ${kind === 'ACCESSORY' ? 'an accessories (TRIM)' : `a ${want.toLowerCase()}`} item`, 400);
     if (!it.isActive) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: item ${it.code} is inactive`, 400);
-    if (l.colour && !o.colours.includes(l.colour)) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: colour ${l.colour} is not on the order`, 400);
-    if (l.size && !o.sizes.includes(l.size)) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: size ${l.size} is not on the order`, 400);
+    if (kind === 'ACCESSORY') {
+      if (l.colour && !o.colours.includes(l.colour)) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: colour ${l.colour} is not on the order`, 400);
+      if (l.size && !o.sizes.includes(l.size)) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: size ${l.size} is not on the order`, 400);
+    } else if (l.size) {
+      throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: sizes do not apply to ${SPL_KIND_NAMES[kind].toLowerCase()}`, 400);
+    }
   });
 }
 
-/** Accessories SPL.Request (Q-072): extra accessories for an order; approval (= post) by management. */
+/** SPL.Request (Q-072, Q-078): extra accessories, yarn or fabric for an order; approval (= post) by management. */
 export const splService = {
-  async list(q: z.output<typeof zProductionListQuery>) {
+  async list(q: z.output<typeof zSplListQuery>) {
     const p = paging(q);
     const where: Prisma.SplRequestWhereInput = {
+      ...(q.kind ? { kind: q.kind } : {}),
       ...(q.status ? { status: q.status } : {}),
       ...(q.orderId ? { orderId: q.orderId } : {}),
       ...(q.from || q.to ? { docDate: { ...(q.from ? { gte: toDbDate(q.from) } : {}), ...(q.to ? { lte: toDbDate(q.to) } : {}) } } : {}),
@@ -58,13 +68,13 @@ export const splService = {
     return shape(d);
   },
   async create(input: Input, user: CurrentUser) {
-    await validate(input.orderId, input.lines, prisma);
+    await validate(input.kind, input.orderId, input.lines, prisma);
     const id = await withTx(
       async (tx) =>
         (
           await repo.create(
             tx,
-            { docDate: toDbDate(input.docDate), orderId: input.orderId, requestedBy: input.requestedBy, reason: input.reason, remarks: input.remarks, createdById: user.id },
+            { kind: input.kind, docDate: toDbDate(input.docDate), orderId: input.orderId, requestedBy: input.requestedBy, reason: input.reason, remarks: input.remarks, createdById: user.id },
             input.lines,
           )
         ).id,
@@ -75,7 +85,7 @@ export const splService = {
   async update(id: string, input: Update) {
     const cur = await repo.get(id);
     if (!cur) throw notFound('SPL request');
-    await validate(cur.orderId, input.lines, prisma);
+    await validate(cur.kind, cur.orderId, input.lines, prisma);
     await withTx(async (tx) => {
       const d = await repo.get(id, tx);
       if (!d) throw notFound('SPL request');
@@ -93,17 +103,17 @@ export const splService = {
       await repo.delete(tx, id);
     }, RC);
   },
-  /** Approve: numbered SPR; the extra qty joins the order's accessories requirement. */
+  /** Approve: numbered SPR; the extra qty joins the order's accessories / yarn requirement, or is offered on the fabric PO. */
   async post(id: string, user: CurrentUser) {
     await withTx(async (tx) => {
       await repo.lock(tx, id);
       const d = await repo.get(id, tx);
       if (!d) throw notFound('SPL request');
       assertDraft(d, 'SPL request');
-      await validate(d.orderId, d.lines.map((l) => ({ itemId: l.itemId, colour: l.colour, size: l.size, qty: l.qty.toFixed(3), reason: l.reason })), tx);
+      await validate(d.kind, d.orderId, d.lines.map((l) => ({ itemId: l.itemId, colour: l.colour, size: l.size, qty: l.qty.toFixed(3), reason: l.reason })), tx);
       const { docNo } = await numbering.next(DOC, dateOnly(d.docDate)!, tx);
       await repo.setState(tx, id, { status: 'POSTED', docNo, postedAt: new Date(), postedById: user.id });
-      await audit.log(tx, { docType: DOC, recordId: id, action: 'APPROVE', docNo, reason: d.reason, data: { order: d.order.orderNo } });
+      await audit.log(tx, { docType: DOC, recordId: id, action: 'APPROVE', docNo, reason: d.reason, data: { order: d.order.orderNo, kind: SPL_KIND_NAMES[d.kind] } });
     });
     return this.get(id);
   },
@@ -126,7 +136,7 @@ export const splService = {
   async accessoryBalance(orderId: string) {
     const [bom, spl, po] = await Promise.all([
       programsService.getBom(orderId),
-      repo.approvedLines(orderId),
+      repo.approvedLines(orderId, 'ACCESSORY'),
       purchaseService.accessoryLines({ OR: [{ orderId }, { orderId: null, po: { orderId } }], po: { status: { not: 'CANCELLED' } } }),
     ]);
     const within = (cell: { colour: string | null; size: string | null }, l: { colour: string | null; size: string | null }) =>
@@ -152,5 +162,11 @@ export const splService = {
         };
       }),
     );
+  },
+
+  /** Approved extra yarn / fabric / accessories for an order (yarn balance, fabric PO "Load approved special requests"). */
+  async approvedExtras(orderId: string, kind: SplKind) {
+    const rows = await repo.approvedLines(orderId, kind);
+    return rows.map(({ request, ...l }) => ({ ...l, docNo: request.docNo, qty: l.qty.toFixed(3) }));
   },
 };

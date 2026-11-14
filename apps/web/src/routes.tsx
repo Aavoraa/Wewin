@@ -64,6 +64,10 @@ const SplListPage = lazy(() => import('@/features/accessories/SplPages').then((m
 const SplPage = lazy(() => import('@/features/accessories/SplPages').then((m) => ({ default: m.SplPage })));
 const StockDocsListPage = lazy(() => import('@/features/stock/StockDocsPages').then((m) => ({ default: m.StockDocsListPage })));
 const StockDocPage = lazy(() => import('@/features/stock/StockDocsPages').then((m) => ({ default: m.StockDocPage })));
+const StockCountListPage = lazy(() => import('@/features/stock/StockCheckPages').then((m) => ({ default: m.StockCountListPage })));
+const StockCountPage = lazy(() => import('@/features/stock/StockCheckPages').then((m) => ({ default: m.StockCountPage })));
+const DisposalListPage = lazy(() => import('@/features/stock/StockCheckPages').then((m) => ({ default: m.DisposalListPage })));
+const DisposalPage = lazy(() => import('@/features/stock/StockCheckPages').then((m) => ({ default: m.DisposalPage })));
 const DirectDeliveryPage = lazy(() => import('@/features/stock/DirectDeliveryPage').then((m) => ({ default: m.DirectDeliveryPage })));
 const VendorBillPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillPage })));
 const VendorBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillsPage })));
@@ -120,6 +124,10 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'spl-requests', perm: 'trims.view', element: <SplListPage /> },
   { path: 'spl-requests/:id', perm: 'trims.view', element: <SplPage /> },
   { path: 'stock-docs/:kind', perm: 'stock.view', element: <StockDocsListPage /> },
+  { path: 'stock-counts', perm: 'stock.view', element: <StockCountListPage /> },
+  { path: 'stock-counts/:id', perm: 'stock.view', element: <StockCountPage /> },
+  { path: 'stock-disposals', perm: 'stock.view', element: <DisposalListPage /> },
+  { path: 'stock-disposals/:id', perm: 'stock.view', element: <DisposalPage /> },
   { path: 'stock-docs/:kind/:id', perm: 'stock.view', element: <StockDocPage /> },
   { path: 'outward-dcs/:id', perm: 'jobwork.view', element: <OutwardDcPage /> },
   { path: 'inward-dcs', perm: 'jobwork.view', element: <InwardDcsPage /> },

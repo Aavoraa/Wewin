@@ -4,7 +4,14 @@ import { formatDate, formatQty } from '@/lib/format';
 import { LoadingState } from '@/components/states';
 import { type AccDoc } from '@/features/accessories/AccessoriesPages';
 import { type SplDoc } from '@/features/accessories/SplPages';
-import { ChallanCopies, CompanyBlock, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
+import {
+  ChallanCopies,
+  CompanyBlock,
+  PrintLayout,
+  Signatures,
+  VendorCertificate,
+  useCompany,
+} from './PrintLayout';
 
 const TITLE: Record<string, string> = {
   RECEIPT: 'Accessories Purchase - GRN',
@@ -13,12 +20,21 @@ const TITLE: Record<string, string> = {
   TRANSFER: 'Accessories Transfer Between Order',
   ISSUE: 'Accessories Consumption Issue',
 };
-const NO: Record<string, string> = { RECEIPT: 'GRN. No', RETURN: 'Return No', REPLACEMENT: 'Inward No', TRANSFER: 'Transfer No', ISSUE: 'Issue No' };
+const NO: Record<string, string> = {
+  RECEIPT: 'GRN. No',
+  RETURN: 'Return No',
+  REPLACEMENT: 'Inward No',
+  TRANSFER: 'Transfer No',
+  ISSUE: 'Issue No',
+};
 
 /** Accessories GRN / return / replacement / transfer, in the desktop GRN layout (A4). */
 export function AccessoriesDocPrint({ id }: { id: string }) {
   const company = useCompany();
-  const q = useQuery({ queryKey: ['print', 'accessories', id], queryFn: () => api.get<AccDoc>(`/trims-docs/${id}/print`) });
+  const q = useQuery({
+    queryKey: ['print', 'accessories', id],
+    queryFn: () => api.get<AccDoc>(`/trims-docs/${id}/print`),
+  });
   if (!q.data || company.isLoading) return <LoadingState />;
   const d = q.data;
   const transfer = d.type === 'TRANSFER';
@@ -42,7 +58,9 @@ export function AccessoriesDocPrint({ id }: { id: string }) {
           ) : v ? (
             <>
               <div className="font-bold uppercase">{v.name}</div>
-              <div className="text-[10px] leading-tight">{[v.addressLine1, v.addressLine2, v.city, v.pincode].filter(Boolean).join(', ')}</div>
+              <div className="text-[10px] leading-tight">
+                {[v.addressLine1, v.addressLine2, v.city, v.pincode].filter(Boolean).join(', ')}
+              </div>
               {v.gstin ? <div className="text-[10px]">GSTIN: {v.gstin}</div> : null}
               <VendorCertificate v={v} className="text-[10px]" />
             </>
@@ -115,10 +133,13 @@ export function AccessoriesDocPrint({ id }: { id: string }) {
   );
 }
 
-/** Accessories SPL.Request (A4). */
+/** SPL.Request — accessories, yarn or fabric (A4). */
 export function SplRequestPrint({ id }: { id: string }) {
   const company = useCompany();
-  const q = useQuery({ queryKey: ['print', 'spl', id], queryFn: () => api.get<SplDoc>(`/spl-requests/${id}/print`) });
+  const q = useQuery({
+    queryKey: ['print', 'spl', id],
+    queryFn: () => api.get<SplDoc>(`/spl-requests/${id}/print`),
+  });
   if (!q.data || company.isLoading) return <LoadingState />;
   const d = q.data;
   return (
@@ -126,7 +147,9 @@ export function SplRequestPrint({ id }: { id: string }) {
       <div className="flex items-start justify-between border-b border-black pb-2">
         <CompanyBlock c={company.data} />
         <div className="text-right">
-          <div className="text-sm font-bold">ACCESSORIES SPL.REQUEST</div>
+          <div className="text-sm font-bold">
+            {(d.kind === 'YARN' ? 'YARN' : d.kind === 'FABRIC' ? 'FABRIC' : 'ACCESSORIES') + ' SPL.REQUEST'}
+          </div>
           <div className="font-mono">{d.docNo ?? 'DRAFT — not approved'}</div>
           <div>Date: {formatDate(d.docDate)}</div>
           {d.status === 'CANCELLED' ? <div className="font-bold text-red-700">CANCELLED</div> : null}
@@ -143,7 +166,7 @@ export function SplRequestPrint({ id }: { id: string }) {
         <thead>
           <tr className="border-y border-black text-left">
             <th className="py-1">Sl</th>
-            <th>Accessories Description</th>
+            <th>{d.kind === 'YARN' ? 'Yarn' : d.kind === 'FABRIC' ? 'Fabric' : 'Accessories Description'}</th>
             <th>Colour</th>
             <th>Size</th>
             <th className="text-right">Qty</th>

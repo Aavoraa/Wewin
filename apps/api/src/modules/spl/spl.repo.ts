@@ -43,7 +43,10 @@ export const splRepo = {
     return db.item.findMany({ where: { id: { in: ids } }, select: { id: true, type: true, isActive: true, code: true } });
   },
   /** Approved SPL lines for an order. */
-  approvedLines(orderId: string) {
-    return prisma.splRequestLine.findMany({ where: { request: { orderId, status: 'POSTED' } }, select: { itemId: true, colour: true, size: true, qty: true } });
+  approvedLines(orderId: string, kind: 'ACCESSORY' | 'YARN' | 'FABRIC') {
+    return prisma.splRequestLine.findMany({
+      where: { request: { orderId, status: 'POSTED', kind } },
+      select: { itemId: true, colour: true, size: true, qty: true, item: { select: { code: true, name: true, unit: true } }, request: { select: { docNo: true } } },
+    });
   },
 };

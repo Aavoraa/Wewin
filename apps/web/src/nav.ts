@@ -92,6 +92,9 @@ export const NAV: NavGroup[] = [
     label: 'Transaction',
     items: [
       { label: 'Purchase', to: '/purchase-orders', icon: ShoppingCart, perm: 'purchase.view' },
+      // Yarn / fabric shortage requests (Q-078); the same screen as Accessories → SPL.Request, filtered.
+      { label: 'Yarn SPL.Request', to: '/spl-requests?kind=YARN', icon: FilePlus2, perm: 'trims.view' },
+      { label: 'Fabric SPL.Request', to: '/spl-requests?kind=FABRIC', icon: FilePlus2, perm: 'trims.view' },
       { label: 'Yarn Dyeing', to: '/transactions/YARN_DYEING', icon: Workflow, perm: 'jobwork.view' },
       { label: 'Yarn Twisting', to: '/transactions/YARN_TWISTING', icon: Workflow, perm: 'jobwork.view' },
       { label: 'Yarn Other Process', to: '/transactions/YARN_OTHER', icon: Workflow, perm: 'jobwork.view' },
@@ -119,7 +122,7 @@ export const NAV: NavGroup[] = [
       { label: 'Purchase Order Cancel', to: '/accessories/po-cancel', icon: XCircle, perm: 'trims.view' },
       { label: 'Purchase Order Close', to: '/accessories/po-close', icon: CircleCheckBig, perm: 'trims.view' },
       { label: 'Transfer Between Order', to: '/accessories/TRANSFER', icon: ArrowLeftRight, perm: 'trims.view' },
-      { label: 'SPL.Request', to: '/spl-requests', icon: FilePlus2, perm: 'trims.view' },
+      { label: 'SPL.Request', to: '/spl-requests?kind=ACCESSORY', icon: FilePlus2, perm: 'trims.view' },
     ],
   },
   {
@@ -175,6 +178,9 @@ export const NAV: NavGroup[] = [
       { label: 'Item locator', to: '/stock/locate', icon: MapPinned, perm: 'stock.view' },
       { label: 'Stock balances', to: '/stock/balances', icon: Boxes, perm: 'stock.view' },
       { label: 'Stock movements', to: '/stock/movements', icon: History, perm: 'stock.view' },
+      // Physical stock check and leftover disposal after dispatch (Q-080).
+      { label: 'Physical stock check', to: '/stock-counts', icon: ClipboardCheck, perm: 'stock.view' },
+      { label: 'Leftover disposal', to: '/stock-disposals', icon: PackageMinus, perm: 'stock.view' },
     ],
   },
   {

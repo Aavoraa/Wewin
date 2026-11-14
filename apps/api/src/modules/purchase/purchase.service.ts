@@ -14,6 +14,7 @@ import { assertPermission } from '../../core/auth/auth.middleware';
 import { mastersService } from '../masters/masters.service';
 import { programsService } from '../programs/programs.service';
 import { trimsService } from '../trims/trims.service';
+import { splService } from '../spl/spl.service';
 import { type PoDetail, type PoLineRow, purchaseRepo as repo } from './purchase.repo';
 
 const DOC = 'PURCHASE_ORDER';
@@ -329,14 +330,24 @@ export const purchaseService = {
    * already on yarn POs that are not cancelled. A requirement row without a yarn colour counts PO lines
    * of any colour for that yarn.
    */
+  /**
+   * Yarn still to order (Q-073): programme requirement + approved yarn SPL requests (Q-078) − kg on
+   * yarn PO lines of the order. An SPL yarn / colour the programmes do not need becomes its own row.
+   */
   async yarnBalance(orderId: string) {
-    const [req, lines] = await Promise.all([programsService.yarnRequirement(orderId), repo.yarnLinesForOrder(orderId)]);
+    const [req, lines, spl] = await Promise.all([programsService.yarnRequirement(orderId), repo.yarnLinesForOrder(orderId), splService.approvedExtras(orderId, 'YARN')]);
     const same = (a: string | null, b: string | null) => (a ?? '').trim().toUpperCase() === (b ?? '').trim().toUpperCase();
-    return req.map((r) => {
+    const rows = req.map((r) => ({ ...r, splKg: '0.000' }));
+    for (const x of spl) {
+      const row = rows.find((r) => r.itemId === x.itemId && (!r.colour ? !x.colour : same(r.colour, x.colour)));
+      if (row) row.splKg = D(row.splKg).plus(D(x.qty)).toFixed(3);
+      else rows.push({ itemId: x.itemId, item: { code: x.item.code, name: x.item.name }, counts: null, colour: x.colour, requiredKg: '0.000', programs: [], splKg: D(x.qty).toFixed(3) });
+    }
+    return rows.map((r) => {
       const poKg = r.itemId
         ? lines.filter((l) => l.itemId === r.itemId && (!r.colour || same(l.colour, r.colour))).reduce((a, l) => a.plus(D(l.qty.toString())), D(0))
         : D(0);
-      const balance = D(r.requiredKg).minus(poKg);
+      const balance = D(r.requiredKg).plus(D(r.splKg)).minus(poKg);
       return { ...r, poKg: poKg.toFixed(3), balance: (balance.isNegative() ? D(0) : balance).toFixed(3) };
     });
   },

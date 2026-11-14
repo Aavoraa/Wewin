@@ -1,6 +1,6 @@
 import { PRINT_TEMPLATES } from './PrintRoute';
 import { YarnReceiptPrint } from './YarnReceiptPrint';
-import { InwardDcPrint, OutwardDcPrint, RollLabelsPrint } from './JobworkPrints';
+import { InwardDcPrint, OutwardDcPrint, OutwardLabelsPrint, RollLabelsPrint } from './JobworkPrints';
 import { DebitNotePrint, PaymentVoucherPrint, VendorBillPrint } from './AccountsPrints';
 import { ExportInvoicePrint, ExportPackingListPrint } from './ExportPrints';
 import { BundleTicketsPrint, CartonLabelPrint, PackingListPrint, PanelDcPrint } from './ProductionPrints';
@@ -18,6 +18,7 @@ PRINT_TEMPLATES['yarn-receipt'] = YarnReceiptPrint;
 PRINT_TEMPLATES['outward-dc'] = OutwardDcPrint;
 PRINT_TEMPLATES['inward-dc'] = InwardDcPrint;
 PRINT_TEMPLATES['roll-labels'] = RollLabelsPrint;
+PRINT_TEMPLATES['outward-labels'] = OutwardLabelsPrint;
 PRINT_TEMPLATES['bundle-tickets'] = BundleTicketsPrint;
 PRINT_TEMPLATES['carton-label'] = CartonLabelPrint;
 PRINT_TEMPLATES['packing-list'] = PackingListPrint;

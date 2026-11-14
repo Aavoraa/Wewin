@@ -4,7 +4,16 @@ import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { ListChecks, Plus, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PO_KIND_NAMES, type PoKind, type VoiceFormSpec, isInterState, poLineAmount, poTotals, todayIst, zPoInput } from '@wewin/shared';
+import {
+  PO_KIND_NAMES,
+  type PoKind,
+  type VoiceFormSpec,
+  isInterState,
+  poLineAmount,
+  poTotals,
+  todayIst,
+  zPoInput,
+} from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
@@ -78,15 +87,49 @@ export interface PoDoc {
   postedAt: string | null;
   closeReason: string | null;
   cancelReason: string | null;
-  vendor: { id: string; code: string; name: string; gstin: string | null; addressLine1: string | null; addressLine2: string | null; city: string | null; state: string | null; stateCode: string | null; pincode: string | null; phone: string | null; contactPerson: string | null };
+  vendor: {
+    id: string;
+    code: string;
+    name: string;
+    gstin: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    state: string | null;
+    stateCode: string | null;
+    pincode: string | null;
+    phone: string | null;
+    contactPerson: string | null;
+  };
   order: { id: string; orderNo: string; styleNo: string; buyer: { name: string } } | null;
   lines: PoLine[];
-  totals: { gross: string; duty: string; taxable: string; cgst: string; sgst: string; igst: string; tcs: string; roundOff: string; net: string };
+  totals: {
+    gross: string;
+    duty: string;
+    taxable: string;
+    cgst: string;
+    sgst: string;
+    igst: string;
+    tcs: string;
+    roundOff: string;
+    net: string;
+  };
   totalQty: string;
 }
 export interface PoConfig {
   roundNetToRupee: boolean;
-  company: { legalName: string; tradeName: string | null; addressLine1: string; addressLine2: string | null; city: string; state: string; stateCode: string; pincode: string; gstin: string; phone: string | null };
+  company: {
+    legalName: string;
+    tradeName: string | null;
+    addressLine1: string;
+    addressLine2: string | null;
+    city: string;
+    state: string;
+    stateCode: string;
+    pincode: string;
+    gstin: string;
+    phone: string | null;
+  };
 }
 
 export const PO_KINDS: PoKind[] = ['YARN', 'FABRIC', 'ACCESSORY'];
@@ -94,7 +137,11 @@ const SHORT: Record<PoKind, string> = { YARN: 'Yarn PO', FABRIC: 'Fabric PO', AC
 const ITEM_TYPE: Record<PoKind, string> = { YARN: 'YARN', FABRIC: 'FABRIC', ACCESSORY: 'TRIM' };
 
 export function usePoConfig() {
-  return useQuery({ queryKey: ['po-config'], queryFn: () => api.get<PoConfig>('/purchase-orders/config'), staleTime: 5 * 60_000 });
+  return useQuery({
+    queryKey: ['po-config'],
+    queryFn: () => api.get<PoConfig>('/purchase-orders/config'),
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function PoStatusBadge({ status }: { status: string }) {
@@ -135,7 +182,10 @@ export function PurchaseOrderListPage() {
           <button
             key={k || 'all'}
             onClick={() => setParams(k ? { kind: k } : {})}
-            className={cn('rounded-full border px-3 py-1 text-xs font-medium', kind === k ? 'border-slate-900 bg-slate-900 text-white' : 'bg-card hover:bg-accent')}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium',
+              kind === k ? 'border-slate-900 bg-slate-900 text-white' : 'bg-card hover:bg-accent',
+            )}
           >
             {k ? SHORT[k] : 'All'}
           </button>
@@ -147,16 +197,41 @@ export function PurchaseOrderListPage() {
         exportTitle="Purchase orders"
         rowHref={(r) => `/purchase-orders/${r.id}`}
         filters={{ kind: kind || undefined, status: status || undefined, from: fy.start, to: fy.end }}
-        filterBar={<StatusFilter value={status} onChange={setStatus} statuses={['DRAFT', 'POSTED', 'CLOSED', 'CANCELLED']} />}
+        filterBar={
+          <StatusFilter
+            value={status}
+            onChange={setStatus}
+            statuses={['DRAFT', 'POSTED', 'CLOSED', 'CANCELLED']}
+          />
+        }
         searchPlaceholder="PO no., supplier, order, item or req. no…"
         columns={[
-          { key: 'docNo', header: 'PO no.', sort: 'docNo', cell: (r) => <span className="font-mono">{r.docNo ?? 'Draft'}</span> },
+          {
+            key: 'docNo',
+            header: 'PO no.',
+            sort: 'docNo',
+            cell: (r) => <span className="font-mono">{r.docNo ?? 'Draft'}</span>,
+          },
           { key: 'docDate', header: 'Date', type: 'date', sort: 'docDate' },
           { key: 'kind', header: 'Type', cell: (r) => SHORT[r.kind] },
           { key: 'vendor.name', header: 'Supplier', cell: (r) => r.vendor.name },
-          { key: 'order.orderNo', header: 'Order', cell: (r) => r.order?.orderNo ?? (r.purpose === 'GENERAL' ? 'General' : [...new Set(r.lines.map((l) => l.order?.orderNo).filter(Boolean))].join(', ') || '—') },
+          {
+            key: 'order.orderNo',
+            header: 'Order',
+            cell: (r) =>
+              r.order?.orderNo ??
+              (r.purpose === 'GENERAL'
+                ? 'General'
+                : [...new Set(r.lines.map((l) => l.order?.orderNo).filter(Boolean))].join(', ') || '—'),
+          },
           { key: 'deliveryDate', header: 'Delivery', type: 'date' },
-          { key: 'totals.net', header: 'Net amount', className: 'text-right', sort: 'netAmount', cell: (r) => formatInr(r.totals.net) },
+          {
+            key: 'totals.net',
+            header: 'Net amount',
+            className: 'text-right',
+            sort: 'netAmount',
+            cell: (r) => formatInr(r.totals.net),
+          },
           { key: 'status', header: 'Status', cell: (r) => <PoStatusBadge status={r.status} /> },
         ]}
       />
@@ -208,7 +283,26 @@ interface FormValues {
   lines: LineForm[];
 }
 
-const blank = (): LineForm => ({ itemId: '', orderId: '', colour: '', size: '', millName: '', bags: '', counts: '', gsm: '', gauge: '', loopLength: '', dia: '', design: '', description: '', qty: '', altQty: '', rate: '', per: '1', remarks: '' });
+const blank = (): LineForm => ({
+  itemId: '',
+  orderId: '',
+  colour: '',
+  size: '',
+  millName: '',
+  bags: '',
+  counts: '',
+  gsm: '',
+  gauge: '',
+  loopLength: '',
+  dia: '',
+  design: '',
+  description: '',
+  qty: '',
+  altQty: '',
+  rate: '',
+  per: '1',
+  remarks: '',
+});
 const or = (v: string) => (v.trim() === '' ? null : v.trim());
 const int = (v: string) => (v.trim() === '' ? null : Number(v));
 const dec = (v: string, d = '0') => (v.trim() === '' ? d : v.trim());
@@ -299,8 +393,18 @@ const VOICE_PO = (kind: PoKind): VoiceFormSpec => ({
   lines: {
     label: 'Items',
     fields: [
-      { name: 'itemId', label: kind === 'YARN' ? 'Yarn' : kind === 'FABRIC' ? 'Fabric' : 'Accessory', type: 'item', itemType: ITEM_TYPE[kind] as never },
-      ...(kind === 'YARN' ? [{ name: 'millName', label: 'Mill name', type: 'text' as const }, { name: 'bags', label: 'Bags', type: 'number' as const }] : []),
+      {
+        name: 'itemId',
+        label: kind === 'YARN' ? 'Yarn' : kind === 'FABRIC' ? 'Fabric' : 'Accessory',
+        type: 'item',
+        itemType: ITEM_TYPE[kind] as never,
+      },
+      ...(kind === 'YARN'
+        ? [
+            { name: 'millName', label: 'Mill name', type: 'text' as const },
+            { name: 'bags', label: 'Bags', type: 'number' as const },
+          ]
+        : []),
       { name: 'colour', label: 'Colour', type: 'text' },
       ...(kind === 'ACCESSORY' ? [{ name: 'size', label: 'Size', type: 'text' as const }] : []),
       { name: 'qty', label: kind === 'ACCESSORY' ? 'Quantity' : 'Kilos', type: 'number' },
@@ -328,6 +432,14 @@ interface YarnBalance {
   poKg: string;
   balance: string;
   programs: string[];
+  splKg?: string;
+}
+interface SplExtra {
+  itemId: string;
+  item: { code: string; name: string; unit: string };
+  colour: string | null;
+  qty: string;
+  docNo: string | null;
 }
 
 export function PurchaseOrderPage() {
@@ -338,7 +450,9 @@ export function PurchaseOrderPage() {
   const po = d.doc;
   const cfg = usePoConfig();
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [vendorState, setVendorState] = useState<{ stateCode: string | null; gstin: string | null } | null>(null);
+  const [vendorState, setVendorState] = useState<{ stateCode: string | null; gstin: string | null } | null>(
+    null,
+  );
   const [dialog, setDialog] = useState<'approve' | 'revert' | null>(null);
   const initialKind = (po?.kind ?? (search.get('kind') as PoKind | null) ?? 'YARN') as PoKind;
   const form = useForm<FormValues>({
@@ -452,20 +566,51 @@ export function PurchaseOrderPage() {
     const unpicked = open.filter((r) => !r.itemId);
     const kept = form.getValues('lines').filter((l) => l.itemId);
     const have = new Set(kept.map((l) => `${l.itemId}|${l.colour.trim().toUpperCase()}`));
-    const add = open.filter((r): r is YarnBalance & { itemId: string } => !!r.itemId && !have.has(`${r.itemId}|${(r.colour ?? '').toUpperCase()}`));
+    const add = open.filter(
+      (r): r is YarnBalance & { itemId: string } =>
+        !!r.itemId && !have.has(`${r.itemId}|${(r.colour ?? '').toUpperCase()}`),
+    );
     if (!add.length) {
       if (!auto)
         toast.info(
           rows.length
             ? 'Nothing left to order — the yarn for this order is already on POs.'
-            : "No yarn requirement for this order — approve its fabric programme (with the yarn and process losses) first.",
+            : 'No yarn requirement for this order — approve its fabric programme (with the yarn and process losses) first.',
         );
     } else {
-      form.setValue('lines', [...kept, ...add.map((r) => ({ ...blank(), itemId: r.itemId, orderId, colour: r.colour ?? '', counts: r.counts ?? '', qty: r.balance }))], { shouldDirty: true });
-      setLabels((x) => ({ ...x, ...Object.fromEntries(add.map((r) => [r.itemId, r.item?.name ?? r.itemId])) }));
-      toast.success(`${add.length} yarn line(s) filled from the fabric programme (${[...new Set(add.flatMap((r) => r.programs))].join(', ')}) — enter the mill and rate`);
+      form.setValue(
+        'lines',
+        [
+          ...kept,
+          ...add.map((r) => ({
+            ...blank(),
+            itemId: r.itemId,
+            orderId,
+            colour: r.colour ?? '',
+            counts: r.counts ?? '',
+            qty: r.balance,
+          })),
+        ],
+        { shouldDirty: true },
+      );
+      setLabels((x) => ({
+        ...x,
+        ...Object.fromEntries(add.map((r) => [r.itemId, r.item?.name ?? r.itemId])),
+      }));
+      const progs = [...new Set(add.flatMap((r) => r.programs))];
+      const spl = add.some((r) => Number(r.splKg ?? 0) > 0);
+      const from = [
+        progs.length ? `fabric programme ${progs.join(', ')}` : '',
+        spl ? 'approved SPL requests' : '',
+      ]
+        .filter(Boolean)
+        .join(' + ');
+      toast.success(`${add.length} yarn line(s) filled from the ${from} — enter the mill and rate`);
     }
-    if (unpicked.length) toast.warning(`Pick the yarn item in the programme's yarn mix for: ${unpicked.map((r) => r.counts ?? '?').join(', ')}`);
+    if (unpicked.length)
+      toast.warning(
+        `Pick the yarn item in the programme's yarn mix for: ${unpicked.map((r) => r.counts ?? '?').join(', ')}`,
+      );
   };
   // Picking the order on a yarn PO with no lines yet fills them straight away.
   const [autoFor, setAutoFor] = useState<string | null>(null);
@@ -476,6 +621,37 @@ export function PurchaseOrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [yarnBalance.data, balOrder]);
 
+  // Fabric PO (Q-078): approved fabric SPL requests for the order, offered as lines.
+  const fabricExtras = useQuery({
+    queryKey: ['spl-extras', 'FABRIC', balOrder],
+    queryFn: () => api.get<SplExtra[]>(`/orders/${balOrder}/spl-extras?kind=FABRIC`),
+    enabled: balKind === 'FABRIC' && balPurpose === 'ORDER' && !!balOrder,
+  });
+  const loadFabricSpl = (orderId: string) => {
+    const rows = fabricExtras.data ?? [];
+    if (!rows.length) return toast.info('No approved fabric SPL requests for this order.');
+    const kept = form.getValues('lines').filter((l) => l.itemId);
+    form.setValue(
+      'lines',
+      [
+        ...kept,
+        ...rows.map((r) => ({
+          ...blank(),
+          itemId: r.itemId,
+          orderId,
+          colour: r.colour ?? '',
+          qty: r.qty,
+          remarks: r.docNo ? `SPL ${r.docNo}` : '',
+        })),
+      ],
+      { shouldDirty: true },
+    );
+    setLabels((x) => ({ ...x, ...Object.fromEntries(rows.map((r) => [r.itemId, r.item.name])) }));
+    toast.success(
+      `${rows.length} line(s) loaded from approved SPL requests (${[...new Set(rows.map((r) => r.docNo))].join(', ')}) — check the qty and enter the rates`,
+    );
+  };
+
   if (!d.isNew && d.query.isLoading) return <LoadingState />;
   if (!d.isNew && d.query.isError) return <ErrorState error={d.query.error} />;
 
@@ -484,23 +660,47 @@ export function PurchaseOrderPage() {
   const v = form.watch();
   const balanceFor = (l: LineForm) => {
     if (!balance.data || !l.itemId) return null;
-    const row = balance.data.find((b) => b.itemId === l.itemId && (b.colour ?? '') === l.colour.trim() && (b.size ?? '') === l.size.trim());
+    const row = balance.data.find(
+      (b) =>
+        b.itemId === l.itemId && (b.colour ?? '') === l.colour.trim() && (b.size ?? '') === l.size.trim(),
+    );
     return row ? String(Number(row.balance)) : null;
   };
   const loadRequirement = () => {
     const rows = (balance.data ?? []).filter((b) => Number(b.balance) > 0);
-    if (!rows.length) return toast.info('Nothing left to order — the requirement is fully on POs (or the order has no Accessories Requirement).');
+    if (!rows.length)
+      return toast.info(
+        'Nothing left to order — the requirement is fully on POs (or the order has no Accessories Requirement).',
+      );
     const kept = v.lines.filter((l) => l.itemId);
     const have = new Set(kept.map((l) => `${l.itemId}|${l.colour.trim()}|${l.size.trim()}`));
     const add = rows.filter((b) => !have.has(`${b.itemId}|${b.colour ?? ''}|${b.size ?? ''}`));
-    form.setValue('lines', [...kept, ...add.map((b) => ({ ...blank(), itemId: b.itemId, colour: b.colour ?? '', size: b.size ?? '', description: b.group ?? '', qty: String(Number(b.balance)) }))], { shouldDirty: true });
+    form.setValue(
+      'lines',
+      [
+        ...kept,
+        ...add.map((b) => ({
+          ...blank(),
+          itemId: b.itemId,
+          colour: b.colour ?? '',
+          size: b.size ?? '',
+          description: b.group ?? '',
+          qty: String(Number(b.balance)),
+        })),
+      ],
+      { shouldDirty: true },
+    );
     setLabels((x) => ({ ...x, ...Object.fromEntries(add.map((b) => [b.itemId, b.item.name])) }));
     toast.success(`${add.length} line(s) loaded with the balance to order — enter the rates`);
   };
   const interState = isInterState(cfg.data?.company.stateCode, vendorState?.stateCode, vendorState?.gstin);
   const safe = (x: string, d0 = '0') => (/^\d*\.?\d+$/.test(x.trim()) ? x.trim() : d0);
   const totals = poTotals({
-    lines: v.lines.map((l) => ({ qty: safe(l.qty), rate: safe(l.rate), per: safe(l.per, '1') === '0' ? '1' : safe(l.per, '1') })),
+    lines: v.lines.map((l) => ({
+      qty: safe(l.qty),
+      rate: safe(l.rate),
+      per: safe(l.per, '1') === '0' ? '1' : safe(l.per, '1'),
+    })),
     packingForwarding: safe(v.packingForwarding),
     dutyPct: safe(v.dutyPct),
     taxPct: safe(v.taxPct),
@@ -518,12 +718,20 @@ export function PurchaseOrderPage() {
       const parsed = zPoInput.safeParse(payload);
       if (!parsed.success) {
         const first = parsed.error.issues[0];
-        return reject(new Error(first ? `${first.path.join(' › ')}: ${first.message}` : 'Please check the lines'));
+        return reject(
+          new Error(first ? `${first.path.join(' › ')}: ${first.message}` : 'Please check the lines'),
+        );
       }
       d.save(payload).then(() => resolve(), reject);
     });
 
-  const picker = (name: 'vendorId' | 'orderId', endpoint: string, map: (r: never) => { id: string; label: string; data?: unknown }, onPick?: (data: unknown) => void, query?: Record<string, string>) => (
+  const picker = (
+    name: 'vendorId' | 'orderId',
+    endpoint: string,
+    map: (r: never) => { id: string; label: string; data?: unknown },
+    onPick?: (data: unknown) => void,
+    query?: Record<string, string>,
+  ) => (
     <Controller
       control={form.control}
       name={name}
@@ -571,7 +779,11 @@ export function PurchaseOrderPage() {
         extraActions={
           <>
             {po && status === 'DRAFT' && can('purchase.approve') ? (
-              <Button onClick={() => setDialog('approve')} disabled={dirty} title={dirty ? 'Save your changes first' : undefined}>
+              <Button
+                onClick={() => setDialog('approve')}
+                disabled={dirty}
+                title={dirty ? 'Save your changes first' : undefined}
+              >
                 <ShieldCheck /> Approve
               </Button>
             ) : null}
@@ -585,7 +797,11 @@ export function PurchaseOrderPage() {
         header={
           <>
             <Field label="Type">
-              <Select value={kind} disabled={!d.isNew} onChange={(e) => form.setValue('kind', e.target.value as PoKind)}>
+              <Select
+                value={kind}
+                disabled={!d.isNew}
+                onChange={(e) => form.setValue('kind', e.target.value as PoKind)}
+              >
                 {PO_KINDS.map((k) => (
                   <option key={k} value={k}>
                     {PO_KIND_NAMES[k]}
@@ -596,17 +812,23 @@ export function PurchaseOrderPage() {
             <Field label="Date *">
               <Input type="date" disabled={!editable} {...form.register('docDate')} />
             </Field>
-            <Field label="Supplier *">{picker('vendorId', '/vendors', pickers.vendor, (data) => {
-              const s = data as { stateCode?: string | null; gstin?: string | null } | undefined;
-              setVendorState(s ? { stateCode: s.stateCode ?? null, gstin: s.gstin ?? null } : null);
-            })}</Field>
+            <Field label="Supplier *">
+              {picker('vendorId', '/vendors', pickers.vendor, (data) => {
+                const s = data as { stateCode?: string | null; gstin?: string | null } | undefined;
+                setVendorState(s ? { stateCode: s.stateCode ?? null, gstin: s.gstin ?? null } : null);
+              })}
+            </Field>
             <Field label="For">
               <Select disabled={!editable} {...form.register('purpose')}>
                 <option value="ORDER">Order</option>
                 <option value="GENERAL">General stock</option>
               </Select>
             </Field>
-            {purpose === 'ORDER' ? <Field label={multiOrder ? 'Order (default for lines)' : 'Order *'}>{picker('orderId', '/orders', pickers.order)}</Field> : null}
+            {purpose === 'ORDER' ? (
+              <Field label={multiOrder ? 'Order (default for lines)' : 'Order *'}>
+                {picker('orderId', '/orders', pickers.order)}
+              </Field>
+            ) : null}
             {kind === 'ACCESSORY' ? (
               <>
                 <Field label="Accessories type">
@@ -628,7 +850,12 @@ export function PurchaseOrderPage() {
             </Field>
             {kind === 'ACCESSORY' ? (
               <Field label="Currency">
-                <Input className="uppercase" maxLength={3} disabled={!editable} {...form.register('currency')} />
+                <Input
+                  className="uppercase"
+                  maxLength={3}
+                  disabled={!editable}
+                  {...form.register('currency')}
+                />
               </Field>
             ) : (
               <>
@@ -640,7 +867,13 @@ export function PurchaseOrderPage() {
                   </Select>
                 </Field>
                 <Field label="Inclusive of tax">
-                  <Select disabled={!editable} value={v.taxInclusive ? 'yes' : 'no'} onChange={(e) => form.setValue('taxInclusive', e.target.value === 'yes', { shouldDirty: true })}>
+                  <Select
+                    disabled={!editable}
+                    value={v.taxInclusive ? 'yes' : 'no'}
+                    onChange={(e) =>
+                      form.setValue('taxInclusive', e.target.value === 'yes', { shouldDirty: true })
+                    }
+                  >
                     <option value="no">No</option>
                     <option value="yes">Yes</option>
                   </Select>
@@ -655,11 +888,23 @@ export function PurchaseOrderPage() {
         lines={
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-2">
-              <CardTitle>{kind === 'YARN' ? 'Yarn PO details' : kind === 'FABRIC' ? 'Fabric PO details' : 'Accessories PO details'}</CardTitle>
+              <CardTitle>
+                {kind === 'YARN'
+                  ? 'Yarn PO details'
+                  : kind === 'FABRIC'
+                    ? 'Fabric PO details'
+                    : 'Accessories PO details'}
+              </CardTitle>
               {editable ? (
                 <div className="flex gap-2">
                   {kind === 'ACCESSORY' && v.orderId ? (
-                    <Button type="button" size="sm" variant="outline" onClick={loadRequirement} title="Lines from the order's Accessories Requirement with a balance still to order">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={loadRequirement}
+                      title="Lines from the order's Accessories Requirement with a balance still to order"
+                    >
                       <ListChecks /> Load BalanceReqQty
                     </Button>
                   ) : null}
@@ -675,6 +920,18 @@ export function PurchaseOrderPage() {
                       <ListChecks /> Load yarn requirement
                     </Button>
                   ) : null}
+                  {kind === 'FABRIC' && purpose === 'ORDER' && v.orderId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!fabricExtras.data}
+                      onClick={() => loadFabricSpl(v.orderId)}
+                      title="Lines from the order's approved fabric SPL requests (extra fabric for shortages)"
+                    >
+                      <ListChecks /> Load approved SPL requests
+                    </Button>
+                  ) : null}
                   <Button type="button" size="sm" variant="outline" onClick={() => lines.append(blank())}>
                     <Plus /> Add line
                   </Button>
@@ -686,7 +943,9 @@ export function PurchaseOrderPage() {
                 <thead>
                   <tr className="border-b text-left text-xs font-medium text-muted-foreground [&>th]:whitespace-nowrap [&>th]:px-1 [&>th]:py-2">
                     <th className="w-8">#</th>
-                    <th className="min-w-44">{kind === 'YARN' ? 'Yarn counts' : kind === 'FABRIC' ? 'Fabric type' : 'Accessory'}</th>
+                    <th className="min-w-44">
+                      {kind === 'YARN' ? 'Yarn counts' : kind === 'FABRIC' ? 'Fabric type' : 'Accessory'}
+                    </th>
                     {multiOrder ? <th className="min-w-36">Order</th> : null}
                     {cols.map((c) =>
                       c.k === 'qty' && kind === 'ACCESSORY' ? (
@@ -759,25 +1018,58 @@ export function PurchaseOrderPage() {
                         {cols.map((c) => (
                           <Fragment key={c.k}>
                             {c.k === 'qty' && kind === 'ACCESSORY' ? (
-                              <td className="px-1 py-1.5 text-right align-middle tabular-nums text-muted-foreground" title="Requirement + approved SPL − already on POs">
+                              <td
+                                className="px-1 py-1.5 text-right align-middle tabular-nums text-muted-foreground"
+                                title="Requirement + approved SPL − already on POs"
+                              >
                                 {balanceFor(l) ?? '—'}
                               </td>
                             ) : null}
                             <td className="px-1">
-                              <Input className={cn(c.w, c.num && 'text-right')} inputMode={c.num ? 'decimal' : undefined} disabled={!editable} {...form.register(`lines.${i}.${c.k}` as const)} />
+                              <Input
+                                className={cn(c.w, c.num && 'text-right')}
+                                inputMode={c.num ? 'decimal' : undefined}
+                                disabled={!editable}
+                                {...form.register(`lines.${i}.${c.k}` as const)}
+                              />
                             </td>
                           </Fragment>
                         ))}
                         <td className="pr-1">
-                          <Input className="w-24 text-right" inputMode="decimal" disabled={!editable} {...form.register(`lines.${i}.rate`)} />
+                          <Input
+                            className="w-24 text-right"
+                            inputMode="decimal"
+                            disabled={!editable}
+                            {...form.register(`lines.${i}.rate`)}
+                          />
                         </td>
                         <td className="pr-1">
-                          <Input className="w-16 text-right" inputMode="decimal" disabled={!editable} {...form.register(`lines.${i}.per`)} />
+                          <Input
+                            className="w-16 text-right"
+                            inputMode="decimal"
+                            disabled={!editable}
+                            {...form.register(`lines.${i}.per`)}
+                          />
                         </td>
-                        <td className="py-1.5 pl-4 text-right align-middle font-mono tabular-nums">{formatInr(poLineAmount(safe(l.qty), safe(l.rate), safe(l.per, '1') === '0' ? '1' : safe(l.per, '1')), { symbol: false })}</td>
+                        <td className="py-1.5 pl-4 text-right align-middle font-mono tabular-nums">
+                          {formatInr(
+                            poLineAmount(
+                              safe(l.qty),
+                              safe(l.rate),
+                              safe(l.per, '1') === '0' ? '1' : safe(l.per, '1'),
+                            ),
+                            { symbol: false },
+                          )}
+                        </td>
                         <td>
                           {editable && lines.fields.length > 1 ? (
-                            <Button type="button" size="icon" variant="ghost" aria-label={`Remove line ${i + 1}`} onClick={() => lines.remove(i)}>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Remove line ${i + 1}`}
+                              onClick={() => lines.remove(i)}
+                            >
                               <Trash2 />
                             </Button>
                           ) : null}
@@ -798,25 +1090,49 @@ export function PurchaseOrderPage() {
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-2 text-sm">
                 <Field label="Packing & forwarding (₹)" className="col-span-2">
-                  <Input inputMode="decimal" className="text-right" disabled={!editable} {...form.register('packingForwarding')} />
+                  <Input
+                    inputMode="decimal"
+                    className="text-right"
+                    disabled={!editable}
+                    {...form.register('packingForwarding')}
+                  />
                 </Field>
                 <Field label="Duty %">
-                  <Input inputMode="decimal" className="text-right" disabled={!editable} {...form.register('dutyPct')} />
+                  <Input
+                    inputMode="decimal"
+                    className="text-right"
+                    disabled={!editable}
+                    {...form.register('dutyPct')}
+                  />
                 </Field>
                 <Field label={interState ? 'IGST %' : 'GST % (CGST + SGST)'}>
-                  <Input inputMode="decimal" className="text-right" disabled={!editable} {...form.register('taxPct')} />
+                  <Input
+                    inputMode="decimal"
+                    className="text-right"
+                    disabled={!editable}
+                    {...form.register('taxPct')}
+                  />
                 </Field>
                 <Field label="TCS %">
-                  <Input inputMode="decimal" className="text-right" disabled={!editable} {...form.register('tcsPct')} />
+                  <Input
+                    inputMode="decimal"
+                    className="text-right"
+                    disabled={!editable}
+                    {...form.register('tcsPct')}
+                  />
                 </Field>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="grid gap-1 pt-4 text-sm">
                 <Row label="Gross amount" value={totals.gross} />
-                {Number(v.packingForwarding) ? <Row label="Packing & forwarding" value={safe(v.packingForwarding)} /> : null}
+                {Number(v.packingForwarding) ? (
+                  <Row label="Packing & forwarding" value={safe(v.packingForwarding)} />
+                ) : null}
                 {Number(totals.duty) ? <Row label="Duty" value={totals.duty} /> : null}
-                {interState ? <Row label={`IGST ${v.taxPct || 0}%`} value={totals.igst} /> : (
+                {interState ? (
+                  <Row label={`IGST ${v.taxPct || 0}%`} value={totals.igst} />
+                ) : (
                   <>
                     <Row label={`CGST ${Number(v.taxPct || 0) / 2}%`} value={totals.cgst} />
                     <Row label={`SGST ${Number(v.taxPct || 0) / 2}%`} value={totals.sgst} />
@@ -828,7 +1144,11 @@ export function PurchaseOrderPage() {
                   <span className="text-muted-foreground">Net amount</span>
                   <span className="text-xl font-semibold">{formatInr(totals.net)}</span>
                 </div>
-                {!vendorState && editable ? <div className="text-xs text-muted-foreground">Pick the supplier to choose CGST + SGST or IGST.</div> : null}
+                {!vendorState && editable ? (
+                  <div className="text-xs text-muted-foreground">
+                    Pick the supplier to choose CGST + SGST or IGST.
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
             {po?.status === 'POSTED' || po?.status === 'CLOSED' ? (
@@ -841,16 +1161,28 @@ export function PurchaseOrderPage() {
                 </CardContent>
               </Card>
             ) : null}
-            {po?.closeReason ? <div className="rounded bg-slate-100 p-2 text-xs">Closed: {po.closeReason}</div> : null}
-            {po?.cancelReason ? <div className="rounded bg-red-50 p-2 text-xs text-destructive">Cancelled: {po.cancelReason}</div> : null}
-            {po?.docNo && status === 'DRAFT' ? <div className="rounded border bg-sky-50 p-2 text-xs text-sky-900">Approval reverted: edit and approve again. The PO keeps number {po.docNo}.</div> : null}
+            {po?.closeReason ? (
+              <div className="rounded bg-slate-100 p-2 text-xs">Closed: {po.closeReason}</div>
+            ) : null}
+            {po?.cancelReason ? (
+              <div className="rounded bg-red-50 p-2 text-xs text-destructive">
+                Cancelled: {po.cancelReason}
+              </div>
+            ) : null}
+            {po?.docNo && status === 'DRAFT' ? (
+              <div className="rounded border bg-sky-50 p-2 text-xs text-sky-900">
+                Approval reverted: edit and approve again. The PO keeps number {po.docNo}.
+              </div>
+            ) : null}
           </>
         }
       />
       <ConfirmDialog
         open={dialog !== null}
         onOpenChange={(o) => setDialog(o ? dialog : null)}
-        title={dialog === 'approve' ? `Approve this ${PO_KIND_NAMES[kind].toLowerCase()}?` : 'Revert the approval?'}
+        title={
+          dialog === 'approve' ? `Approve this ${PO_KIND_NAMES[kind].toLowerCase()}?` : 'Revert the approval?'
+        }
         description={
           dialog === 'approve'
             ? `${po?.vendor.name ?? ''} · ${formatInr(po?.totals.net ?? '0')}. Approving numbers the PO and records your note in the audit log.`
@@ -861,7 +1193,10 @@ export function PurchaseOrderPage() {
         reasonLabel={dialog === 'approve' ? 'Approval note' : 'Reason'}
         onConfirm={async (text) => {
           try {
-            await d.action(dialog === 'approve' ? 'approve' : 'revert', dialog === 'approve' ? { note: text } : { reason: text });
+            await d.action(
+              dialog === 'approve' ? 'approve' : 'revert',
+              dialog === 'approve' ? { note: text } : { reason: text },
+            );
             toast.success(dialog === 'approve' ? 'Purchase order approved' : 'Approval reverted');
           } catch (err) {
             toast.error(errorMessage(err));

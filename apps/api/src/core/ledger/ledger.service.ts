@@ -119,6 +119,7 @@ export const ledger = {
 
   /** Live balances for specific keys (used by services for pending / availability checks). */
   balances: ledgerRepo.balances,
+  orderBalances: ledgerRepo.orderBalances,
   unitBalanceAt: ledgerRepo.unitBalanceAt,
   unitLocations: ledgerRepo.unitLocations,
   lockUnits: ledgerRepo.lockUnits,

@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, ShieldCheck } from 'lucide-react';
+import { Plus, ShieldCheck, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { D, todayIst, zOutwardDcInput } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
@@ -32,7 +32,12 @@ import { type VoiceFormSpec } from '@wewin/shared';
 import { useVoiceFill } from '@/lib/voice';
 
 const columns: DTColumn<OutwardDc>[] = [
-  { key: 'docNo', header: 'D.C. no.', sort: 'docNo', cell: (r) => <span className="font-mono">{r.docNo ?? 'Draft'}</span> },
+  {
+    key: 'docNo',
+    header: 'D.C. no.',
+    sort: 'docNo',
+    cell: (r) => <span className="font-mono">{r.docNo ?? 'Draft'}</span>,
+  },
   { key: 'docDate', header: 'Date', type: 'date', sort: 'docDate' },
   { key: 'vendor.name', header: 'Job worker' },
   { key: 'process.name', header: 'Process' },
@@ -49,7 +54,15 @@ const columns: DTColumn<OutwardDc>[] = [
     key: 'expectedReturnDate',
     header: 'Expected back',
     sort: 'expectedReturnDate',
-    cell: (r) => (r.expectedReturnDate ? <span className={r.overdue ? 'font-semibold text-destructive' : ''}>{formatDate(r.expectedReturnDate)}{r.overdue ? ' · overdue' : ''}</span> : '—'),
+    cell: (r) =>
+      r.expectedReturnDate ? (
+        <span className={r.overdue ? 'font-semibold text-destructive' : ''}>
+          {formatDate(r.expectedReturnDate)}
+          {r.overdue ? ' · overdue' : ''}
+        </span>
+      ) : (
+        '—'
+      ),
   },
   {
     key: 'status',
@@ -59,35 +72,44 @@ const columns: DTColumn<OutwardDc>[] = [
       <span className="inline-flex items-center gap-1">
         <StatusBadge status={r.status} />
         {r.approvalStatus === 'PENDING' ? <Badge variant="warning">Awaiting approval</Badge> : null}
-        {r.status === 'DRAFT' && r.approvalStatus === 'APPROVED' ? <Badge variant="success">Approved</Badge> : null}
+        {r.status === 'DRAFT' && r.approvalStatus === 'APPROVED' ? (
+          <Badge variant="success">Approved</Badge>
+        ) : null}
       </span>
     ),
   },
 ];
 
-export function OutwardDcsPage({ processId, openOnly, embedded, direct }: { processId?: string; openOnly?: boolean; embedded?: boolean; direct?: boolean } = {}) {
+export function OutwardDcsPage({
+  processId,
+  openOnly,
+  embedded,
+  direct,
+}: { processId?: string; openOnly?: boolean; embedded?: boolean; direct?: boolean } = {}) {
   const { can } = useAuth();
   const fy = useFy();
   const [status, setStatus] = useState('');
   const [view, setView] = useState(openOnly ? 'open' : '');
   return (
     <div>
-      {embedded ? null : <PageHeader
-        title="Outward D.C.s"
-        description="Yarn and fabric sent to job workers (Rule 55). Loss % is measured per D.C. across its inward returns."
-        actions={
-          can('jobwork.create') ? (
-            <>
-              <ScanInvoiceButton target="OUTWARD_DC" />
-              <Button asChild>
-                <Link to="/outward-dcs/new">
-                  <Plus /> New outward D.C.
-                </Link>
-              </Button>
-            </>
-          ) : null
-        }
-      />}
+      {embedded ? null : (
+        <PageHeader
+          title="Outward D.C.s"
+          description="Yarn and fabric sent to job workers (Rule 55). Loss % is measured per D.C. across its inward returns."
+          actions={
+            can('jobwork.create') ? (
+              <>
+                <ScanInvoiceButton target="OUTWARD_DC" />
+                <Button asChild>
+                  <Link to="/outward-dcs/new">
+                    <Plus /> New outward D.C.
+                  </Link>
+                </Button>
+              </>
+            ) : null
+          }
+        />
+      )}
       <DataTable<OutwardDc>
         id="outward-dcs"
         endpoint="/outward-dcs"
@@ -107,8 +129,17 @@ export function OutwardDcsPage({ processId, openOnly, embedded, direct }: { proc
         }}
         filterBar={
           <>
-            <StatusFilter value={status} onChange={setStatus} statuses={['DRAFT', 'POSTED', 'CLOSED', 'CANCELLED']} />
-            <Select className="h-9 w-40" value={view} onChange={(e) => setView(e.target.value)} aria-label="View">
+            <StatusFilter
+              value={status}
+              onChange={setStatus}
+              statuses={['DRAFT', 'POSTED', 'CLOSED', 'CANCELLED']}
+            />
+            <Select
+              className="h-9 w-40"
+              value={view}
+              onChange={(e) => setView(e.target.value)}
+              aria-label="View"
+            >
               <option value="">All D.C.s</option>
               <option value="open">Open (at vendor)</option>
               <option value="overdue">Overdue</option>
@@ -121,7 +152,16 @@ export function OutwardDcsPage({ processId, openOnly, embedded, direct }: { proc
   );
 }
 
-type LineRow = GridRow & { itemId: string; lot: string; colour: string; rollId: string; rollNo: string; qtyKg: string; rolls: string | number; valuePerKg: string };
+type LineRow = GridRow & {
+  itemId: string;
+  lot: string;
+  colour: string;
+  rollId: string;
+  rollNo: string;
+  qtyKg: string;
+  rolls: string | number;
+  valuePerKg: string;
+};
 interface FormValues {
   docDate: string;
   orderId: string;
@@ -138,7 +178,16 @@ interface FormValues {
 interface ProgramOpt {
   id: string;
   programNo: string;
-  processes: { id: string; sequence: number; processId: string; inputItemId: string; allowedLossPct: string; materialCostPerKg: string | null; process: { name: string }; inputItem: { name: string } }[];
+  processes: {
+    id: string;
+    sequence: number;
+    processId: string;
+    inputItemId: string;
+    allowedLossPct: string;
+    materialCostPerKg: string | null;
+    process: { name: string };
+    inputItem: { name: string };
+  }[];
 }
 /** Approved Program Defined entries (Q-076) a D.C. can go under; yarn processes must. */
 interface YarnProgramOpt {
@@ -150,13 +199,49 @@ interface YarnProgramOpt {
   process: { name: string };
   outputItem: { name: string };
   outputColour: string | null;
-  inputs: { itemId: string; colour: string | null; mixPct: string; planKg: string | null; item: { name: string } }[];
+  inputs: {
+    itemId: string;
+    colour: string | null;
+    mixPct: string;
+    planKg: string | null;
+    item: { name: string };
+  }[];
 }
 const yarnProgramLabel = (y: YarnProgramOpt) =>
   `${y.programNo} · ${y.process.name}: ${y.inputs.map((l) => `${l.item.name} ${Number(l.mixPct)}%`).join(' + ')} → ${y.outputItem.name}${y.outputColour ? ` ${y.outputColour}` : ''} — allowed loss ${Number(y.allowedLossPct)}%`;
-const blankLine = (itemId = '', valuePerKg = ''): LineRow => ({ _key: newKey(), itemId, lot: '', colour: '', rollId: '', rollNo: '', qtyKg: '', rolls: '', valuePerKg });
+const blankLine = (itemId = '', valuePerKg = ''): LineRow => ({
+  _key: newKey(),
+  itemId,
+  lot: '',
+  colour: '',
+  rollId: '',
+  rollNo: '',
+  qtyKg: '',
+  rolls: '',
+  valuePerKg,
+});
 
-const VOICE_OUTWARD: VoiceFormSpec = { title: 'Outward D.C.', fields: [{ name: 'docDate', label: 'D.C. date', type: 'date' }, { name: 'vendorId', label: 'Job worker', type: 'vendor' }, { name: 'orderId', label: 'Order', type: 'order' }, { name: 'expectedReturnDate', label: 'Expected return', type: 'date' }, { name: 'vehicleNo', label: 'Vehicle no.', type: 'text' }, { name: 'remarks', label: 'Remarks', type: 'text' }], lines: { label: 'Material', fields: [{ name: 'itemId', label: 'Yarn / fabric', type: 'item' }, { name: 'lot', label: 'Lot', type: 'text' }, { name: 'colour', label: 'Colour', type: 'text' }, { name: 'qtyKg', label: 'Kg', type: 'number' }, { name: 'rolls', label: 'Bags / rolls', type: 'number' }] } };
+const VOICE_OUTWARD: VoiceFormSpec = {
+  title: 'Outward D.C.',
+  fields: [
+    { name: 'docDate', label: 'D.C. date', type: 'date' },
+    { name: 'vendorId', label: 'Job worker', type: 'vendor' },
+    { name: 'orderId', label: 'Order', type: 'order' },
+    { name: 'expectedReturnDate', label: 'Expected return', type: 'date' },
+    { name: 'vehicleNo', label: 'Vehicle no.', type: 'text' },
+    { name: 'remarks', label: 'Remarks', type: 'text' },
+  ],
+  lines: {
+    label: 'Material',
+    fields: [
+      { name: 'itemId', label: 'Yarn / fabric', type: 'item' },
+      { name: 'lot', label: 'Lot', type: 'text' },
+      { name: 'colour', label: 'Colour', type: 'text' },
+      { name: 'qtyKg', label: 'Kg', type: 'number' },
+      { name: 'rolls', label: 'Bags / rolls', type: 'number' },
+    ],
+  },
+};
 
 export function OutwardDcPage() {
   const { id } = useParams();
@@ -169,9 +254,29 @@ export function OutwardDcPage() {
   const [search] = useSearchParams();
   const form = useForm<FormValues>({
     resolver: zodResolver(zOutwardDcInput as never),
-    defaultValues: { docDate: todayIst(), orderId: search.get('orderId') ?? '', programProcessId: '', yarnProgramId: search.get('yarnProgramId') ?? '', vendorId: '', fromVendorId: '', expectedReturnDate: '', purpose: 'For job work', vehicleNo: '', remarks: '', lines: [blankLine()] },
+    defaultValues: {
+      docDate: todayIst(),
+      orderId: search.get('orderId') ?? '',
+      programProcessId: '',
+      yarnProgramId: search.get('yarnProgramId') ?? '',
+      vendorId: '',
+      fromVendorId: '',
+      expectedReturnDate: '',
+      purpose: 'For job work',
+      vehicleNo: '',
+      remarks: '',
+      lines: [blankLine()],
+    },
   });
-  const voice = useVoiceFill({ form, spec: VOICE_OUTWARD, enabled: (o?.status ?? 'DRAFT') === 'DRAFT' && can('jobwork.create'), setLabels, linesName: 'lines', newLine: () => blankLine(), isBlankLine: (l: LineRow) => !l.itemId && !l.qtyKg && !l.rollId });
+  const voice = useVoiceFill({
+    form,
+    spec: VOICE_OUTWARD,
+    enabled: (o?.status ?? 'DRAFT') === 'DRAFT' && can('jobwork.create'),
+    setLabels,
+    linesName: 'lines',
+    newLine: () => blankLine(),
+    isBlankLine: (l: LineRow) => !l.itemId && !l.qtyKg && !l.rollId,
+  });
   const e = form.formState.errors;
   const orderId = form.watch('orderId');
   const ppId = form.watch('programProcessId');
@@ -181,7 +286,8 @@ export function OutwardDcPage() {
     enabled: !!orderId,
   });
   const ppOptions = useMemo(
-    () => (programs.data?.data ?? []).flatMap((p) => p.processes.map((x) => ({ ...x, programNo: p.programNo }))),
+    () =>
+      (programs.data?.data ?? []).flatMap((p) => p.processes.map((x) => ({ ...x, programNo: p.programNo }))),
     [programs.data],
   );
   const pp = ppOptions.find((x) => x.id === ppId);
@@ -197,7 +303,14 @@ export function OutwardDcPage() {
   useEffect(() => {
     if (!yp || !d.isNew || form.getValues('lines').some((l) => l.itemId)) return;
     setLabels((l) => ({ ...l, ...Object.fromEntries(yp.inputs.map((x) => [x.itemId, x.item.name])) }));
-    form.setValue('lines', yp.inputs.map((x) => ({ ...blankLine(x.itemId, yp.materialCostPerKg ?? ''), colour: x.colour ?? '', qtyKg: x.planKg ?? '' })));
+    form.setValue(
+      'lines',
+      yp.inputs.map((x) => ({
+        ...blankLine(x.itemId, yp.materialCostPerKg ?? ''),
+        colour: x.colour ?? '',
+        qtyKg: x.planKg ?? '',
+      })),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [yp?.id]);
   /** The programme select holds a fabric programme step id, or y:<id> for a yarn programme. */
@@ -205,13 +318,23 @@ export function OutwardDcPage() {
     const isYarn = value.startsWith('y:');
     const id = isYarn ? value.slice(2) : value;
     form.setValue('yarnProgramId', isYarn ? id : '', { shouldDirty: true });
-    form.setValue('programProcessId', isYarn ? '' : id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+    form.setValue('programProcessId', isYarn ? '' : id, {
+      shouldDirty: true,
+      shouldValidate: form.formState.isSubmitted,
+    });
     if (form.getValues('lines').some((l) => l.itemId)) return;
     if (isYarn) {
       const y = ypOptions.find((x) => x.id === id);
       if (!y) return;
       setLabels((l) => ({ ...l, ...Object.fromEntries(y.inputs.map((x) => [x.itemId, x.item.name])) }));
-      form.setValue('lines', y.inputs.map((x) => ({ ...blankLine(x.itemId, y.materialCostPerKg ?? ''), colour: x.colour ?? '', qtyKg: x.planKg ?? '' })));
+      form.setValue(
+        'lines',
+        y.inputs.map((x) => ({
+          ...blankLine(x.itemId, y.materialCostPerKg ?? ''),
+          colour: x.colour ?? '',
+          qtyKg: x.planKg ?? '',
+        })),
+      );
     } else {
       const x = ppOptions.find((p) => p.id === id);
       if (!x) return;
@@ -269,7 +392,11 @@ export function OutwardDcPage() {
         async (v) => {
           try {
             const { orderId: _o, ...payload } = v;
-            await d.save({ ...payload, fromVendorId: direct ? v.fromVendorId : null, lines: v.lines.map((l) => ({ ...l, rollId: l.rollId || null })) });
+            await d.save({
+              ...payload,
+              fromVendorId: direct ? v.fromVendorId : null,
+              lines: v.lines.map((l) => ({ ...l, rollId: l.rollId || null })),
+            });
             resolve();
           } catch (err) {
             reject(err);
@@ -281,14 +408,37 @@ export function OutwardDcPage() {
 
   async function addRoll(code: string) {
     try {
-      const r = await api.get<{ id: string; rollNo: string; itemId: string; lot: string; colour: string; kg: string; item: { name: string } }>(`/rolls/${encodeURIComponent(code)}`);
+      const r = await api.get<{
+        id: string;
+        rollNo: string;
+        itemId: string;
+        lot: string;
+        colour: string;
+        kg: string;
+        item: { name: string };
+      }>(`/rolls/${encodeURIComponent(code)}`);
       const cur = form.getValues('lines').filter((l) => l.rollId || l.qtyKg);
       if (cur.some((l) => l.rollId === r.id)) {
         toast.warning(`Roll ${r.rollNo} is already on this D.C.`);
         return;
       }
       setLabels((x) => ({ ...x, [r.itemId]: r.item.name }));
-      form.setValue('lines', [...cur, { ...blankLine(r.itemId, pp?.materialCostPerKg ?? ''), rollId: r.id, rollNo: r.rollNo, lot: r.lot, colour: r.colour, qtyKg: r.kg, rolls: 1 }], { shouldDirty: true });
+      form.setValue(
+        'lines',
+        [
+          ...cur,
+          {
+            ...blankLine(r.itemId, pp?.materialCostPerKg ?? ''),
+            rollId: r.id,
+            rollNo: r.rollNo,
+            lot: r.lot,
+            colour: r.colour,
+            qtyKg: r.kg,
+            rolls: 1,
+          },
+        ],
+        { shouldDirty: true },
+      );
       toast.success(`Roll ${r.rollNo} · ${formatKg(r.kg)} kg added`);
     } catch (err) {
       toast.error(errorMessage(err));
@@ -301,144 +451,138 @@ export function OutwardDcPage() {
 
   return (
     <>
-    <DocumentForm
-      voice={voice}
-      title="Outward D.C."
-      docNo={o?.docNo}
-      status={status}
-      postedAt={o?.postedAt}
-      backHref="/outward-dcs"
-      canEdit={can('jobwork.create')}
-      canPost={!d.isNew && can('jobwork.post') && !awaitingApproval}
-      canCancel={can('jobwork.cancel')}
-      canClose={can('jobwork.close')}
-      closeDescription="Closing posts whatever is still at the job worker to PROCESS_LOSS and freezes the final loss %. Excess loss is notified and later debited."
-      postDescription="Posting numbers the D.C. and moves the material to the job worker. It needs management approval first; editing an approved draft clears the approval."
-      extraActions={
-        canApprove ? (
-          <Button variant="outline" onClick={() => setApproving(true)} disabled={dirty} title={dirty ? 'Save your changes first' : undefined}>
-            <ShieldCheck /> Approve
-          </Button>
-        ) : null
-      }
-      onSave={save}
-      onPost={async () => {
-        if (dirty) await save();
-        await d.action('post');
-      }}
-      onCancel={(reason) => d.action('cancel', { reason })}
-      onClose={(reason) => d.action('close', { reason })}
-      onDelete={d.isNew ? undefined : d.remove}
-      printHref={o ? `/print/outward-dc/${o.id}` : undefined}
-      header={
-        <>
-          <Field label="D.C. date *" error={e.docDate?.message}>
-            <Input type="date" {...form.register('docDate')} />
-          </Field>
-          <Field label="Order *">
-            <Controller
-              control={form.control}
-              name="orderId"
-              render={({ field }) => (
-                <EntityPicker
-                  endpoint="/orders"
-                  map={pickers.order}
-                  value={field.value}
-                  valueLabel={labels[field.value]}
-                  disabled={!editable}
-                  rememberKey="dc-order"
-                  useLast={d.isNew}
-                  onChange={(opt) => {
-                    if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
-                    field.onChange(opt?.id ?? '');
-                    form.setValue('programProcessId', '');
-                    form.setValue('yarnProgramId', '');
-                  }}
-                />
-              )}
-            />
-          </Field>
-          <Field label="Programme *" error={e.programProcessId?.message} className="sm:col-span-2">
-            <Select
-              value={ypId ? `y:${ypId}` : ppId}
-              disabled={!editable}
-              onChange={(ev) => pickProgram(ev.target.value)}
-              aria-invalid={!!e.programProcessId}
-              aria-label="Programme"
+      <DocumentForm
+        voice={voice}
+        title="Outward D.C."
+        docNo={o?.docNo}
+        status={status}
+        postedAt={o?.postedAt}
+        backHref="/outward-dcs"
+        canEdit={can('jobwork.create')}
+        canPost={!d.isNew && can('jobwork.post') && !awaitingApproval}
+        canCancel={can('jobwork.cancel')}
+        canClose={can('jobwork.close')}
+        closeDescription="Closing posts whatever is still at the job worker to PROCESS_LOSS and freezes the final loss %. Excess loss is notified and later debited."
+        postDescription="Posting numbers the D.C. and moves the material to the job worker. It needs management approval first; editing an approved draft clears the approval."
+        extraActions={
+          canApprove ? (
+            <Button
+              variant="outline"
+              onClick={() => setApproving(true)}
+              disabled={dirty}
+              title={dirty ? 'Save your changes first' : undefined}
             >
-              <option value="">
-                {orderId
-                  ? programs.isLoading || yarnPrograms.isLoading
-                    ? 'Loading…'
-                    : ppOptions.length || ypOptions.length
-                      ? 'Select…'
-                      : 'No approved programme for this order'
-                  : 'Select the order first'}
-              </option>
-              {ypOptions.length ? (
-                <optgroup label="Program Defined">
-                  {ypOptions.map((y) => (
-                    <option key={y.id} value={`y:${y.id}`}>
-                      {yarnProgramLabel(y)}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {ppOptions.length ? (
-                <optgroup label="Fabric programme steps">
-                  {ppOptions.map((x) => (
-                    <option key={x.id} value={x.id}>
-                      {x.programNo} · {x.sequence}. {x.process.name} — allowed loss {Number(x.allowedLossPct)}%
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {o && !(ppOptions.some((x) => x.id === o.programProcessId) || ypOptions.some((x) => x.id === o.yarnProgramId)) ? (
-                <option value={o.yarnProgramId ? `y:${o.yarnProgramId}` : (o.programProcessId ?? '')}>
-                  {o.program.programNo} · {o.process.name} — allowed {Number(o.allowedLossPct)}%
-                </option>
-              ) : null}
-            </Select>
-          </Field>
-          <Field label="Job worker *" error={e.vendorId?.message}>
-            <Controller
-              control={form.control}
-              name="vendorId"
-              render={({ field }) => (
-                <EntityPicker
-                  endpoint="/vendors"
-                  query={{ processId: pp?.processId ?? yp?.processId ?? o?.processId }}
-                  map={pickers.vendor}
-                  value={field.value}
-                  valueLabel={labels[field.value]}
-                  disabled={!editable}
-                  invalid={!!e.vendorId}
-                  onChange={(opt) => {
-                    if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
-                    field.onChange(opt?.id ?? '');
-                  }}
-                />
-              )}
-            />
-          </Field>
-          <Field label="Send from">
-            <Select value={direct ? 'vendor' : 'store'} onChange={(ev) => setDirect(ev.target.value === 'vendor')} disabled={!editable}>
-              <option value="store">Our store</option>
-              <option value="vendor">Direct from another vendor</option>
-            </Select>
-          </Field>
-          {direct ? (
-            <Field label="From vendor *" error={e.fromVendorId?.message}>
+              <ShieldCheck /> Approve
+            </Button>
+          ) : o && status !== 'DRAFT' ? (
+            <Button variant="outline" asChild>
+              <Link
+                to={`/print/outward-labels/${o.id}`}
+                target="_blank"
+                title="Labels for the bags / rolls going to the job worker"
+              >
+                <Tag /> Outward labels
+              </Link>
+            </Button>
+          ) : null
+        }
+        onSave={save}
+        onPost={async () => {
+          if (dirty) await save();
+          await d.action('post');
+        }}
+        onCancel={(reason) => d.action('cancel', { reason })}
+        onClose={(reason) => d.action('close', { reason })}
+        onDelete={d.isNew ? undefined : d.remove}
+        printHref={o ? `/print/outward-dc/${o.id}` : undefined}
+        header={
+          <>
+            <Field label="D.C. date *" error={e.docDate?.message}>
+              <Input type="date" {...form.register('docDate')} />
+            </Field>
+            <Field label="Order *">
               <Controller
                 control={form.control}
-                name="fromVendorId"
+                name="orderId"
+                render={({ field }) => (
+                  <EntityPicker
+                    endpoint="/orders"
+                    map={pickers.order}
+                    value={field.value}
+                    valueLabel={labels[field.value]}
+                    disabled={!editable}
+                    rememberKey="dc-order"
+                    useLast={d.isNew}
+                    onChange={(opt) => {
+                      if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
+                      field.onChange(opt?.id ?? '');
+                      form.setValue('programProcessId', '');
+                      form.setValue('yarnProgramId', '');
+                    }}
+                  />
+                )}
+              />
+            </Field>
+            <Field label="Programme *" error={e.programProcessId?.message} className="sm:col-span-2">
+              <Select
+                value={ypId ? `y:${ypId}` : ppId}
+                disabled={!editable}
+                onChange={(ev) => pickProgram(ev.target.value)}
+                aria-invalid={!!e.programProcessId}
+                aria-label="Programme"
+              >
+                <option value="">
+                  {orderId
+                    ? programs.isLoading || yarnPrograms.isLoading
+                      ? 'Loading…'
+                      : ppOptions.length || ypOptions.length
+                        ? 'Select…'
+                        : 'No approved programme for this order'
+                    : 'Select the order first'}
+                </option>
+                {ypOptions.length ? (
+                  <optgroup label="Program Defined">
+                    {ypOptions.map((y) => (
+                      <option key={y.id} value={`y:${y.id}`}>
+                        {yarnProgramLabel(y)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {ppOptions.length ? (
+                  <optgroup label="Fabric programme steps">
+                    {ppOptions.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.programNo} · {x.sequence}. {x.process.name} — allowed loss{' '}
+                        {Number(x.allowedLossPct)}%
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {o &&
+                !(
+                  ppOptions.some((x) => x.id === o.programProcessId) ||
+                  ypOptions.some((x) => x.id === o.yarnProgramId)
+                ) ? (
+                  <option value={o.yarnProgramId ? `y:${o.yarnProgramId}` : (o.programProcessId ?? '')}>
+                    {o.program.programNo} · {o.process.name} — allowed {Number(o.allowedLossPct)}%
+                  </option>
+                ) : null}
+              </Select>
+            </Field>
+            <Field label="Job worker *" error={e.vendorId?.message}>
+              <Controller
+                control={form.control}
+                name="vendorId"
                 render={({ field }) => (
                   <EntityPicker
                     endpoint="/vendors"
+                    query={{ processId: pp?.processId ?? yp?.processId ?? o?.processId }}
                     map={pickers.vendor}
                     value={field.value}
                     valueLabel={labels[field.value]}
                     disabled={!editable}
+                    invalid={!!e.vendorId}
                     onChange={(opt) => {
                       if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
                       field.onChange(opt?.id ?? '');
@@ -447,98 +591,155 @@ export function OutwardDcPage() {
                 )}
               />
             </Field>
-          ) : null}
-          <Field label="Expected return" error={e.expectedReturnDate?.message}>
-            <Input type="date" {...form.register('expectedReturnDate')} title="Blank = D.C. date + the process's default return days" />
-          </Field>
-          <Field label="Vehicle no.">
-            <Input {...form.register('vehicleNo')} />
-          </Field>
-          <Field label="Purpose">
-            <Input {...form.register('purpose')} />
-          </Field>
-          <Field label="Remarks" className="sm:col-span-2">
-            <Input {...form.register('remarks')} />
-          </Field>
-        </>
-      }
-      lines={
-        <div className="flex flex-col gap-2">
-          {editable ? (
-            <div className="max-w-sm">
-              <ScanInput onScan={addRoll} placeholder="Scan a roll QR / type roll no. + Enter" />
-            </div>
-          ) : null}
-          <Controller
-            control={form.control}
-            name="lines"
-            render={({ field }) => (
-              <LineGrid<LineRow>
-                rows={field.value}
-                onChange={field.onChange}
-                readOnly={!editable}
-                newRow={() => blankLine(pp?.inputItemId ?? '', pp?.materialCostPerKg ?? '')}
-                errors={Object.fromEntries(lineErrors.map((x, i) => [i, { itemId: x?.itemId?.message, qtyKg: x?.qtyKg?.message }]))}
-                columns={[
-                  {
-                    key: 'itemId',
-                    header: 'Item',
-                    width: '240px',
-                    display: !editable ? (r) => labels[r.itemId] ?? '—' : undefined,
-                    render: (r, i, update) => (
-                      <EntityPicker
-                        endpoint="/items"
-                        map={pickers.item}
-                        value={r.itemId}
-                        valueLabel={labels[r.itemId]}
-                        cellId={`${i}:0`}
-                        disabled={!!r.rollId}
-                        onChange={(opt) => {
-                          if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
-                          update({ itemId: opt?.id ?? '' } as Partial<LineRow>);
-                        }}
-                      />
-                    ),
-                  },
-                  { key: 'rollNo', header: 'Roll', width: '120px', readOnly: true, display: (r) => r.rollNo || '—' },
-                  { key: 'lot', header: 'Lot / dye lot', width: '120px', readOnly: (r) => !!r.rollId },
-                  { key: 'colour', header: 'Colour', width: '100px', readOnly: (r) => !!r.rollId },
-                  { key: 'rolls', header: 'Rolls', type: 'pcs', width: '70px', total: true },
-                  { key: 'qtyKg', header: 'Kg', type: 'kg', width: '110px', total: true },
-                  { key: 'valuePerKg', header: 'Value ₹/kg', type: 'rate', width: '110px' },
-                  {
-                    key: 'value',
-                    header: 'Value',
-                    type: 'money',
-                    width: '120px',
-                    display: (r) => (/^\d+(\.\d+)?$/.test(r.qtyKg) && /^\d+(\.\d+)?$/.test(r.valuePerKg) ? formatInr(D(r.qtyKg).times(D(r.valuePerKg)).toFixed(2)) : '—'),
-                  },
-                ]}
+            <Field label="Send from">
+              <Select
+                value={direct ? 'vendor' : 'store'}
+                onChange={(ev) => setDirect(ev.target.value === 'vendor')}
+                disabled={!editable}
+              >
+                <option value="store">Our store</option>
+                <option value="vendor">Direct from another vendor</option>
+              </Select>
+            </Field>
+            {direct ? (
+              <Field label="From vendor *" error={e.fromVendorId?.message}>
+                <Controller
+                  control={form.control}
+                  name="fromVendorId"
+                  render={({ field }) => (
+                    <EntityPicker
+                      endpoint="/vendors"
+                      map={pickers.vendor}
+                      value={field.value}
+                      valueLabel={labels[field.value]}
+                      disabled={!editable}
+                      onChange={(opt) => {
+                        if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
+                        field.onChange(opt?.id ?? '');
+                      }}
+                    />
+                  )}
+                />
+              </Field>
+            ) : null}
+            <Field label="Expected return" error={e.expectedReturnDate?.message}>
+              <Input
+                type="date"
+                {...form.register('expectedReturnDate')}
+                title="Blank = D.C. date + the process's default return days"
               />
-            )}
-          />
-        </div>
-      }
-      aside={
-        <>
-          <Card>
-            <CardContent className="grid gap-1 text-sm">
-              <div className="text-xs text-muted-foreground">Sent</div>
-              <div className="text-2xl font-semibold">{formatKg(total.toFixed(3))} kg</div>
-              {pp || o ? <div className="text-xs text-muted-foreground">Allowed loss {Number(pp?.allowedLossPct ?? o?.allowedLossPct)}%</div> : null}
-            </CardContent>
-          </Card>
-          {o ? <ApprovalPanel o={o} canApprove={canApprove} /> : null}
-          {o && o.status !== 'DRAFT' && o.status !== 'CANCELLED' ? <LossPanel o={o} /> : null}
-          {o?.cancelReason ? <div className="rounded bg-red-50 p-2 text-xs text-destructive">Cancelled: {o.cancelReason}</div> : null}
-        </>
-      }
-    />
+            </Field>
+            <Field label="Vehicle no.">
+              <Input {...form.register('vehicleNo')} />
+            </Field>
+            <Field label="Purpose">
+              <Input {...form.register('purpose')} />
+            </Field>
+            <Field label="Remarks" className="sm:col-span-2">
+              <Input {...form.register('remarks')} />
+            </Field>
+          </>
+        }
+        lines={
+          <div className="flex flex-col gap-2">
+            {editable ? (
+              <div className="max-w-sm">
+                <ScanInput onScan={addRoll} placeholder="Scan a roll QR / type roll no. + Enter" />
+              </div>
+            ) : null}
+            <Controller
+              control={form.control}
+              name="lines"
+              render={({ field }) => (
+                <LineGrid<LineRow>
+                  rows={field.value}
+                  onChange={field.onChange}
+                  readOnly={!editable}
+                  newRow={() => blankLine(pp?.inputItemId ?? '', pp?.materialCostPerKg ?? '')}
+                  errors={Object.fromEntries(
+                    lineErrors.map((x, i) => [i, { itemId: x?.itemId?.message, qtyKg: x?.qtyKg?.message }]),
+                  )}
+                  columns={[
+                    {
+                      key: 'itemId',
+                      header: 'Item',
+                      width: '240px',
+                      display: !editable ? (r) => labels[r.itemId] ?? '—' : undefined,
+                      render: (r, i, update) => (
+                        <EntityPicker
+                          endpoint="/items"
+                          map={pickers.item}
+                          value={r.itemId}
+                          valueLabel={labels[r.itemId]}
+                          cellId={`${i}:0`}
+                          disabled={!!r.rollId}
+                          onChange={(opt) => {
+                            if (opt) setLabels((l) => ({ ...l, [opt.id]: opt.label }));
+                            update({ itemId: opt?.id ?? '' } as Partial<LineRow>);
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      key: 'rollNo',
+                      header: 'Roll',
+                      width: '120px',
+                      readOnly: true,
+                      display: (r) => r.rollNo || '—',
+                    },
+                    { key: 'lot', header: 'Lot / dye lot', width: '120px', readOnly: (r) => !!r.rollId },
+                    { key: 'colour', header: 'Colour', width: '100px', readOnly: (r) => !!r.rollId },
+                    { key: 'rolls', header: 'Rolls', type: 'pcs', width: '70px', total: true },
+                    { key: 'qtyKg', header: 'Kg', type: 'kg', width: '110px', total: true },
+                    { key: 'valuePerKg', header: 'Value ₹/kg', type: 'rate', width: '110px' },
+                    {
+                      key: 'value',
+                      header: 'Value',
+                      type: 'money',
+                      width: '120px',
+                      display: (r) =>
+                        /^\d+(\.\d+)?$/.test(r.qtyKg) && /^\d+(\.\d+)?$/.test(r.valuePerKg)
+                          ? formatInr(D(r.qtyKg).times(D(r.valuePerKg)).toFixed(2))
+                          : '—',
+                    },
+                  ]}
+                />
+              )}
+            />
+          </div>
+        }
+        aside={
+          <>
+            <Card>
+              <CardContent className="grid gap-1 text-sm">
+                <div className="text-xs text-muted-foreground">Sent</div>
+                <div className="text-2xl font-semibold">{formatKg(total.toFixed(3))} kg</div>
+                {pp || o ? (
+                  <div className="text-xs text-muted-foreground">
+                    Allowed loss {Number(pp?.allowedLossPct ?? o?.allowedLossPct)}%
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+            {o ? <ApprovalPanel o={o} canApprove={canApprove} /> : null}
+            {o && o.status !== 'DRAFT' && o.status !== 'CANCELLED' ? <LossPanel o={o} /> : null}
+            {o?.cancelReason ? (
+              <div className="rounded bg-red-50 p-2 text-xs text-destructive">
+                Cancelled: {o.cancelReason}
+              </div>
+            ) : null}
+          </>
+        }
+      />
       <ConfirmDialog
         open={approving}
         onOpenChange={setApproving}
         title="Approve this outward D.C.?"
-        description={o ? `${o.vendor.name} · ${o.process.name} · ${formatKg(o.totals.sentKg)} kg. Your name is printed as the authorised signatory and the approval is recorded with your note in the audit log; posting is then allowed.` : undefined}
+        description={
+          o
+            ? `${o.vendor.name} · ${o.process.name} · ${formatKg(o.totals.sentKg)} kg. Your name is printed as the authorised signatory and the approval is recorded with your note in the audit log; posting is then allowed.`
+            : undefined
+        }
         confirmLabel="Approve"
         requireReason
         reasonLabel="Approval note"
@@ -574,7 +775,9 @@ function ApprovalPanel({ o, canApprove }: { o: OutwardDc; canApprove: boolean })
   return (
     <div className="rounded border border-sky-300 bg-sky-50 p-2 text-xs text-sky-900">
       <div className="font-medium">Awaiting management approval</div>
-      {canApprove ? 'Review the D.C. and click Approve. It can be posted once approved.' : 'It can be posted once management approves it.'}
+      {canApprove
+        ? 'Review the D.C. and click Approve. It can be posted once approved.'
+        : 'It can be posted once management approves it.'}
     </div>
   );
 }
@@ -594,13 +797,28 @@ function LossPanel({ o }: { o: OutwardDc }) {
         {!l.final ? <Row label="Still at vendor" value={`${formatKg(o.pendingKg)} kg`} /> : null}
         <Row label="Loss" value={`${formatKg(l.lossKg)} kg`} />
         <Row label="Allowed" value={`${formatKg(l.allowedKg)} kg`} />
-        <Row label="Excess" value={<span className={D(l.excessKg).gt(0) ? 'font-semibold text-destructive' : ''}>{formatKg(l.excessKg)} kg</span>} />
-        {!l.final ? <p className="mt-1 text-[11px] text-muted-foreground">Running figures count material not yet returned as loss — warning only until the D.C. is closed.</p> : null}
+        <Row
+          label="Excess"
+          value={
+            <span className={D(l.excessKg).gt(0) ? 'font-semibold text-destructive' : ''}>
+              {formatKg(l.excessKg)} kg
+            </span>
+          }
+        />
+        {!l.final ? (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Running figures count material not yet returned as loss — warning only until the D.C. is closed.
+          </p>
+        ) : null}
         {o.inwards?.length ? (
           <div className="mt-2 border-t pt-2">
             <div className="mb-1 text-xs font-medium text-muted-foreground">Inward D.C.s</div>
             {o.inwards.map((i) => (
-              <Link key={i.id} to={`/inward-dcs/${i.id}`} className="flex items-center justify-between py-0.5 text-xs hover:underline">
+              <Link
+                key={i.id}
+                to={`/inward-dcs/${i.id}`}
+                className="flex items-center justify-between py-0.5 text-xs hover:underline"
+              >
                 <span className="font-mono">{i.docNo ?? 'Draft'}</span>
                 <span>
                   {formatKg(i.receivedKg)} kg <StatusBadge status={i.status} />

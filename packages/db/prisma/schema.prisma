@@ -301,6 +301,8 @@ model Item {
   inwardLines        InwardDcLine[]         @relation("inwardLineItem")
   poLines            PurchaseOrderLine[]    @relation("poLineItem")
   stockDocLines      StockDocLine[]         @relation("stockDocLineItem")
+  stockCountLines    StockCountLine[]       @relation("stockCountLineItem")
+  disposalLines      StockDisposalLine[]    @relation("disposalLineItem")
   rolls              FabricRoll[]           @relation("rollItem")
   bundles            CutBundle[]            @relation("bundlePanel")
   panelDcLines       PanelDcLine[]          @relation("panelDcItem")
@@ -630,6 +632,8 @@ model Order {
   purchaseOrderLines PurchaseOrderLine[] @relation("poLineOrder")
   stockDocs          StockDoc[]          @relation("stockDocOrder")
   stockDocsTo        StockDoc[]          @relation("stockDocToOrder")
+  stockCountLines    StockCountLine[]    @relation("stockCountLineOrder")
+  disposals          StockDisposal[]     @relation("disposalOrder")
 
   @@index([buyerId])
   @@index([status])
@@ -2240,11 +2244,19 @@ model StockDocLine {
 
 // ───────────────────────────── Accessories SPL.Request (Q-072) ─────────────────────────────
 
-/// Extra accessories for an order beyond its requirement (wastage, replacement, extra pieces).
+enum SplKind {
+  ACCESSORY
+  YARN
+  FABRIC
+}
+
+/// Extra accessories, yarn or fabric for an order beyond its requirement (wastage, replacement, extra pieces).
 /// DRAFT → POSTED (= approved by management, numbered SPR) → CANCELLED. Approved qty is added to the
 /// order's accessories requirement (BalanceReqQty on the accessories PO). Moves no stock.
 model SplRequest {
   id            String           @id @default(uuid()) @db.Uuid
+  /// What is requested: accessories (their unit), yarn or fabric (kg) — Q-077.
+  kind          SplKind          @default(ACCESSORY)
   docNo         String?          @unique @map("doc_no")
   docDate       DateTime         @map("doc_date") @db.Date
   orderId       String           @map("order_id") @db.Uuid
@@ -2265,6 +2277,7 @@ model SplRequest {
   lines         SplRequestLine[]
 
   @@index([orderId, status])
+  @@index([kind])
   @@map("spl_requests")
 }
 
@@ -2282,4 +2295,107 @@ model SplRequestLine {
 
   @@index([requestId])
   @@map("spl_request_lines")
+}
+
+// ─────────────── Physical stock check and leftover disposal (Q-080) ───────────────
+
+/// Physical stock check of one own store (`store` = location code). Approval (= post) moves each
+/// difference between the store and STOCK_ADJUSTMENT, per order; cancel reverses it.
+model StockCount {
+  id            String           @id @default(uuid()) @db.Uuid
+  docNo         String?          @unique @map("doc_no")
+  docDate       DateTime         @map("doc_date") @db.Date
+  store         String
+  countedBy     String?          @map("counted_by")
+  remarks       String?
+  status        DocStatus        @default(DRAFT)
+  version       Int              @default(1)
+  postedAt      DateTime?        @map("posted_at") @db.Timestamptz(3)
+  postedById    String?          @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?        @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?          @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?          @map("cancel_reason")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?          @map("created_by_id") @db.Uuid
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lines         StockCountLine[]
+
+  @@index([status, docDate])
+  @@map("stock_counts")
+}
+
+/// `systemQty` is refreshed on every save and frozen at approval.
+model StockCountLine {
+  id         String     @id @default(uuid()) @db.Uuid
+  countId    String     @map("count_id") @db.Uuid
+  lineNo     Int        @map("line_no")
+  itemId     String     @map("item_id") @db.Uuid
+  orderId    String?    @map("order_id") @db.Uuid
+  lot        String     @default("")
+  colour     String     @default("")
+  size       String     @default("")
+  unit       String
+  systemQty  Decimal    @map("system_qty") @db.Decimal(14, 3)
+  countedQty Decimal    @map("counted_qty") @db.Decimal(14, 3)
+  reason     String?
+  count      StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  item       Item       @relation("stockCountLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  order      Order?     @relation("stockCountLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([countId])
+  @@index([itemId])
+  @@map("stock_count_lines")
+}
+
+enum DisposalMode {
+  SOLD
+  SCRAPPED
+  REUSE
+}
+
+/// Leftover stock of an order disposed after its goods are dispatched. Approval (= post): SOLD /
+/// SCRAPPED move store → DISPOSED; REUSE frees it from the order in the same store.
+model StockDisposal {
+  id            String              @id @default(uuid()) @db.Uuid
+  docNo         String?             @unique @map("doc_no")
+  docDate       DateTime            @map("doc_date") @db.Date
+  orderId       String              @map("order_id") @db.Uuid
+  mode          DisposalMode
+  partyName     String?             @map("party_name")
+  amount        Decimal?            @db.Decimal(14, 2)
+  reason        String
+  remarks       String?
+  status        DocStatus           @default(DRAFT)
+  version       Int                 @default(1)
+  postedAt      DateTime?           @map("posted_at") @db.Timestamptz(3)
+  postedById    String?             @map("posted_by_id") @db.Uuid
+  cancelledAt   DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById String?             @map("cancelled_by_id") @db.Uuid
+  cancelReason  String?             @map("cancel_reason")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById   String?             @map("created_by_id") @db.Uuid
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order         Order               @relation("disposalOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  lines         StockDisposalLine[]
+
+  @@index([orderId, status])
+  @@index([status, docDate])
+  @@map("stock_disposals")
+}
+
+model StockDisposalLine {
+  id         String        @id @default(uuid()) @db.Uuid
+  disposalId String        @map("disposal_id") @db.Uuid
+  lineNo     Int           @map("line_no")
+  itemId     String        @map("item_id") @db.Uuid
+  lot        String        @default("")
+  colour     String        @default("")
+  size       String        @default("")
+  qty        Decimal       @db.Decimal(14, 3)
+  unit       String
+  disposal   StockDisposal @relation(fields: [disposalId], references: [id], onDelete: Cascade)
+  item       Item          @relation("disposalLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([disposalId])
+  @@map("stock_disposal_lines")
 }

@@ -37,6 +37,8 @@ export const VIRTUAL_LOCATIONS = {
   OPENING: 'Opening balance (go-live import)',
   OTHERS: 'Others (non-job-work delivery / inward)',
   ORDER_TRANSFER: 'Order transfer',
+  STOCK_ADJUSTMENT: 'Stock adjustment (physical check)',
+  DISPOSED: 'Disposed (sold / scrapped leftovers)',
 } as const;
 
 export type OwnLocationCode = keyof typeof OWN_LOCATIONS;
@@ -77,6 +79,8 @@ export const DOCUMENT_SERIES = {
   TRIMS_REPLACEMENT: { prefix: 'ARI', name: 'Accessories purchase replacement inward' },
   TRIMS_TRANSFER: { prefix: 'ATR', name: 'Accessories transfer between orders' },
   SPL_REQUEST: { prefix: 'SPR', name: 'Accessories special request' },
+  STOCK_COUNT: { prefix: 'PSC', name: 'Physical stock check' },
+  STOCK_DISPOSAL: { prefix: 'DSP', name: 'Leftover stock disposal' },
 } as const;
 export type SeriesCode = keyof typeof DOCUMENT_SERIES;
 

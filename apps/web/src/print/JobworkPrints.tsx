@@ -5,7 +5,15 @@ import { formatDate, formatDateTimeIst, formatInr, formatKg, formatPct } from '@
 import { useQr } from '@/lib/qr';
 import { LoadingState } from '@/components/states';
 import { type InwardDc, type OutwardDc } from '@/features/jobwork/types';
-import { ChallanCopies, CompanyBlock, JOB_WORK_CHALLAN_COPIES, PrintLayout, Signatures, VendorCertificate, useCompany } from './PrintLayout';
+import {
+  ChallanCopies,
+  CompanyBlock,
+  JOB_WORK_CHALLAN_COPIES,
+  PrintLayout,
+  Signatures,
+  VendorCertificate,
+  useCompany,
+} from './PrintLayout';
 
 /**
  * Delivery challan for job work (Rule 55, CGST Rules): GSTIN of both parties, HSN, quantity, value,
@@ -13,7 +21,10 @@ import { ChallanCopies, CompanyBlock, JOB_WORK_CHALLAN_COPIES, PrintLayout, Sign
  */
 export function OutwardDcPrint({ id }: { id: string }) {
   const company = useCompany();
-  const q = useQuery({ queryKey: ['print', 'outward', id], queryFn: () => api.get<OutwardDc>(`/outward-dcs/${id}/print`) });
+  const q = useQuery({
+    queryKey: ['print', 'outward', id],
+    queryFn: () => api.get<OutwardDc>(`/outward-dcs/${id}/print`),
+  });
   if (!q.data || company.isLoading) return <LoadingState />;
   const o = q.data;
   const v = o.vendor;
@@ -30,7 +41,9 @@ export function OutwardDcPrint({ id }: { id: string }) {
                 <div className="mt-1 font-mono text-sm">{o.docNo ?? 'DRAFT'}</div>
                 <div>Date: {formatDate(o.docDate)}</div>
                 {o.status === 'CANCELLED' ? <div className="font-bold text-red-700">CANCELLED</div> : null}
-                {o.approvalStatus === 'PENDING' ? <div className="font-bold text-sky-700">NOT APPROVED</div> : null}
+                {o.approvalStatus === 'PENDING' ? (
+                  <div className="font-bold text-sky-700">NOT APPROVED</div>
+                ) : null}
               </div>
             </div>
             <div className="my-2 grid grid-cols-2 gap-3 border-b border-black pb-2">
@@ -47,7 +60,9 @@ export function OutwardDcPrint({ id }: { id: string }) {
               <div>
                 <div>Purpose: {o.purpose}</div>
                 <div>Process: {o.process.name}</div>
-                <div>Order: {o.order.orderNo} · Program {o.program.programNo}</div>
+                <div>
+                  Order: {o.order.orderNo} · Program {o.program.programNo}
+                </div>
                 <div>Dispatched from: {o.fromLocation.name}</div>
                 <div>Vehicle no.: {o.vehicleNo ?? '—'}</div>
                 <div>Expected return: {formatDate(o.expectedReturnDate)}</div>
@@ -96,13 +111,23 @@ export function OutwardDcPrint({ id }: { id: string }) {
               </tfoot>
             </table>
             <p className="mt-2 text-[10px]">
-              Goods are sent for job work and are to be returned after processing. No sale is involved. Value stated for the purpose of the
-              delivery challan only.
+              Goods are sent for job work and are to be returned after processing. No sale is involved. Value
+              stated for the purpose of the delivery challan only.
             </p>
             {o.remarks ? <div className="mt-1">Remarks: {o.remarks}</div> : null}
             <Signatures
-              labels={['Prepared by', "Receiver's signature & seal", `For ${company.data?.tradeName ?? company.data?.legalName ?? ''} — Authorised signatory`]}
-              signed={[null, null, o.approvedBy ? `Approved: ${o.approvedBy.fullName}\n${formatDateTimeIst(o.approvedAt)}` : null]}
+              labels={[
+                'Prepared by',
+                "Receiver's signature & seal",
+                `For ${company.data?.tradeName ?? company.data?.legalName ?? ''} — Authorised signatory`,
+              ]}
+              signed={[
+                null,
+                null,
+                o.approvedBy
+                  ? `Approved: ${o.approvedBy.fullName}\n${formatDateTimeIst(o.approvedAt)}`
+                  : null,
+              ]}
             />
           </>
         )}
@@ -114,11 +139,15 @@ export function OutwardDcPrint({ id }: { id: string }) {
 /** Inward D.C. / GRN (A5): rolls, weights, GSM / dia and the loss % of each linked outward (A§11). */
 export function InwardDcPrint({ id }: { id: string }) {
   const company = useCompany();
-  const q = useQuery({ queryKey: ['print', 'inward', id], queryFn: () => api.get<InwardDc>(`/inward-dcs/${id}/print`) });
+  const q = useQuery({
+    queryKey: ['print', 'inward', id],
+    queryFn: () => api.get<InwardDc>(`/inward-dcs/${id}/print`),
+  });
   const outwards = useQuery({
     queryKey: ['print', 'inward-outwards', id],
     enabled: !!q.data,
-    queryFn: async () => Promise.all((q.data?.links ?? []).map((k) => api.get<OutwardDc>(`/outward-dcs/${k.outwardDcId}`))),
+    queryFn: async () =>
+      Promise.all((q.data?.links ?? []).map((k) => api.get<OutwardDc>(`/outward-dcs/${k.outwardDcId}`))),
   });
   if (!q.data || company.isLoading || outwards.isLoading) return <LoadingState />;
   const i = q.data;
@@ -191,7 +220,8 @@ export function InwardDcPrint({ id }: { id: string }) {
                   sent {formatKg(o.loss.sentKg)} · recd {formatKg(o.loss.receivedKg)}
                 </td>
                 <td className="text-right font-semibold">
-                  loss {formatPct(o.loss.lossPct)} {o.loss.final ? '(final)' : '(running)'} / allowed {formatPct(o.loss.allowedPct)}
+                  loss {formatPct(o.loss.lossPct)} {o.loss.final ? '(final)' : '(running)'} / allowed{' '}
+                  {formatPct(o.loss.allowedPct)}
                   {D(o.loss.excessKg).gt(0) ? ` · excess ${formatKg(o.loss.excessKg)} kg` : ''}
                 </td>
               </tr>
@@ -204,7 +234,23 @@ export function InwardDcPrint({ id }: { id: string }) {
   );
 }
 
-function RollLabel({ rollNo, item, lot, colour, kg, gsm, dia }: { rollNo: string; item: string; lot: string; colour: string; kg: string; gsm: number | null; dia: string | null }) {
+function RollLabel({
+  rollNo,
+  item,
+  lot,
+  colour,
+  kg,
+  gsm,
+  dia,
+}: {
+  rollNo: string;
+  item: string;
+  lot: string;
+  colour: string;
+  kg: string;
+  gsm: number | null;
+  dia: string | null;
+}) {
   const qr = useQr(rollNo, 140);
   return (
     <div className="print-break flex h-[56mm] w-[96mm] gap-2 border border-dashed border-slate-300 p-1 print:border-0">
@@ -225,15 +271,102 @@ function RollLabel({ rollNo, item, lot, colour, kg, gsm, dia }: { rollNo: string
 
 /** Roll labels with QR (label roll, A§11) for every roll of an inward D.C. */
 export function RollLabelsPrint({ id }: { id: string }) {
-  const q = useQuery({ queryKey: ['print', 'inward', id], queryFn: () => api.get<InwardDc>(`/inward-dcs/${id}/print`) });
+  const q = useQuery({
+    queryKey: ['print', 'inward', id],
+    queryFn: () => api.get<InwardDc>(`/inward-dcs/${id}/print`),
+  });
   if (!q.data) return <LoadingState />;
   return (
     <PrintLayout size="LABEL" title={`Roll labels ${q.data.docNo ?? ''}`}>
       <div className="flex flex-col gap-2">
         {q.data.lines.map((l) => (
-          <RollLabel key={l.id} rollNo={l.rollNo} item={l.item.name} lot={l.lot} colour={l.colour} kg={l.kg} gsm={l.gsm} dia={l.dia} />
+          <RollLabel
+            key={l.id}
+            rollNo={l.rollNo}
+            item={l.item.name}
+            lot={l.lot}
+            colour={l.colour}
+            kg={l.kg}
+            gsm={l.gsm}
+            dia={l.dia}
+          />
         ))}
       </div>
     </PrintLayout>
+  );
+}
+
+/**
+ * Outward labels (Q-079): one 100 × 60 mm label per D.C. line to stick on the bag / roll going to the
+ * job worker. A line sent as several rolls / bags prints that many labels ("2 of 5") showing the
+ * line's total kg (the split per bag is not recorded). The QR carries the D.C. no. and line.
+ */
+export function OutwardLabelsPrint({ id }: { id: string }) {
+  const q = useQuery({
+    queryKey: ['print', 'outward', id],
+    queryFn: () => api.get<OutwardDc>(`/outward-dcs/${id}/print`),
+  });
+  if (!q.data) return <LoadingState />;
+  const o = q.data;
+  const labels = o.lines.flatMap((l) => {
+    const n = l.roll ? 1 : Math.max(1, Math.min(l.rolls ?? 1, 200));
+    return Array.from({ length: n }, (_, i) => ({ l, i, n }));
+  });
+  return (
+    <PrintLayout size="LABEL" title={`Outward labels ${o.docNo ?? ''}`}>
+      <div className="flex flex-col gap-2">
+        {labels.map(({ l, i, n }) => (
+          <OutwardLabel key={`${l.id}-${i}`} o={o} line={l} copy={i + 1} of={n} />
+        ))}
+      </div>
+    </PrintLayout>
+  );
+}
+
+function OutwardLabel({
+  o,
+  line: l,
+  copy,
+  of,
+}: {
+  o: OutwardDc;
+  line: OutwardDc['lines'][number];
+  copy: number;
+  of: number;
+}) {
+  const code = l.roll?.rollNo ?? `${o.docNo ?? 'DRAFT'}#${l.lineNo}`;
+  const qr = useQr(code, 140);
+  return (
+    <div className="print-break flex h-[56mm] w-[96mm] gap-2 border border-dashed border-slate-300 p-1 print:border-0">
+      {qr ? (
+        <img src={qr} alt={`QR ${code}`} className="size-[30mm] shrink-0" />
+      ) : (
+        <div className="size-[30mm] shrink-0" />
+      )}
+      <div className="flex min-w-0 flex-col justify-center text-[10px] leading-tight">
+        <div className="text-[9px] font-semibold uppercase tracking-wide">Outward · {o.process.name}</div>
+        <div className="font-mono text-xs font-bold">
+          {o.docNo ?? 'DRAFT'} · L{l.lineNo}
+        </div>
+        <div>D.C. date: {formatDate(o.docDate)}</div>
+        <div className="truncate font-semibold">To: {o.vendor.name}</div>
+        <div>
+          Order {o.order.orderNo} · {o.order.styleNo}
+        </div>
+        <div className="truncate">{l.item.name}</div>
+        <div>
+          Colour: {l.colour || '—'} · Lot: {l.lot || '—'}
+        </div>
+        {l.roll ? <div className="font-mono">Roll {l.roll.rollNo}</div> : null}
+        <div className="mt-0.5 flex items-baseline gap-2">
+          <span className="text-sm font-bold">{formatKg(l.qtyKg)} kg</span>
+          {of > 1 ? (
+            <span className="text-[9px]">
+              line total · bag/roll {copy} of {of}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }

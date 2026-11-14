@@ -253,8 +253,17 @@ export const zTrimsDocInput = z
   });
 export const zTrimsDocUpdate = z.intersection(zTrimsDocInput, z.object({ version: z.number().int().min(1) }));
 
-/** Accessories SPL.Request (Q-072): extra accessories for an order beyond its requirement; approved by management. */
+/**
+ * SPL.Request (Q-072, Q-078): extra accessories, yarn or fabric for an order beyond its requirement
+ * (shortage, damage, wastage); approved by management.
+ */
+export const SPL_KINDS = ['ACCESSORY', 'YARN', 'FABRIC'] as const;
+export type SplKind = (typeof SPL_KINDS)[number];
+export const SPL_KIND_NAMES: Record<SplKind, string> = { ACCESSORY: 'Accessories', YARN: 'Yarn', FABRIC: 'Fabric' };
+/** The item type each kind of request takes. */
+export const SPL_ITEM_TYPE: Record<SplKind, 'TRIM' | 'YARN' | 'FABRIC'> = { ACCESSORY: 'TRIM', YARN: 'YARN', FABRIC: 'FABRIC' };
 export const zSplRequestInput = z.object({
+  kind: z.enum(SPL_KINDS).default('ACCESSORY'),
   docDate: zDate(),
   orderId: zRef(),
   requestedBy: zOptional(text(80)),
@@ -265,7 +274,8 @@ export const zSplRequestInput = z.object({
     .min(1)
     .max(200),
 });
-export const zSplRequestUpdate = zSplRequestInput.omit({ orderId: true }).extend({ version: z.number().int().min(1) });
+export const zSplRequestUpdate = zSplRequestInput.omit({ orderId: true, kind: true }).extend({ version: z.number().int().min(1) });
+export const zSplListQuery = zProductionListQuery.extend({ kind: z.enum(SPL_KINDS).optional() });
 
 /**
  * Accessories PO line position (Q-072): net received = receipts − returns + replacements; pending =

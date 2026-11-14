@@ -107,6 +107,23 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-14 — Physical stock check and leftover disposal (Q-080)
+- Migration `20261114120000_stock_check_disposal`: `stock_counts` / `stock_count_lines`, `stock_disposals` / `stock_disposal_lines`, series `PSC` / `DSP`, virtual locations `STOCK_ADJUSTMENT` / `DISPOSED`; permissions `stock.count.*`, `stock.dispose.*`.
+- API: `/stock-counts` (+ `/stock-counts/sheet`), `/stock-disposals`, `/orders/:id/leftover-stock`; post = approval through the ledger, per-order stock checked, cancel = reversal.
+- Web: Stores → Physical stock check, Leftover disposal.
+- Verified: API `stockcheck.test.ts` (4: sheet, duplicate line refused, approval permission, shortage + excess per order, double approve, cancel restores, no-difference count; disposal refused before dispatch, sold → DISPOSED, over-disposal of another order's stock refused, amount only on a sale, reuse → general stock, ledger invariants).
+
+### 2026-11-14 — Outward labels (Q-079)
+- Outward D.C. (posted / closed): **Outward labels** button → `/print/outward-labels/:id`, 100 × 60 mm labels with QR, one per line (N per line sent as N rolls / bags).
+- Verified: typecheck, lint. Browser check of the label print still to do (needs a logged-in session).
+
+### 2026-11-14 — SPL.Request for yarn and fabric shortages (Q-078)
+- `spl_requests.kind` (ACCESSORY / YARN / FABRIC, default ACCESSORY) — migration `20261114100000_spl_kind`; the item type must match the kind; sizes refused on yarn / fabric.
+- Yarn PO: the yarn still to order (`/orders/:id/yarn-balance`) adds approved yarn SPL kg (`splKg`); "Load yarn requirement" fills those lines too.
+- Fabric PO: `GET /orders/:id/spl-extras?kind=FABRIC` and a "Load approved SPL requests" button.
+- SPL.Request screens: new-request buttons and filter tabs per type, Type column, kg for yarn / fabric, accessories requirement panel only for accessories; print title shows the type.
+- Verified: API `spl.test.ts` (3: wrong item type / size refused, list filter, approval permission, yarn balance up → PO down → cancel restores, fabric extras), accessories and purchase suites unchanged.
+
 ### 2026-11-12 — Every document prints in bill format
 - Wewin asked that every print be in bill format, not a screen layout. `DocumentForm` now opens the document's print layout for drafts too (marked DRAFT); on a document not yet saved, Print saves the draft first and then opens its bill layout. The top-bar Print and Ctrl+P on a document page open the bill layout too; only list and report pages print as shown.
 - `BillDoc` (shared bill layout: letterhead, title, number / date, party with vendor certificate, details, lines table, totals, signatures). New prints: sewing issue, sewing output, carton, trims documents, panel inward, recut slip, cutting lay, quality checks, Program Defined, shipment advice, buyer receipt; Yarn/Fabric inward and order transfers print one copy; the SPL request print is now linked. Every document form has a print layout.
