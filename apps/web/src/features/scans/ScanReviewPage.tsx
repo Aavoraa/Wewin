@@ -28,6 +28,7 @@ import {
   type ScanTarget,
   TARGET_SPECS,
   D,
+  isBillTarget,
   isDcTarget,
   label as baseLabel,
 } from '@wewin/shared';
@@ -480,8 +481,13 @@ export function ScanReviewPage() {
                     <div className="grid gap-1 sm:grid-cols-2">{PARTY.map(headerInput)}</div>
                   </Section>
 
-                  {target === 'VENDOR_BILL' ? (
-                    <SourcesBox scan={scan} editable={editable} save={save} />
+                  {isBillTarget(target) ? (
+                    <SourcesBox
+                      scan={scan}
+                      editable={editable && edits.target === undefined}
+                      save={save}
+                      purchase={target === 'PURCHASE_BILL'}
+                    />
                   ) : (
                     <LinesBox
                       scan={scan}
@@ -519,7 +525,7 @@ export function ScanReviewPage() {
                   ) : null}
 
                   {scan.validation?.duplicates.length &&
-                  target !== 'VENDOR_BILL' &&
+                  !isBillTarget(target) &&
                   !dc &&
                   !po &&
                   editable ? (
@@ -1119,22 +1125,25 @@ function CellInput({
   );
 }
 
+/** Job-work bill: inward D.C.s / panel inwards. Purchase bill: posted yarn receipts / inward from others (Q-083). */
 function SourcesBox({
   scan,
   editable,
   save,
+  purchase = false,
 }: {
   scan: ScanDetail;
   editable: boolean;
   save: (extra?: Partial<Omit<ReviewPatch, 'version'>>) => Promise<unknown>;
+  purchase?: boolean;
 }) {
   const review = scan.review!;
   const cands = useQuery({
-    queryKey: ['invoice-scan-sources', scan.id, review.vendor.id],
+    queryKey: ['invoice-scan-sources', scan.id, review.target, review.vendor.id],
     queryFn: () =>
       api.get<
         {
-          sourceType: 'INWARD_DC' | 'PANEL_IN';
+          sourceType: 'INWARD_DC' | 'PANEL_IN' | 'YARN_RECEIPT' | 'STOCK_INWARD';
           sourceId: string;
           docNo: string;
           docDate: string;
@@ -1144,10 +1153,12 @@ function SourcesBox({
           rate: string | null;
           expected: string | null;
           vendorDcNo?: string | null;
+          items?: string;
         }[]
       >(`/invoice-scans/${scan.id}/sources`),
     enabled: editable && !!review.vendor.id,
   });
+  const docs = purchase ? 'receipts' : 'D.C.s';
   const chosen = new Set(review.sources.map((s) => s.sourceId));
   const [sel, setSel] = useState<Set<string> | null>(null);
   const current = sel ?? chosen;
@@ -1155,11 +1166,15 @@ function SourcesBox({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-sm">D.C.s this invoice covers</CardTitle>
+        <CardTitle className="text-sm">
+          {purchase ? 'Yarn receipts / inward from others this invoice covers' : 'D.C.s this invoice covers'}
+        </CardTitle>
         {confirmed ? (
           <Badge variant="success">Confirmed</Badge>
         ) : review.sources.length ? (
-          <Badge variant="warning">Matched from “DC No” — confirm</Badge>
+          <Badge variant="warning">
+            {purchase ? 'Matched from the invoice no. — confirm' : 'Matched from “DC No” — confirm'}
+          </Badge>
         ) : null}
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
@@ -1182,15 +1197,24 @@ function SourcesBox({
                   }}
                 />
                 <span className="font-mono">{c.docNo}</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatDate(c.docDate)} · {c.processName} · {c.qty} {c.unit.toLowerCase()}{' '}
-                  {c.vendorDcNo ? `· their D.C. ${c.vendorDcNo}` : ''}
-                </span>
+                {purchase ? (
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(c.docDate)} · {c.processName}
+                    {c.vendorDcNo ? ` · supplier invoice ${c.vendorDcNo}` : ''}
+                    {c.items ? ` · ${c.items}` : ''} · {c.qty} {c.unit.toLowerCase()}
+                    {c.rate ? ` @ ₹${c.rate}/${c.unit.toLowerCase()}` : ''}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(c.docDate)} · {c.processName} · {c.qty} {c.unit.toLowerCase()}{' '}
+                    {c.vendorDcNo ? `· their D.C. ${c.vendorDcNo}` : ''}
+                  </span>
+                )}
                 <span className="ml-auto tabular-nums">{c.expected ? formatInr(c.expected) : 'no rate'}</span>
               </label>
             ))}
         {editable && cands.data && !cands.data.length ? (
-          <p className="text-muted-foreground">This vendor has no posted, unbilled D.C.s.</p>
+          <p className="text-muted-foreground">This vendor has no posted, unbilled {docs}.</p>
         ) : null}
         {editable ? (
           <div className="flex gap-2">
@@ -1209,7 +1233,7 @@ function SourcesBox({
                   .catch(() => undefined)
               }
             >
-              <Check /> Confirm these D.C.s
+              <Check /> Confirm these {docs}
             </Button>
           </div>
         ) : null}

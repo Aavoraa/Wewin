@@ -82,6 +82,10 @@ describe('Program Defined — yarn programmes (Q-076)', () => {
     const approved = await owner.post(`/api/v1/yarn-programs/${yp.id}/approve`);
     ok(approved);
     expect(approved.body.data.status).toBe('APPROVED');
+    // The approver's name comes back with the programme (for the print).
+    const ownerName = (await prisma.user.findUniqueOrThrow({ where: { id: owner.userId } })).fullName;
+    expect(approved.body.data.approvedBy).toEqual({ id: owner.userId, fullName: ownerName });
+    expect((await owner.get(`/api/v1/yarn-programs/${yp.id}`)).body.data.approvedBy).toEqual({ id: owner.userId, fullName: ownerName });
     ok(await owner.post(`/api/v1/yarn-programs/${yp.id}/approve`), 409); // double approve
     ok(await owner.patch(`/api/v1/yarn-programs/${yp.id}`, { ...programBody(), version: approved.body.data.version }), 409); // locked
 

@@ -51,6 +51,7 @@ const SCAN_MODULE: Record<string, [string, string]> = {
   YARN_RECEIPT: ['Materials & Inventory', 'Scanned yarn invoice'],
   TRIMS_RECEIPT: ['Materials & Inventory', 'Scanned trims invoice'],
   VENDOR_BILL: ['Finance & Accounts', 'Scanned vendor invoice'],
+  PURCHASE_BILL: ['Finance & Accounts', 'Scanned purchase invoice'],
   OUTWARD_DC: ['Materials & Inventory', 'Scanned outward D.C.'],
   INWARD_DC: ['Materials & Inventory', 'Scanned return D.C.'],
   ORDER: ['Order Management', 'Scanned buyer PO'],

@@ -7,7 +7,13 @@ type Db = Tx | typeof prisma;
 const include = {
   vendor: { select: { id: true, code: true, name: true, gstin: true, city: true, certificateNo: true, certificateExpiry: true } },
   order: { select: { id: true, orderNo: true, styleNo: true } },
-  lines: { orderBy: { lineNo: 'asc' }, include: { item: { select: { id: true, code: true, name: true, hsnCode: true, unit: true } } } },
+  lines: {
+    orderBy: { lineNo: 'asc' },
+    include: {
+      item: { select: { id: true, code: true, name: true, hsnCode: true, unit: true } },
+      poLine: { select: { id: true, rate: true, per: true, po: { select: { id: true, docNo: true } } } },
+    },
+  },
 } satisfies Prisma.YarnReceiptInclude;
 export type YarnReceiptDetail = Prisma.YarnReceiptGetPayload<{ include: typeof include }>;
 
@@ -17,6 +23,7 @@ export interface YarnLineData {
   bags: number | null;
   qtyKg: string;
   ratePerKg: string | null;
+  poLineId?: string | null;
 }
 
 const lineRows = (lines: YarnLineData[]) =>
@@ -27,9 +34,30 @@ const lineRows = (lines: YarnLineData[]) =>
     bags: l.bags,
     qtyKg: new Prisma.Decimal(l.qtyKg),
     ratePerKg: l.ratePerKg ? new Prisma.Decimal(l.ratePerKg) : null,
+    poLineId: l.poLineId ?? null,
   }));
 
 export const yarnRepo = {
+  // ───────── For purchase bills (Q-079) ─────────
+  billable(vendorId: string, orderId: string | null, db: Db = prisma) {
+    return db.yarnReceipt.findMany({ where: { vendorId, status: 'POSTED', OR: [{ billId: null }, { billedInFull: false }], ...(orderId ? { orderId } : {}) }, orderBy: { docDate: 'asc' }, include });
+  },
+  byIdsForBill(ids: string[], db: Db = prisma) {
+    return db.yarnReceipt.findMany({ where: { id: { in: ids } }, include });
+  },
+  async lockForBill(tx: Tx, ids: string[]) {
+    if (!ids.length) return;
+    await tx.$queryRaw`SELECT 1 FROM yarn_receipts WHERE id = ANY(${[...new Set(ids)].sort()}::uuid[]) ORDER BY id FOR UPDATE`;
+  },
+  setBill(tx: Tx, ids: string[], billId: string, full = true) {
+    return tx.yarnReceipt.updateMany({ where: { id: { in: ids }, status: 'POSTED', OR: [{ billId: null }, { billedInFull: false }] }, data: { billId, billedInFull: full } });
+  },
+  setBillState(tx: Tx, id: string, billId: string | null, full: boolean) {
+    return tx.yarnReceipt.update({ where: { id }, data: { billId, billedInFull: full } });
+  },
+  clearBill(tx: Tx, billId: string) {
+    return tx.yarnReceipt.updateMany({ where: { billId }, data: { billId: null } });
+  },
   list(where: Prisma.YarnReceiptWhereInput, order: Prisma.YarnReceiptOrderByWithRelationInput, p: Paging) {
     return prisma.$transaction([
       prisma.yarnReceipt.findMany({ where, orderBy: order, skip: p.skip, take: p.take, include }),

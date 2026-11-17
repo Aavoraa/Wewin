@@ -8,40 +8,29 @@ import {
   type SettingsValues,
   defaultSettings,
 } from '@wewin/shared';
-import { type Tx, prisma, withTx } from '../db';
-import { AppError, notFound, versionConflict } from '../errors/app-error';
-
-function toDateOrNull(v: string | null | undefined): Date | null {
-  return v ? new Date(`${v.slice(0, 10)}T00:00:00Z`) : null;
-}
+import { MAIN_UNIT_ID, type Tx, prisma, withTx } from '../db';
+import { currentUnitId } from '../context';
+import { AppError, notFound } from '../errors/app-error';
 
 export const settingsService = {
+  /**
+   * Letterhead, GSTIN, state and bank of the exporter whose unit this request works in (Q-085);
+   * without a unit (jobs, scripts) the first exporter, which is also the company settings row.
+   */
   async getCompany() {
-    const c = await prisma.companySettings.findUnique({ where: { id: 1 } });
-    if (!c) throw notFound('Company settings');
-    return c;
+    const unit = await prisma.businessUnit.findUnique({ where: { id: currentUnitId() ?? MAIN_UNIT_ID }, select: { exporter: true } });
+    if (!unit) throw notFound('Company settings');
+    const logo = await prisma.companySettings.findUnique({ where: { id: 1 }, select: { logoFileKey: true } });
+    return { ...unit.exporter, logoFileKey: logo?.logoFileKey ?? null };
   },
 
+  /** Edits the current unit's exporter (Settings › Company). */
   async updateCompany(input: CompanySettingsInput) {
-    return withTx(
-      async (tx) => {
-        const { version, lutValidFrom, lutValidTo, email, ...rest } = input;
-        const res = await tx.companySettings.updateMany({
-          where: { id: 1, version },
-          data: {
-            ...rest,
-            email: email || null,
-            lutValidFrom: toDateOrNull(lutValidFrom),
-            lutValidTo: toDateOrNull(lutValidTo),
-            isPlaceholder: false,
-            version: { increment: 1 },
-          },
-        });
-        if (res.count === 0) throw versionConflict();
-        return tx.companySettings.findUniqueOrThrow({ where: { id: 1 } });
-      },
-      { isolation: 'ReadCommitted' },
-    );
+    const unit = await prisma.businessUnit.findUnique({ where: { id: currentUnitId() ?? MAIN_UNIT_ID }, select: { exporterId: true } });
+    if (!unit) throw notFound('Company settings');
+    // Loaded lazily: the units module depends on auth, which depends on these settings.
+    const { unitsService } = await import('../../modules/units/units.service');
+    return unitsService.updateExporter(unit.exporterId, input);
   },
 
   /** All business settings, validated, with defaults for anything missing. */

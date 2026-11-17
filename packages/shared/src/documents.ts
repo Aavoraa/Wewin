@@ -22,6 +22,8 @@ export const zYarnReceiptLine = z.object({
   bags: zOptional(z.coerce.number().int().min(0).max(100_000)),
   qtyKg: zKg({ positive: true }),
   ratePerKg: zOptional(zRate()),
+  /** Approved yarn PO line received against (GRN against PO, Q-080). */
+  poLineId: zOptional(zRef()),
 });
 
 const yarnReceiptShape = z.object({

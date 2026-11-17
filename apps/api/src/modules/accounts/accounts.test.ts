@@ -139,6 +139,10 @@ describe('vendor bills — 3-way match, auto debit notes, no double billing', ()
     expect(fresh[0]!.totalAmount).toBe('280.00');
     const active = await prisma.debitNoteLine.count({ where: { originId: round1.outwardId, reason: 'EXCESS_LOSS', active: true } });
     expect(active).toBe(1);
+    // The check list's Debit column shows the excess debited on the posted note (the cancelled one is not counted).
+    const cl = await accountant.get(`/api/v1/vendor-bills/${bill1}/check-list`);
+    ok(cl);
+    expect(cl.body.data.reconciliation[0]).toMatchObject({ excessKg: '1.000', debitKg: '1.000', debitAmount: '280.00' });
   });
 
   it('outside tolerance needs owner approval; closing the D.C. afterwards raises its debit note', async () => {
@@ -226,9 +230,197 @@ describe('vendor bills — 3-way match, auto debit notes, no double billing', ()
     }
   });
 
+  it('bills passing: 1st then 2nd audit, hold with a reason, check list, optional payment hold (Q-078)', async () => {
+    const auditor1 = await asUser(['accounts.view', 'accounts.bill.audit1']);
+    const r = await knitRound('20', '19');
+    const c = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00'));
+    ok(c, 201);
+    const id = c.body.data.id as string;
+    // Only posted bills are audited.
+    expect((await auditor1.post(`/api/v1/vendor-bills/${id}/audit`, { level: 1, decision: 'PASS' })).status).toBe(409);
+    ok(await accountant.post(`/api/v1/vendor-bills/${id}/post`));
+    expect((await accountant.get(`/api/v1/vendor-bills?audit=PENDING1&pageSize=200`)).body.data.map((b: { id: string }) => b.id)).toContain(id);
+
+    // Each level needs its own permission; the 2nd waits for the 1st; holding needs a reason.
+    expect((await accountant.post(`/api/v1/vendor-bills/${id}/audit`, { level: 1, decision: 'PASS' })).status).toBe(403);
+    expect((await owner.post(`/api/v1/vendor-bills/${id}/audit`, { level: 2, decision: 'PASS' })).status).toBe(409);
+    expect((await auditor1.post(`/api/v1/vendor-bills/${id}/audit`, { level: 1, decision: 'HOLD' })).status).toBe(400);
+    const held = await auditor1.post(`/api/v1/vendor-bills/${id}/audit`, { level: 1, decision: 'HOLD', note: 'Rate differs from PO' });
+    ok(held);
+    expect(held.body.data).toMatchObject({ audit1Status: 'HELD', audit1Note: 'Rate differs from PO', audit2Status: 'PENDING' });
+    expect((await accountant.get(`/api/v1/vendor-bills?audit=HELD&pageSize=200`)).body.data.map((b: { id: string }) => b.id)).toContain(id);
+
+    // While the payment hold is on, a bill short of the 2nd audit cannot be paid.
+    const key = '/api/v1/settings/business/accounts.billAuditRequiredForPayment';
+    ok(await owner.put(key, { value: true }));
+    try {
+      const pay = await accountant.post('/api/v1/payments', {
+        docDate: todayIst(), vendorId: m.vendors.knitter.id, mode: 'NEFT', reference: uid('UTR'), amount: '10.00', allocations: [{ billId: id, amount: '10.00' }],
+      });
+      expect(pay.status).toBe(409);
+      expect(pay.body.error.message).toContain('2nd audit');
+    } finally {
+      ok(await owner.put(key, { value: false }));
+    }
+
+    ok(await auditor1.post(`/api/v1/vendor-bills/${id}/audit`, { level: 1, decision: 'PASS' }));
+    expect((await auditor1.post(`/api/v1/vendor-bills/${id}/audit`, { level: 1, decision: 'PASS' })).status).toBe(409); // already passed
+    expect((await auditor1.post(`/api/v1/vendor-bills/${id}/audit`, { level: 2, decision: 'PASS' })).status).toBe(403);
+    const passed = await owner.post(`/api/v1/vendor-bills/${id}/audit`, { level: 2, decision: 'PASS', note: 'Checked against loss report' });
+    ok(passed);
+    expect(passed.body.data).toMatchObject({ audit1Status: 'PASSED', audit2Status: 'PASSED' });
+    const log = await prisma.auditLog.findMany({ where: { recordId: id, action: { in: ['APPROVE', 'REJECT'] } }, orderBy: { id: 'asc' } });
+    expect(log.map((l) => l.action)).toEqual(['REJECT', 'APPROVE', 'APPROVE']);
+
+    // The check list carries the billed D.C., the outward reconciliation and who audited.
+    const cl = await accountant.get(`/api/v1/vendor-bills/${id}/check-list`);
+    ok(cl);
+    expect(cl.body.data.lines[0]).toMatchObject({ sourceDocNo: expect.any(String), billableQty: '19.000' });
+    expect(cl.body.data.reconciliation).toHaveLength(1);
+    expect(cl.body.data.reconciliation[0]).toMatchObject({ sentKg: '20.000', receivedKg: '19.000', lossKg: '1.000', debitKg: '0.000', process: expect.stringMatching(/knitting/i) });
+    expect(cl.body.data.people.audit1By).toBeTruthy();
+    expect(cl.body.data.people.audit2By).toBeTruthy();
+
+    // Leave nothing open for the ledger and ageing tests below.
+    ok(await owner.post(`/api/v1/vendor-bills/${id}/cancel`, { reason: 'Test bill' }));
+  });
+
   it('a draft bill cannot be edited after posting', async () => {
     const r = await owner.patch(`/api/v1/vendor-bills/${bill2}`, { ...billBody([round1.inwardId], '1'), version: 99 });
     expect(r.status).toBe(409);
+  });
+});
+
+describe('bill entry details and purchase bills (Q-079)', () => {
+  it('job-work bill: process filter, bill qty below received, bill pcs, add / less amounts', async () => {
+    const knitter = m.vendors.knitter.id;
+    const r = await knitRound('20', '19');
+    const forKnitting = await accountant.get(`/api/v1/vendor-bills/match?vendorId=${knitter}&processId=${m.processes.knitting.id}`);
+    ok(forKnitting);
+    const row = forKnitting.body.data.find((c: { sourceId: string }) => c.sourceId === r.inwardId);
+    expect(row).toMatchObject({ qty: '19.000', rolls: 1, orderNo: expect.any(String) });
+    const forDyeing = await accountant.get(`/api/v1/vendor-bills/match?vendorId=${knitter}&processId=${m.processes.dyeing.id}`);
+    expect(forDyeing.body.data.map((c: { sourceId: string }) => c.sourceId)).not.toContain(r.inwardId);
+
+    expect((await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00', { processId: m.processes.dyeing.id }))).status).toBe(400);
+    const tooMuch = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '342.00', { lines: [{ sourceType: 'INWARD_DC', sourceId: r.inwardId, billQty: '19.5' }] }));
+    expect(tooMuch.status).toBe(400);
+    expect(tooMuch.body.error.message).toContain('more than');
+
+    // Billed 18 of the 19 kg received: the expected amount follows the bill qty (18 × ₹18).
+    const c = await accountant.post(
+      '/api/v1/vendor-bills',
+      billBody([r.inwardId], '324.00', {
+        processId: m.processes.knitting.id,
+        cgstAmount: '8.10',
+        sgstAmount: '8.10',
+        gstRatePct: '5',
+        taxType: 'GST',
+        taxablePct: '100',
+        addAmount: '0.25',
+        lessAmount: '0.05',
+        lines: [{ sourceType: 'INWARD_DC', sourceId: r.inwardId, billQty: '18', billPcs: 2 }],
+      }),
+    );
+    ok(c, 201);
+    expect(c.body.data).toMatchObject({ kind: 'JOBWORK', expectedTaxable: '324.00', withinTolerance: true, addAmount: '0.25', lessAmount: '0.05', gstRatePct: '5', taxType: 'GST', taxablePct: '100.00' });
+    // A tax type that does not match the amounts is refused (Q-087).
+    const wrongTax = await accountant.post('/api/v1/vendor-bills', billBody([r.inwardId], '324.00', { processId: m.processes.knitting.id, taxType: 'NONE', cgstAmount: '8.10', sgstAmount: '8.10' }));
+    expect(wrongTax.status).toBe(400);
+    // The check list shows each line's lot, process and unit.
+    const cl = (await accountant.get(`/api/v1/vendor-bills/${c.body.data.id}/check-list`)).body.data;
+    expect(cl.lines[0]).toMatchObject({ processName: expect.stringMatching(/knitting/i), unit: 'KG' });
+    expect(cl.lines[0]).toHaveProperty('lots');
+    expect(c.body.data.process.id).toBe(m.processes.knitting.id);
+    expect(c.body.data.lines[0]).toMatchObject({ billableQty: '19.000', billQty: '18.000', billPcs: 2, expectedAmount: '324.00' });
+    expect(c.body.data.figures).toMatchObject({ invoiceTotal: '340.40', gstTotal: '16.20' });
+    // A saved bill's lines carry what the D.C. holds, for the screen, the print and the check list.
+    const saved = (await accountant.get(`/api/v1/vendor-bills/${c.body.data.id}`)).body.data;
+    expect(saved.lines[0].details).toMatchObject({ orderNo: expect.any(String), items: expect.any(String), rolls: 1, processName: expect.stringMatching(/knitting/i) });
+    ok(await owner.del(`/api/v1/vendor-bills/${c.body.data.id}`), 204);
+  });
+
+  it('bill the rest later: part of a D.C. now, the rest on a later bill; cancelling hands the qty back (Q-081)', async () => {
+    const knitter = m.vendors.knitter.id;
+    const r = await knitRound('20', '19');
+    const offered = async () =>
+      (await accountant.get(`/api/v1/vendor-bills/match?vendorId=${knitter}`)).body.data.find((c: { sourceId: string }) => c.sourceId === r.inwardId) as
+        | { qty: string; receivedQty: string; billedBefore: string | null; expected: string }
+        | undefined;
+    const part = (qty: string | null, taxable: string) =>
+      billBody([r.inwardId], taxable, { lines: [{ sourceType: 'INWARD_DC', sourceId: r.inwardId, ...(qty ? { billQty: qty } : {}) }] });
+    const inward = () => prisma.inwardDc.findUniqueOrThrow({ where: { id: r.inwardId }, select: { billId: true, billedInFull: true } });
+
+    // Bill A: 10 of the 19 kg at ₹18.
+    const a = await accountant.post('/api/v1/vendor-bills', part('10', '180.00'));
+    ok(a, 201);
+    ok(await accountant.post(`/api/v1/vendor-bills/${a.body.data.id}/post`));
+    expect(await inward()).toEqual({ billId: a.body.data.id, billedInFull: false });
+    expect(await offered()).toMatchObject({ qty: '9.000', receivedQty: '19.000', billedBefore: '10.000', expected: '162.00' });
+    expect((await owner.post(`/api/v1/inward-dcs/${r.inwardId}/cancel`, { reason: 'Wrong rolls' })).status).toBe(409); // still on a bill
+
+    // The rest: more than is left is refused; two drafts for the rest — only the first to post wins.
+    expect((await accountant.post('/api/v1/vendor-bills', part('9.5', '171.00'))).status).toBe(400);
+    const c = await accountant.post('/api/v1/vendor-bills', part(null, '162.00'));
+    ok(c, 201);
+    expect(c.body.data.lines[0]).toMatchObject({ billableQty: '9.000', billQty: null, expectedAmount: '162.00' });
+    const d = await accountant.post('/api/v1/vendor-bills', part(null, '162.00'));
+    ok(d, 201);
+    ok(await accountant.post(`/api/v1/vendor-bills/${c.body.data.id}/post`));
+    expect(await inward()).toEqual({ billId: c.body.data.id, billedInFull: true });
+    expect(await offered()).toBeUndefined();
+    expect((await accountant.post(`/api/v1/vendor-bills/${d.body.data.id}/post`)).status).toBe(409);
+
+    // Cancelling bill A hands its 10 kg back; bill C still covers the rest.
+    ok(await owner.post(`/api/v1/vendor-bills/${a.body.data.id}/cancel`, { reason: 'Test' }));
+    expect(await inward()).toEqual({ billId: c.body.data.id, billedInFull: false });
+    expect(await offered()).toMatchObject({ qty: '10.000', billedBefore: '9.000' });
+
+    // Tidy up for the ledger tests below.
+    ok(await owner.post(`/api/v1/vendor-bills/${c.body.data.id}/cancel`, { reason: 'Test' }));
+    expect(await inward()).toEqual({ billId: null, billedInFull: true });
+    ok(await owner.del(`/api/v1/vendor-bills/${d.body.data.id}`), 204);
+  });
+
+  it('purchase bill: yarn receipt priced at its own rate, marked billed, guarded, freed when the bill is cancelled', async () => {
+    const mill = m.vendors.mill.id;
+    const yr = await owner.post('/api/v1/yarn-receipts', { docDate: '2026-10-01', vendorId: mill, supplierInvoiceNo: 'KSM/77', lines: [{ itemId: m.items.yarn.id, lot: uid('PB'), qtyKg: '100', ratePerKg: '280' }] });
+    ok(yr, 201);
+    ok(await owner.post(`/api/v1/yarn-receipts/${yr.body.data.id}/post`));
+    const receiptId = yr.body.data.id as string;
+
+    const cands = await accountant.get(`/api/v1/vendor-bills/match?vendorId=${mill}&kind=PURCHASE`);
+    ok(cands);
+    expect(cands.body.data.find((c: { sourceId: string }) => c.sourceId === receiptId)).toMatchObject({ sourceType: 'YARN_RECEIPT', qty: '100.000', expected: '28000.00', against: 'KSM/77' });
+    expect((await accountant.get(`/api/v1/vendor-bills/match?vendorId=${mill}`)).body.data.map((c: { sourceId: string }) => c.sourceId)).not.toContain(receiptId);
+
+    const body = (over: Record<string, unknown> = {}) => ({
+      kind: 'PURCHASE',
+      docDate: '2026-10-05',
+      vendorId: mill,
+      vendorInvoiceNo: uid('KSM'),
+      vendorInvoiceDate: '2026-10-02',
+      taxableAmount: '28000.00',
+      cgstAmount: '700.00',
+      sgstAmount: '700.00',
+      lines: [{ sourceType: 'YARN_RECEIPT', sourceId: receiptId }],
+      ...over,
+    });
+    expect((await accountant.post('/api/v1/vendor-bills', body({ processId: m.processes.knitting.id }))).status).toBe(400);
+    const pb = await accountant.post('/api/v1/vendor-bills', body());
+    ok(pb, 201);
+    expect(pb.body.data).toMatchObject({ kind: 'PURCHASE', expectedTaxable: '28000.00', withinTolerance: true, process: null });
+    expect(pb.body.data.lines[0].details).toMatchObject({ against: 'KSM/77', items: expect.any(String), lots: expect.any(String) });
+    ok(await accountant.post(`/api/v1/vendor-bills/${pb.body.data.id}/post`));
+    expect((await prisma.yarnReceipt.findUniqueOrThrow({ where: { id: receiptId } })).billId).toBe(pb.body.data.id);
+
+    expect((await owner.post(`/api/v1/yarn-receipts/${receiptId}/cancel`, { reason: 'Wrong lot' })).status).toBe(409);
+    expect((await accountant.post('/api/v1/vendor-bills', body())).status).toBe(409);
+    expect((await accountant.get(`/api/v1/vendor-bills?kind=PURCHASE&vendorId=${mill}&pageSize=200`)).body.data.map((b: { id: string }) => b.id)).toContain(pb.body.data.id);
+    expect((await accountant.get(`/api/v1/vendor-bills?kind=JOBWORK&vendorId=${mill}&pageSize=200`)).body.data.map((b: { id: string }) => b.id)).not.toContain(pb.body.data.id);
+
+    ok(await owner.post(`/api/v1/vendor-bills/${pb.body.data.id}/cancel`, { reason: 'Test bill' }));
+    expect((await prisma.yarnReceipt.findUniqueOrThrow({ where: { id: receiptId } })).billId).toBeNull();
   });
 });
 
@@ -363,5 +555,44 @@ describe('alerts — overdue D.C. and GST time limit (A6)', () => {
     const list = await owner.get(`/api/v1/alerts?status=OPEN&kind=PAYMENT_DUE&q=${encodeURIComponent(posted.body.data.docNo)}`);
     ok(list);
     expect(list.body.data.some((x: { id: string }) => x.id === a.id)).toBe(true);
+  });
+});
+
+describe('Debit Note Posting to Accounts — Tally (Q-084)', () => {
+  it('posts a debit note to Tally once, downloads it again, and sends its cancellation', async () => {
+    const mill = m.vendors.mill.id;
+    await prisma.vendor.update({ where: { id: mill }, data: { tallyLedgerName: 'Kaveri Spinning (Tally)' } });
+    const dn = await owner.post('/api/v1/debit-notes', { docDate: '2026-10-20', vendorId: mill, remarks: 'Short weight', lines: [{ description: 'Short weight on lot', qty: '2', unit: 'KG', rate: '280' }] });
+    ok(dn, 201);
+    const id = dn.body.data.id as string;
+    // A draft is not in the queue; posting puts it there.
+    expect((await owner.get('/api/v1/tally/debit-notes')).body.data.map((n: { id: string }) => n.id)).not.toContain(id);
+    ok(await owner.post(`/api/v1/debit-notes/${id}/post`));
+    const pending = (await owner.get('/api/v1/tally/debit-notes')).body.data.find((n: { id: string }) => n.id === id);
+    expect(pending).toMatchObject({ action: 'CREATE', vendor: { tallyLedger: 'Kaveri Spinning (Tally)' }, totalAmount: '560.00' });
+    expect((await accountant.get('/api/v1/tally/debit-notes')).status).toBe(403);
+
+    const ex = await owner.post('/api/v1/tally/debit-notes/export', { ids: [id] });
+    ok(ex);
+    expect(ex.body.data).toMatchObject({ count: 1, total: '560.00', fileName: expect.stringMatching(/^tally-debit-notes-.*\.xml$/) });
+    expect(ex.body.data.xml).toContain(`<VOUCHERNUMBER>${pending.docNo}</VOUCHERNUMBER>`);
+    expect(ex.body.data.xml).toContain('<LEDGERNAME>Kaveri Spinning (Tally)</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-560.00</AMOUNT>');
+    expect(ex.body.data.xml).toContain('<LEDGERNAME>Job Work Charges</LEDGERNAME>');
+    expect((await owner.get('/api/v1/tally/debit-notes')).body.data.map((n: { id: string }) => n.id)).not.toContain(id);
+    expect((await owner.get('/api/v1/tally/debit-notes?queue=POSTED')).body.data.map((n: { id: string }) => n.id)).toContain(id);
+    expect((await owner.post('/api/v1/tally/debit-notes/export', { ids: [id] })).status).toBe(409); // posted once only
+    ok(await owner.post('/api/v1/tally/debit-notes/export', { ids: [id], mark: false })); // download again
+    const log = await prisma.auditLog.findMany({ where: { recordId: id, action: 'EXPORT' } });
+    expect(log).toHaveLength(1);
+
+    // Cancelled after posting: the cancellation goes to Tally next time, once.
+    ok(await owner.post(`/api/v1/debit-notes/${id}/cancel`, { reason: 'Weight confirmed' }));
+    expect((await owner.get('/api/v1/tally/debit-notes')).body.data.find((n: { id: string }) => n.id === id)).toMatchObject({ action: 'CANCEL' });
+    const cx = await owner.post('/api/v1/tally/debit-notes/export', { ids: [id] });
+    ok(cx);
+    expect(cx.body.data.xml).toContain('ACTION="Cancel"');
+    expect(cx.body.data.xml).toContain('Cancelled: Weight confirmed');
+    expect((await owner.get('/api/v1/tally/debit-notes')).body.data.map((n: { id: string }) => n.id)).not.toContain(id);
+    expect((await owner.post('/api/v1/tally/debit-notes/export', { ids: [id] })).status).toBe(409);
   });
 });

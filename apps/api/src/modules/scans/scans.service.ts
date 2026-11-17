@@ -21,6 +21,7 @@ import {
   type ValidationContext,
   emptyField,
   isDcTarget,
+  matchPurchaseSources,
   targetItemTypes,
   zInwardDcInput,
   zOutwardDcInput,
@@ -154,6 +155,15 @@ async function suggestSources(vendorId: string | null, dcRefs: string | null): P
   return out;
 }
 
+/**
+ * Purchase invoice → the vendor's posted yarn receipts / inward from others with qty left to bill:
+ * the receipt's supplier invoice no. equals the invoice no., or the receipt no. is printed on the invoice (Q-083).
+ */
+async function suggestPurchaseSources(vendorId: string | null, invoiceNo: string | null, dcRefs: string | null): Promise<Review['sources']> {
+  if (!vendorId || (!invoiceNo && !dcRefs)) return [];
+  return matchPurchaseSources(await billsService.purchaseCandidates(vendorId, null), { invoiceNo, dcRefs });
+}
+
 /** "Your D.C. No" on a job worker's D.C. → our posted outward D.C.s still pending at that vendor. */
 async function suggestOutwards(vendorId: string | null, dcRefs: string | null): Promise<Review['sources']> {
   if (!vendorId) return [];
@@ -218,9 +228,11 @@ async function buildReview(ex: Extraction, prev: Review | null, uploaded: ScanTa
     ? prev.sources
     : target === 'VENDOR_BILL'
       ? await suggestSources(vendor.id, header.dcRefs.value)
-      : target === 'INWARD_DC'
-        ? await suggestOutwards(vendor.id, header.dcRefs.value)
-        : [];
+      : target === 'PURCHASE_BILL'
+        ? await suggestPurchaseSources(vendor.id, header.invoiceNo.value, header.dcRefs.value)
+        : target === 'INWARD_DC'
+          ? await suggestOutwards(vendor.id, header.dcRefs.value)
+          : [];
   const programProcessId = target === 'OUTWARD_DC' ? (prev?.programProcessId ?? (await autoProgramProcess(vendor.id))) : null;
   return { target, vendor, header, lines, sources, programProcessId, existingDocId: prev?.existingDocId ?? null, confirmed: prev?.confirmed ?? [] };
 }
@@ -269,6 +281,7 @@ function bySourceScan(target: ScanTarget, scanId: string) {
     case 'TRIMS_RECEIPT':
       return trimsService.bySourceScan(scanId);
     case 'VENDOR_BILL':
+    case 'PURCHASE_BILL':
       return billsService.bySourceScan(scanId);
     case 'OUTWARD_DC':
       return jobworkService.outwardBySourceScan(scanId);
@@ -321,7 +334,10 @@ async function check(scan: Scan, review: Review): Promise<Checked> {
     duplicates = docs.filter((d) => d.id !== review.existingDocId).map((d) => ({ docType: d.docType, docNo: d.docNo, id: d.id }));
     dupDocs = docs.map((d) => ({ docType: d.docType, docNo: d.docNo, id: d.id, status: d.status }));
     // Other scans are indexed by vendor; a buyer PO scan is compared through the orders it created.
-    const otherScans = isOrder ? [] : await repo.sameInvoice(vendor.id, invoiceNo, scan.id);
+    // A purchase invoice is often scanned once into the yarn receipt and once into the purchase bill
+    // (Q-083): those two scans of one invoice are not duplicates of each other.
+    const pair = (a: string | null) => (review.target === 'PURCHASE_BILL' && a === 'YARN_RECEIPT') || (review.target === 'YARN_RECEIPT' && a === 'PURCHASE_BILL');
+    const otherScans = (isOrder ? [] : await repo.sameInvoice(vendor.id, invoiceNo, scan.id)).filter((o) => !pair(o.appliedDocType ?? o.target));
     for (const o of otherScans) {
       if (o.status === 'APPLIED' && o.appliedDocId === review.existingDocId) continue; // reconciling against the receipt that scan created
       if (o.status === 'APPLIED') duplicates.push({ docType: 'SCANNED_INVOICE', docNo: null, id: o.id });
@@ -333,13 +349,14 @@ async function check(scan: Scan, review: Review): Promise<Checked> {
   const ids = [...new Set(review.lines.map((l) => l.item.id).filter((x): x is string => !!x))];
   const items = ids.length ? await mastersService.itemsByIdsBrief(ids) : [];
   let billMatch: ValidationContext['billMatch'] = null;
-  if (review.target === 'VENDOR_BILL' && review.sources.length && vendor && review.header.taxableAmount.value) {
+  if ((review.target === 'VENDOR_BILL' || review.target === 'PURCHASE_BILL') && review.sources.length && vendor && review.header.taxableAmount.value) {
     try {
       const body = zBillInput.parse({ ...buildPayload(review, { docDate: todayIst() }), vendorInvoiceNo: invoiceNo ?? 'PREVIEW' });
       const p = await billsService.preview(body);
       billMatch = { withinTolerance: p.match.withinTolerance, variance: p.match.variance, missingRates: p.match.missingRates };
     } catch (err) {
-      extra.push({ level: 'ERROR', code: 'BILL_SOURCES', field: 'sources', message: err instanceof AppError ? err.message : 'The selected D.C.s cannot be billed', ackKey: null, acknowledged: false });
+      const what = review.target === 'PURCHASE_BILL' ? 'receipts' : 'D.C.s';
+      extra.push({ level: 'ERROR', code: 'BILL_SOURCES', field: 'sources', message: err instanceof AppError ? err.message : `The selected ${what} cannot be billed`, ackKey: null, acknowledged: false });
     }
   }
   // Outward: what the store holds for each line's item + lot + colour (posting will check exactly this).
@@ -628,8 +645,18 @@ export const scansService = {
     }
     if (patch.sources) {
       const vendorId = review.vendor.id;
-      if (!vendorId) throw new AppError('VALIDATION_ERROR', 'Pick the vendor before choosing D.C.s', 400);
-      if (review.target === 'INWARD_DC') {
+      if (!vendorId) throw new AppError('VALIDATION_ERROR', `Pick the vendor before choosing ${review.target === 'PURCHASE_BILL' ? 'receipts' : 'D.C.s'}`, 400);
+      if (review.target === 'PURCHASE_BILL') {
+        // Only this vendor's posted yarn receipts / inward from others with qty left to bill (never a job-work D.C.).
+        const cands = await billsService.purchaseCandidates(vendorId, null);
+        const byId = new Map(cands.map((c) => [`${c.sourceType}|${c.sourceId}`, c]));
+        review.sources = patch.sources.map((s) => {
+          const c = byId.get(`${s.sourceType}|${s.sourceId}`);
+          if (!c) throw new AppError('ALREADY_BILLED', 'A selected document is not a posted yarn receipt or inward from others of this vendor with qty left to bill', 409);
+          return { sourceType: c.sourceType, sourceId: c.sourceId, docNo: c.docNo, reason: 'Chosen by reviewer' };
+        });
+        events.push({ kind: 'SOURCES_SET', field: 'sources', after: review.sources.map((s) => s.docNo) });
+      } else if (review.target === 'INWARD_DC') {
         const open = new Map((await jobworkService.pendingForVendor(vendorId)).map((o) => [o.id, o]));
         review.sources = patch.sources.map((s) => {
           const o = s.sourceType === 'OUTWARD_DC' ? open.get(s.sourceId) : undefined;
@@ -672,12 +699,15 @@ export const scansService = {
     if (events.some((e) => e.kind === 'TARGET_SET' || (e.kind === 'MATCH_CONFIRMED' && e.field === 'vendor'))) {
       review.lines = await matchItems(review.target, review.vendor.id, review.lines);
       const vendorChanged = events.some((e) => e.kind === 'MATCH_CONFIRMED' && e.field === 'vendor');
-      // D.C. links and program processes belong to one vendor: re-suggest them for the new one.
-      if (vendorChanged && !patch.sources && isDcTarget(review.target)) review.sources = [];
+      // D.C. links, purchase receipts and program processes belong to one vendor: re-suggest them for the new one.
+      if (vendorChanged && !patch.sources && (isDcTarget(review.target) || review.target === 'PURCHASE_BILL')) review.sources = [];
       if (review.target === 'VENDOR_BILL' && !review.sources.length) review.sources = await suggestSources(review.vendor.id, review.header.dcRefs.value);
+      if (review.target === 'PURCHASE_BILL' && !review.sources.length) review.sources = await suggestPurchaseSources(review.vendor.id, review.header.invoiceNo.value, review.header.dcRefs.value);
       if (review.target === 'INWARD_DC' && !review.sources.length) review.sources = await suggestOutwards(review.vendor.id, review.header.dcRefs.value);
       if (review.target === 'OUTWARD_DC' && patch.programProcessId === undefined) review.programProcessId = await autoProgramProcess(review.vendor.id);
       if (review.target !== 'OUTWARD_DC') review.programProcessId = null;
+    } else if (review.target === 'PURCHASE_BILL' && !review.sources.length && !patch.sources && (changedKeys.has('header:invoiceNo') || changedKeys.has('header:dcRefs'))) {
+      review.sources = await suggestPurchaseSources(review.vendor.id, review.header.invoiceNo.value, review.header.dcRefs.value);
     }
 
     const checked = await check(scan, review);
@@ -788,6 +818,7 @@ export const scansService = {
               docId = (await trimsService.create(zTrimsDocInput.parse(payload), user, src)).id;
               break;
             case 'VENDOR_BILL':
+            case 'PURCHASE_BILL':
               docId = (await billsService.create(zBillInput.parse(payload), user, src)).id;
               break;
             case 'OUTWARD_DC':
@@ -818,7 +849,10 @@ export const scansService = {
     return this.get(id);
   },
 
-  /** Job-work bills: unbilled D.C.s of the scan's vendor. Inward D.C.s: our outward D.C.s pending at the vendor. */
+  /**
+   * Job-work bills: unbilled D.C.s of the scan's vendor. Purchase bills: its posted yarn receipts /
+   * inward from others with qty left to bill. Inward D.C.s: our outward D.C.s pending at the vendor.
+   */
   async sourceCandidates(id: string) {
     const s = await repo.get(id);
     if (!s) throw notFound('Scanned document');
@@ -837,6 +871,7 @@ export const scansService = {
         lots: o.lots,
       }));
     }
+    if (r.target === 'PURCHASE_BILL') return billsService.purchaseCandidates(r.vendor.id, null);
     return billsService.candidates(r.vendor.id, null);
   },
 

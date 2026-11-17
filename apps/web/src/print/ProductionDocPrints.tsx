@@ -227,7 +227,11 @@ export function PanelInwardPrint({ id }: { id: string }) {
 }
 
 // ── Recut slip ──
-type RecutPrintData = Omit<RecutSlip, 'lines'> & { lines: (RecutSlip['lines'][number] & { panelItem?: { name: string } | null })[] };
+type RecutPrintData = Omit<RecutSlip, 'lines'> & {
+  lines: (RecutSlip['lines'][number] & { panelItem?: { name: string } | null })[];
+  /** The panel D.C. the recut is raised against (when linked). */
+  panelDc?: { id: string; docNo: string | null; docDate: string | null } | null;
+};
 
 export function RecutSlipPrint({ id }: { id: string }) {
   const q = usePrintDoc<RecutPrintData>('recut-slip', '/recut-slips', id);
@@ -242,6 +246,7 @@ export function RecutSlipPrint({ id }: { id: string }) {
       party={{ label: 'To', name: 'Cutting section' }}
       details={[
         ['Order', orderLabel(d.order)],
+        ['Against panel D.C.', d.panelDc ? `${d.panelDc.docNo ?? 'DRAFT'}${d.panelDc.docDate ? ` (${formatDate(d.panelDc.docDate)})` : ''}` : null],
         ['Reason', d.reason],
         ['Pieces to recut', formatQty(d.totalPcs)],
       ]}

@@ -65,6 +65,26 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /** Modules this menu belongs to (Q-088); none = every module (overview, masters, settings). */
+  modules?: ModuleCode[];
+}
+
+/**
+ * Module picked at login, as on the desktop login (1. Order & Planning, 2. Yarn to Fabric, 3. Production).
+ * It only narrows the sidebar; permissions still decide what a user may open (Q-088).
+ */
+export const MODULES = [
+  { code: 'ALL', label: 'All modules' },
+  { code: 'ORDER_PLANNING', label: 'Order & Planning' },
+  { code: 'YARN_TO_FABRIC', label: 'Yarn to Fabric' },
+  { code: 'PRODUCTION', label: 'Production' },
+] as const;
+export type ModuleCode = (typeof MODULES)[number]['code'];
+export const isModuleCode = (v: unknown): v is ModuleCode => MODULES.some((m) => m.code === v);
+
+/** Sidebar groups for a module; ALL shows everything. */
+export function navFor(module: ModuleCode, nav: NavGroup[] = NAV): NavGroup[] {
+  return module === 'ALL' ? nav : nav.filter((g) => !g.modules || g.modules.includes(module));
 }
 
 /**
@@ -82,6 +102,7 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Orders',
+    modules: ['ORDER_PLANNING'],
     items: [
       { label: 'Orders', to: '/orders', icon: ClipboardSignature, perm: 'orders.view' },
       { label: 'Fabric programs', to: '/programs', icon: Route, perm: 'programs.view' },
@@ -90,6 +111,7 @@ export const NAV: NavGroup[] = [
   {
     // Desktop Transaction menu (Q-071).
     label: 'Transaction',
+    modules: ['YARN_TO_FABRIC'],
     items: [
       { label: 'Purchase', to: '/purchase-orders', icon: ShoppingCart, perm: 'purchase.view' },
       { label: 'Yarn Dyeing', to: '/transactions/YARN_DYEING', icon: Workflow, perm: 'jobwork.view' },
@@ -111,6 +133,7 @@ export const NAV: NavGroup[] = [
   {
     // Desktop Accessories menu (Q-072).
     label: 'Accessories',
+    modules: ['ORDER_PLANNING', 'PRODUCTION'],
     items: [
       { label: 'Purchase Order', to: '/purchase-orders?kind=ACCESSORY', icon: ShoppingCart, perm: 'purchase.view' },
       { label: 'Purchase Receipt', to: '/accessories/RECEIPT', icon: PackagePlus, perm: 'trims.view' },
@@ -124,6 +147,7 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Job work',
+    modules: ['YARN_TO_FABRIC'],
     items: [
       { label: 'Outward D.C.s', to: '/outward-dcs', icon: ArrowUpFromLine, perm: 'jobwork.view' },
       { label: 'Inward D.C.s', to: '/inward-dcs', icon: ArrowDownToLine, perm: 'jobwork.view' },
@@ -132,6 +156,7 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Production',
+    modules: ['PRODUCTION'],
     items: [
       { label: 'Cutting lays', to: '/cut-lays', icon: Scissors, perm: 'cutting.view' },
       { label: 'Recut slips', to: '/recut-slips', icon: ClipboardCheck, perm: 'panels.view' },
@@ -148,6 +173,7 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Export',
+    modules: ['ORDER_PLANNING'],
     items: [
       { label: 'Export invoices', to: '/export-invoices', icon: FileOutput, perm: 'export.view' },
       { label: 'Shipments', to: '/shipments', icon: Ship, perm: 'export.view' },
@@ -156,9 +182,31 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    // The desktop "Bills Entry" menu, in its order (Q-079): purchase bill, one job-work invoice per process, bills passing.
+    label: 'Bills Entry',
+    modules: ['YARN_TO_FABRIC'],
+    items: [
+      { label: 'Yarn/Fabric Purchase Bill Entry', to: '/purchase-bills', icon: ShoppingCart, perm: 'accounts.view' },
+      { label: 'Yarn Dyeing JobWork Invoice', to: '/jobwork-invoices/YARN_DYEING', icon: FileText, perm: 'accounts.view' },
+      { label: 'Yarn Twisting JobWork Invoice', to: '/jobwork-invoices/YARN_TWISTING', icon: FileText, perm: 'accounts.view' },
+      { label: 'Yarn Other Process JobWork Invoice', to: '/jobwork-invoices/YARN_OTHER', icon: FileText, perm: 'accounts.view' },
+      { label: 'Knitting JobWork Invoice', to: '/jobwork-invoices/KNITTING', icon: FileText, perm: 'accounts.view' },
+      { label: 'Grey Process JobWork Invoice', to: '/jobwork-invoices/GREY_PROCESS', icon: FileText, perm: 'accounts.view' },
+      { label: 'Dyeing JobWork Invoice', to: '/jobwork-invoices/DYEING', icon: FileText, perm: 'accounts.view' },
+      { label: 'Fabric to Yarn JobWork Invoice', to: '/jobwork-invoices/FABRIC_TO_YARN', icon: FileText, perm: 'accounts.view' },
+      { label: 'Printing JobWork Invoice', to: '/jobwork-invoices/FABRIC_PRINTING', icon: FileText, perm: 'accounts.view' },
+      { label: 'Fabric Other Process JobWork Invoice', to: '/jobwork-invoices/FABRIC_OTHER', icon: FileText, perm: 'accounts.view' },
+      { label: 'Bills Passing 1st Audit', to: '/bill-audit/1', icon: ClipboardCheck, perm: 'accounts.bill.audit1' },
+      { label: 'Bill Passing 2nd Audit', to: '/bill-audit/2', icon: ClipboardCheck, perm: 'accounts.bill.audit2' },
+      { label: 'Debit Note Posting to Accounts', to: '/tally/debit-notes', icon: FileMinus, perm: 'accounts.tally.export' },
+    ],
+  },
+  {
     label: 'Accounts',
+    modules: ['YARN_TO_FABRIC'],
     items: [
       { label: 'Vendor bills', to: '/vendor-bills', icon: FileText, perm: 'accounts.view' },
+      { label: 'Purchase bills', to: '/purchase-bills', icon: ShoppingCart, perm: 'accounts.view' },
       { label: 'Debit notes', to: '/debit-notes', icon: FileMinus, perm: 'accounts.view' },
       { label: 'Payments', to: '/payments', icon: Wallet, perm: 'accounts.view' },
       { label: 'Vendor ledger', to: '/reports/vendor-ledger', icon: BookOpen, perm: 'accounts.view' },
@@ -169,6 +217,7 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Stores',
+    modules: ['YARN_TO_FABRIC', 'PRODUCTION'],
     items: [
       { label: 'Scan invoices', to: '/scans', icon: ScanText, perm: 'scans.view' },
       { label: 'Yarn receipts', to: '/yarn-receipts', icon: PackageOpen, perm: 'yarn.view' },
@@ -193,6 +242,7 @@ export const NAV: NavGroup[] = [
     label: 'Settings',
     items: [
       { label: 'Company & settings', to: '/settings', icon: Cog, perm: 'settings.view' },
+      { label: 'Exporters & units', to: '/settings/units', icon: Building2, perm: 'settings.view' },
       { label: 'Document series', to: '/settings/series', icon: ClipboardList, perm: 'settings.view' },
       { label: 'Audit log', to: '/audit', icon: FileClock, perm: 'audit.view' },
       { label: 'Opening data', to: '/settings/opening', icon: FileUp, perm: 'opening.import' },

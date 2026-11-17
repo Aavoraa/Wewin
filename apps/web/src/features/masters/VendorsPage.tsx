@@ -61,7 +61,7 @@ function CertificateExpiry({ expiry }: { expiry: string | null }) {
 const FIELDS = [
   'code', 'name', 'gstin', 'pan', 'addressLine1', 'addressLine2', 'city', 'state', 'stateCode', 'pincode', 'contactPerson',
   'phone', 'email', 'whatsappNumber', 'creditDays', 'tdsApplicable', 'tdsRatePct', 'debitNoteGstApplicable',
-  'debitNoteGstRatePct', 'bankName', 'bankAccount', 'bankIfsc', 'certificateNo', 'certificateExpiry', 'processIds',
+  'debitNoteGstRatePct', 'bankName', 'bankAccount', 'bankIfsc', 'tallyLedgerName', 'certificateNo', 'certificateExpiry', 'processIds',
 ] as const;
 
 const empty = Object.fromEntries(FIELDS.map((f) => [f, ''])) as Record<string, unknown>;
@@ -144,6 +144,7 @@ export function VendorsPage() {
           <TextField form={form} name="bankName" label="Bank" />
           <TextField form={form} name="bankAccount" label="Account no." />
           <TextField form={form} name="bankIfsc" label="IFSC" />
+          <TextField form={form} name="tallyLedgerName" label="Tally ledger name" hint="Only if the vendor's ledger in Tally has a different name" />
         </>
       )}
     />

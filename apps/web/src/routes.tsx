@@ -10,6 +10,7 @@ import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
 /** Pages load on first visit (route-level code splitting); login stays in the main bundle. */
 const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const ExportersPage = lazy(() => import('@/features/settings/ExportersPage').then((m) => ({ default: m.ExportersPage })));
 const SeriesPage = lazy(() => import('@/features/settings/SeriesPage').then((m) => ({ default: m.SeriesPage })));
 const OpeningImportPage = lazy(() => import('@/features/settings/OpeningImportPage').then((m) => ({ default: m.OpeningImportPage })));
 const AuditPage = lazy(() => import('@/features/settings/AuditPage').then((m) => ({ default: m.AuditPage })));
@@ -67,6 +68,10 @@ const StockDocPage = lazy(() => import('@/features/stock/StockDocsPages').then((
 const DirectDeliveryPage = lazy(() => import('@/features/stock/DirectDeliveryPage').then((m) => ({ default: m.DirectDeliveryPage })));
 const VendorBillPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillPage })));
 const VendorBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillsPage })));
+const PurchaseBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.PurchaseBillsPage })));
+const JobworkInvoicesPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.JobworkInvoicesPage })));
+const TallyPostingPage = lazy(() => import('@/features/accounts/TallyPostingPage').then((m) => ({ default: m.TallyPostingPage })));
+const BillAuditPage = lazy(() => import('@/features/accounts/BillAuditPages').then((m) => ({ default: m.BillAuditPage })));
 const DebitNotePage = lazy(() => import('@/features/accounts/DebitNotePages').then((m) => ({ default: m.DebitNotePage })));
 const DebitNotesPage = lazy(() => import('@/features/accounts/DebitNotePages').then((m) => ({ default: m.DebitNotesPage })));
 const PaymentPage = lazy(() => import('@/features/accounts/PaymentPages').then((m) => ({ default: m.PaymentPage })));
@@ -151,6 +156,11 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'rate-contracts', perm: 'accounts.view', element: <RatesPage /> },
   { path: 'vendor-bills', perm: 'accounts.view', element: <VendorBillsPage /> },
   { path: 'vendor-bills/:id', perm: 'accounts.view', element: <VendorBillPage /> },
+  { path: 'purchase-bills', perm: 'accounts.view', element: <PurchaseBillsPage /> },
+  { path: 'purchase-bills/:id', perm: 'accounts.view', element: <VendorBillPage kind="PURCHASE" /> },
+  { path: 'bill-audit/:level', perm: 'accounts.view', element: <BillAuditPage /> },
+  { path: 'tally/debit-notes', perm: 'accounts.tally.export', element: <TallyPostingPage /> },
+  { path: 'jobwork-invoices/:processCode', perm: 'accounts.view', element: <JobworkInvoicesPage /> },
   { path: 'debit-notes', perm: 'accounts.view', element: <DebitNotesPage /> },
   { path: 'debit-notes/:id', perm: 'accounts.view', element: <DebitNotePage /> },
   { path: 'payments', perm: 'accounts.view', element: <PaymentsPage /> },
@@ -232,6 +242,7 @@ export function AppRoutes() {
         <Route path="stock/movements" element={<Perm perm="stock.view"><StockMovementsPage /></Perm>} />
         <Route path="settings" element={<Perm perm="settings.view"><SettingsPage /></Perm>} />
         <Route path="settings/series" element={<Perm perm="settings.view"><SeriesPage /></Perm>} />
+        <Route path="settings/units" element={<Perm perm="settings.view"><ExportersPage /></Perm>} />
         <Route path="audit" element={<Perm perm="audit.view"><AuditPage /></Perm>} />
         {PAGES.map((p) => (
           <Route key={p.path} path={p.path} element={<Perm perm={p.perm}>{p.element}</Perm>} />

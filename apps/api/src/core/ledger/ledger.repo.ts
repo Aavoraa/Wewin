@@ -1,5 +1,5 @@
 import { Prisma } from '@wewin/db';
-import { type Tx, type prisma } from '../db';
+import { type Tx, type prisma, unitFilter } from '../db';
 import { type NormalisedMovement } from './ledger.validate';
 
 export type UnitKind = 'roll' | 'bundle' | 'carton';
@@ -61,10 +61,10 @@ export const ledgerRepo = {
       SELECT k.item_id, k.location_id, k.lot, k.colour, k.size,
              COALESCE((SELECT SUM(m.qty) FROM stock_movements m
                         WHERE m.item_id = k.item_id AND m.to_location_id = k.location_id
-                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size), 0)
+                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size ${unitFilter('m')}), 0)
            - COALESCE((SELECT SUM(m.qty) FROM stock_movements m
                         WHERE m.item_id = k.item_id AND m.from_location_id = k.location_id
-                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size), 0) AS qty
+                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size ${unitFilter('m')}), 0) AS qty
       FROM unnest(${keys.map((k) => k.itemId)}::uuid[], ${keys.map((k) => k.locationId)}::uuid[],
                   ${keys.map((k) => k.lot)}::text[], ${keys.map((k) => k.colour)}::text[], ${keys.map((k) => k.size)}::text[])
            AS k(item_id, location_id, lot, colour, size)`;
@@ -85,10 +85,10 @@ export const ledgerRepo = {
       SELECT k.item_id, k.location_id, k.order_id, k.lot, k.colour, k.size,
              COALESCE((SELECT SUM(m.qty) FROM stock_movements m
                         WHERE m.item_id = k.item_id AND m.to_location_id = k.location_id AND m.order_id IS NOT DISTINCT FROM k.order_id
-                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size), 0)
+                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size ${unitFilter('m')}), 0)
            - COALESCE((SELECT SUM(m.qty) FROM stock_movements m
                         WHERE m.item_id = k.item_id AND m.from_location_id = k.location_id AND m.order_id IS NOT DISTINCT FROM k.order_id
-                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size), 0) AS qty
+                          AND m.lot = k.lot AND m.colour = k.colour AND m.size = k.size ${unitFilter('m')}), 0) AS qty
       FROM unnest(${keys.map((k) => k.itemId)}::uuid[], ${keys.map((k) => k.locationId)}::uuid[], ${keys.map((k) => k.orderId)}::uuid[],
                   ${keys.map((k) => k.lot)}::text[], ${keys.map((k) => k.colour)}::text[], ${keys.map((k) => k.size)}::text[])
            AS k(item_id, location_id, order_id, lot, colour, size)`;

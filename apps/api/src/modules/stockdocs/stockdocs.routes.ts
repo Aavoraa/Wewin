@@ -1,5 +1,6 @@
+import { z } from 'zod';
 import { Router } from 'express';
-import { zIdParam, zReason, zStockDocInput, zStockDocListQuery, zStockDocUpdate } from '@wewin/shared';
+import { zIdParam, zReason, zStockDocInput, zStockDocListQuery, zStockDocUpdate, zRef } from '@wewin/shared';
 import { requirePermission } from '../../core/auth/auth.middleware';
 import { HANDLED, ListResult, handle, type HandlerInput } from '../../core/http';
 import { stockDocsService as svc } from './stockdocs.service';
@@ -30,6 +31,8 @@ const c = stockDocsController;
 const view = requirePermission('stock.view');
 const create = requirePermission('stockdocs.create');
 stockDocsRouter.get('/stock-docs', view, handle({ query: zStockDocListQuery }, c.list));
+// GRN against PO (Q-082): before /:id so 'po-lines' is not read as an id.
+stockDocsRouter.get('/stock-docs/po-lines', view, handle({ query: z.object({ vendorId: zRef(), orderId: zRef().optional() }) }, async ({ query }) => svc.openPoLines(query.vendorId, query.orderId)));
 stockDocsRouter.get('/stock-docs/:id', view, handle({ params: zIdParam }, c.get));
 stockDocsRouter.post('/stock-docs', create, handle({ body: zStockDocInput }, c.create, { status: 201 }));
 stockDocsRouter.patch('/stock-docs/:id', create, handle({ params: zIdParam, body: zStockDocUpdate }, c.update));

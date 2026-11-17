@@ -58,3 +58,13 @@ describe('amount in words for buyer documents', () => {
     expect(amountInWords('247968.00', 'INR')).toBe('Rupees Two Lakhs Forty Seven Thousand Nine Hundred and Sixty Eight Only');
   });
 });
+
+describe('bills passing input (Q-078)', () => {
+  it('a hold needs a reason; a pass does not', async () => {
+    const { zBillAudit } = await import('./accounts');
+    expect(zBillAudit.safeParse({ level: 1, decision: 'PASS' }).success).toBe(true);
+    expect(zBillAudit.safeParse({ level: 2, decision: 'HOLD' }).success).toBe(false);
+    expect(zBillAudit.safeParse({ level: 2, decision: 'HOLD', note: 'GSM short' }).success).toBe(true);
+    expect(zBillAudit.safeParse({ level: 3, decision: 'PASS' }).success).toBe(false);
+  });
+});

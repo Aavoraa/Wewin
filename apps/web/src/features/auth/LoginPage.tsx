@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useLocation } from 'react-router';
-import { type LoginInput, zLogin } from '@wewin/shared';
-import { useAuth } from '@/lib/auth';
-import { errorMessage } from '@/lib/api';
+import { type LoginInput, type UnitInfo, zLogin } from '@wewin/shared';
+import { rememberedUnit, useAuth } from '@/lib/auth';
+import { api, errorMessage } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
 import { WewinBrand } from '@/components/Brand';
+import { MODULES, type ModuleCode } from '@/nav';
+import { setModule, useModule } from '@/lib/module';
 
 /** From wewinknitfashions.com. */
 const FACTS: [string, string][] = [
@@ -22,6 +25,24 @@ export function LoginPage() {
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const form = useForm<LoginInput>({ resolver: zodResolver(zLogin), defaultValues: { username: '', password: '' } });
+  // Exporter and unit to work in (Q-085): every document, number, stock and report belongs to that unit.
+  const unitsQ = useQuery({ queryKey: ['auth', 'units'], queryFn: () => api.get<UnitInfo[]>('/auth/units'), staleTime: 60_000 });
+  const units = useMemo(() => unitsQ.data ?? [], [unitsQ.data]);
+  const exporters = useMemo(() => [...new Map(units.map((u) => [u.exporter.id, u.exporter])).values()], [units]);
+  const [exporterId, setExporterId] = useState('');
+  const [unitId, setUnitId] = useState('');
+  useEffect(() => {
+    if (!units.length || unitId) return;
+    const pick = units.find((u) => u.id === rememberedUnit()) ?? units[0];
+    if (pick) {
+      setExporterId(pick.exporter.id);
+      setUnitId(pick.id);
+    }
+  }, [units, unitId]);
+  const exporterUnits = units.filter((u) => u.exporter.id === exporterId);
+  // Module to work in (desktop login: 1. Order & Planning, 2. Yarn to Fabric, 3. Production — Q-088).
+  const lastModule = useModule();
+  const [module, pickModule] = useState<ModuleCode>(lastModule);
 
   if (status === 'authenticated') {
     const from = (location.state as { from?: string } | null)?.from ?? '/';
@@ -31,7 +52,8 @@ export function LoginPage() {
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null);
     try {
-      await login(v.username, v.password);
+      await login(v.username, v.password, unitId || undefined);
+      setModule(module);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -82,6 +104,52 @@ export function LoginPage() {
               <span className="text-[11px] text-destructive">{form.formState.errors.password.message}</span>
             ) : null}
           </div>
+          {units.length > 1 ? (
+            <>
+              <div className="grid gap-1">
+                <Label htmlFor="exporter">Exporter</Label>
+                <Select
+                  id="exporter"
+                  value={exporterId}
+                  onChange={(e) => {
+                    setExporterId(e.target.value);
+                    setUnitId(units.find((u) => u.exporter.id === e.target.value)?.id ?? '');
+                  }}
+                >
+                  {exporters.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="unit">Unit</Label>
+                <Select id="unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+                  {exporterUnits.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </>
+          ) : null}
+          <fieldset className="grid gap-1">
+            <legend className="mb-1 text-sm font-medium">Module</legend>
+            <div className="grid grid-cols-2 gap-1.5">
+              {MODULES.map((m, n) => (
+                <label
+                  key={m.code}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm ${module === m.code ? 'border-brand bg-brand/5 font-medium' : 'hover:bg-accent'}`}
+                >
+                  <input type="radio" name="module" className="sr-only" checked={module === m.code} onChange={() => pickModule(m.code)} />
+                  <span className="text-xs text-muted-foreground">{n === 0 ? '★' : `${n}.`}</span>
+                  {m.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           {error ? (
             <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-destructive">
               {error}

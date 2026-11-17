@@ -3,6 +3,7 @@ import { waitUntil } from '@vercel/functions';
 import { env } from '../config/env';
 import { logger } from '../core/logger';
 import { prisma } from '../core/db';
+import { currentUnitId, runWithContext } from '../core/context';
 
 export const QUEUES = {
   REFRESH_STOCK: 'refresh-stock-balances',
@@ -19,6 +20,21 @@ export const QUEUES = {
 type Handler = (data: Record<string, unknown>) => Promise<void>;
 const handlers = new Map<string, Handler>();
 let boss: PgBoss | null = null;
+
+/**
+ * Run a job in its unit (Q-085): a job queued from a request carries that unit; a scheduled job
+ * (cron) runs once for every active unit; the stock cache refresh covers all units at once.
+ */
+async function runInUnits(name: string, handler: Handler, data: Record<string, unknown>): Promise<void> {
+  const unitId = typeof data.__unitId === 'string' ? data.__unitId : undefined;
+  if (unitId) return runWithContext({ requestId: `job:${name}`, unitId }, () => handler(data));
+  if (CRON_JOBS.includes(name)) {
+    const units = await prisma.businessUnit.findMany({ where: { isActive: true }, select: { id: true }, orderBy: { code: 'asc' } });
+    for (const u of units) await runWithContext({ requestId: `job:${name}`, unitId: u.id }, () => handler(data));
+    return;
+  }
+  return handler(data);
+}
 
 /** Register a worker. Workers run inside the API process (A§11). */
 export function registerJob(name: string, handler: Handler): void {
@@ -65,7 +81,7 @@ export async function startJobs(): Promise<void> {
       for (const job of batch) {
         const started = Date.now();
         try {
-          await handler(job.data ?? {});
+          await runInUnits(name, handler, job.data ?? {});
           logger.info({ job: name, id: job.id, ms: Date.now() - started }, 'job done');
         } catch (err) {
           logger.error({ err, job: name, id: job.id }, 'job failed');
@@ -92,7 +108,7 @@ export async function stopJobs(): Promise<void> {
 export async function runJobNow(name: string, data: Record<string, unknown> = {}): Promise<void> {
   const h = handlers.get(name);
   if (!h) throw new Error(`No handler registered for ${name}`);
-  await h(data);
+  await runInUnits(name, h, data);
 }
 
 let refreshTimer: NodeJS.Timeout | null = null;
@@ -118,6 +134,9 @@ export const jobs = {
   },
 
   async send(name: string, data: Record<string, unknown>, opts: PgBoss.SendOptions = {}): Promise<string | null> {
+    // The job runs in the unit it was queued from (Q-085).
+    const unitId = currentUnitId();
+    if (unitId && data.__unitId === undefined) data = { ...data, __unitId: unitId };
     if (boss) return boss.send(name, data, opts);
     // Workers disabled: run inline after the current tick so the HTTP response is not delayed.
     void background(name, () => runJobNow(name, data));

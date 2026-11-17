@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus } from 'lucide-react';
+import { ClipboardList, Plus } from 'lucide-react';
 import { D, todayIst, zYarnReceiptInput } from '@wewin/shared';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
@@ -17,6 +17,7 @@ import { ScanInvoiceButton } from '../scans/ScanInvoiceButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
+import { LoadFromPo } from '../purchase/LoadFromPo';
 import { pickers } from '../orders/api';
 import { type VoiceFormSpec } from '@wewin/shared';
 import { useVoiceFill } from '@/lib/voice';
@@ -37,7 +38,20 @@ export interface YarnReceipt {
   cancelReason: string | null;
   vendor: { id: string; code: string; name: string; gstin: string | null; city: string | null };
   order: { id: string; orderNo: string; styleNo: string } | null;
-  lines: { id: string; lineNo: number; itemId: string; lot: string; bags: number | null; qtyKg: string; ratePerKg: string | null; amount: string | null; item: { code: string; name: string; hsnCode: string | null } }[];
+  lines: {
+    id: string;
+    lineNo: number;
+    itemId: string;
+    lot: string;
+    bags: number | null;
+    qtyKg: string;
+    ratePerKg: string | null;
+    amount: string | null;
+    poLineId: string | null;
+    poNo: string | null;
+    poRatePerKg: string | null;
+    item: { code: string; name: string; hsnCode: string | null };
+  }[];
   totals: { kg: string; bags: number; value: string };
 }
 
@@ -101,7 +115,7 @@ export function StatusFilter({ value, onChange, statuses = ['DRAFT', 'POSTED', '
   );
 }
 
-type LineRow = GridRow & { itemId: string; lot: string; bags: string | number; qtyKg: string; ratePerKg: string };
+type LineRow = GridRow & { itemId: string; lot: string; bags: string | number; qtyKg: string; ratePerKg: string; poLineId?: string | null; poNo?: string | null };
 interface FormValues {
   docDate: string;
   vendorId: string;
@@ -142,6 +156,7 @@ export function YarnReceiptPage() {
   const d = useDocument<YarnReceipt>('/yarn-receipts', 'yarn-receipts', id);
   const r = d.doc;
   const [labels, setLabels] = useState<Record<string, string>>({});
+  const [loadingPo, setLoadingPo] = useState(false);
   const form = useForm<FormValues>({
     resolver: zodResolver(zYarnReceiptInput as never),
     defaultValues: { docDate: todayIst(), vendorId: '', orderId: '', supplierInvoiceNo: '', supplierInvoiceDate: '', vehicleNo: '', remarks: '', lines: [blankLine()] },
@@ -159,7 +174,7 @@ export function YarnReceiptPage() {
       supplierInvoiceDate: r.supplierInvoiceDate ?? '',
       vehicleNo: r.vehicleNo ?? '',
       remarks: r.remarks ?? '',
-      lines: r.lines.map((l) => ({ _key: l.id, itemId: l.itemId, lot: l.lot, bags: l.bags ?? '', qtyKg: l.qtyKg, ratePerKg: l.ratePerKg ?? '' })),
+      lines: r.lines.map((l) => ({ _key: l.id, itemId: l.itemId, lot: l.lot, bags: l.bags ?? '', qtyKg: l.qtyKg, ratePerKg: l.ratePerKg ?? '', poLineId: l.poLineId, poNo: l.poNo })),
     });
     setLabels({
       [r.vendorId]: r.vendor.name,
@@ -211,6 +226,13 @@ export function YarnReceiptPage() {
       onDelete={d.isNew ? undefined : d.remove}
       printHref={r ? `/print/yarn-receipt/${r.id}` : undefined}
       voice={voice}
+      extraActions={
+        editable ? (
+          <Button variant="outline" onClick={() => setLoadingPo(true)} disabled={!form.watch('vendorId')} title={form.watch('vendorId') ? undefined : 'Pick the mill first'}>
+            <ClipboardList /> Load from PO
+          </Button>
+        ) : null
+      }
       header={
         <>
           <Field label="Receipt date *" error={e.docDate?.message}>
@@ -304,6 +326,7 @@ export function YarnReceiptPage() {
                     />
                   ),
                 },
+                { key: 'poNo', header: 'PO', width: '120px', display: (row) => row.poNo ?? '—' },
                 { key: 'lot', header: 'Lot no.', width: '130px' },
                 { key: 'bags', header: 'Bags', type: 'pcs', width: '80px', total: true },
                 { key: 'qtyKg', header: 'Kg', type: 'kg', width: '120px', total: true },
@@ -323,6 +346,28 @@ export function YarnReceiptPage() {
       aside={
         <Card>
           <CardContent className="grid gap-1 text-sm">
+            {loadingPo ? (
+              <LoadFromPo
+                endpoint="/yarn-receipts/po-lines"
+                vendorId={form.watch('vendorId')}
+                orderId={form.watch('orderId') || undefined}
+                already={lines.map((l) => l.poLineId).filter((x): x is string => !!x)}
+                onClose={() => setLoadingPo(false)}
+                onAdd={(picked) => {
+                  const kept = form.getValues('lines').filter((l) => l.itemId || l.lot || l.qtyKg);
+                  setLabels((x) => ({ ...x, ...Object.fromEntries(picked.map((p) => [p.itemId, p.item.name])) }));
+                  form.setValue(
+                    'lines',
+                    [
+                      ...kept,
+                      ...picked.map((p) => ({ _key: newKey(), itemId: p.itemId, lot: '', bags: p.bags ?? '', qtyKg: p.pending, ratePerKg: p.ratePerKg, poLineId: p.poLineId, poNo: p.poNo })),
+                    ],
+                    { shouldDirty: true },
+                  );
+                  setLoadingPo(false);
+                }}
+              />
+            ) : null}
             <div className="text-xs text-muted-foreground">Total received</div>
             <div className="text-2xl font-semibold">{formatKg(totalKg.toFixed(3))} kg</div>
             <div className="text-xs text-muted-foreground">{formatQty(lines.length)} line(s)</div>

@@ -1,15 +1,98 @@
 import { Prisma, PrismaClient } from '@wewin/db';
-import { getContext } from './context';
+import { currentUnitId, getContext } from './context';
 import { logger } from './logger';
 
-export const prisma = new PrismaClient({
+/** First exporter's main unit: existing data, and rows written outside a unit (seed, scripts). */
+export const MAIN_UNIT_ID = '00000000-0000-4000-8000-000000000001';
+
+/**
+ * Tables whose rows belong to an exporter / unit (Q-085). Every query on them made while a unit is
+ * in the request / job context is filtered to that unit, and new rows are stamped with it — the
+ * one place units are kept apart. Lines, links and masters belong to their document or are shared.
+ */
+export const UNIT_SCOPED_MODELS = new Set([
+  'Order', 'FabricProgram', 'YarnProgram', 'YarnReceipt', 'OutwardDc', 'InwardDc', 'FabricRoll', 'CutLay', 'CutBundle', 'PanelDc',
+  'RecutSlip', 'SewingIssue', 'SewingEntry', 'Carton', 'PackingList', 'TrimsDoc', 'VendorBill', 'DebitNote', 'PaymentVoucher',
+  'AgeingSnapshot', 'InvoiceScan', 'ExportInvoice', 'Shipment', 'BuyerReceipt', 'OpeningImport', 'QcInspection', 'PurchaseOrder',
+  'StockDoc', 'SplRequest', 'StockMovement', 'Alert', 'ReportExport',
+]);
+
+type Args = Record<string, unknown> & { where?: unknown; data?: unknown; create?: unknown };
+const WHERE_AND = new Set(['findMany', 'findFirst', 'findFirstOrThrow', 'count', 'aggregate', 'groupBy', 'updateMany', 'updateManyAndReturn', 'deleteMany']);
+const WHERE_UNIQUE = new Set(['findUnique', 'findUniqueOrThrow', 'update', 'delete', 'upsert']);
+
+function scopeArgs(operation: string, args: Args, unitId: string): Args {
+  const a: Args = { ...args };
+  if (WHERE_AND.has(operation)) a.where = a.where ? { AND: [a.where, { unitId }] } : { unitId };
+  else if (WHERE_UNIQUE.has(operation)) a.where = { ...(a.where as object), unitId };
+  const stamp = (d: unknown) => (d && typeof d === 'object' && !('unitId' in d) ? { ...d, unitId } : d);
+  if (operation === 'create') a.data = stamp(a.data);
+  if (operation === 'createMany' || operation === 'createManyAndReturn') a.data = Array.isArray(a.data) ? a.data.map(stamp) : stamp(a.data);
+  if (operation === 'upsert') a.create = stamp(a.create);
+  return a;
+}
+
+const base = new PrismaClient({
   log: [
     { level: 'warn', emit: 'event' },
     { level: 'error', emit: 'event' },
   ],
 });
-prisma.$on('warn', (e) => logger.warn({ prisma: e }, 'prisma warning'));
-prisma.$on('error', (e) => logger.error({ prisma: e }, 'prisma error'));
+base.$on('warn', (e) => logger.warn({ prisma: e }, 'prisma warning'));
+base.$on('error', (e) => logger.error({ prisma: e }, 'prisma error'));
+
+const scoped = base.$extends({
+  name: 'unit-scope',
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const unitId = currentUnitId();
+        if (!unitId || !UNIT_SCOPED_MODELS.has(model)) return query(args);
+        return query(scopeArgs(operation, args as Args, unitId) as typeof args);
+      },
+    },
+  },
+});
+
+/** The database client: unit-scoped (see UNIT_SCOPED_MODELS); typed as the plain client. */
+export const prisma = scoped as unknown as PrismaClient;
+
+/** Tables of UNIT_SCOPED_MODELS, plus the per-unit stock balance cache (Q-085). */
+const UNIT_SCOPED_TABLES = [
+  'orders', 'fabric_programs', 'yarn_programs', 'yarn_receipts', 'outward_dcs', 'inward_dcs', 'fabric_rolls', 'cut_lays', 'cut_bundles', 'panel_dcs',
+  'recut_slips', 'sewing_issues', 'sewing_entries', 'cartons', 'packing_lists', 'trims_docs', 'vendor_bills', 'debit_notes', 'payment_vouchers',
+  'ageing_snapshots', 'invoice_scans', 'export_invoices', 'shipments', 'buyer_receipts', 'opening_imports', 'qc_inspections', 'purchase_orders',
+  'stock_docs', 'spl_requests', 'stock_movements', 'alerts', 'report_exports', 'stock_balances',
+];
+
+/**
+ * For hand-written report SQL (Q-085): runs the query with every unit-scoped table replaced by a CTE of
+ * the same name holding only the current unit's rows (a CTE hides the table of that name in the query),
+ * so all of its references are filtered at once. Without a unit in context the query runs as written.
+ */
+export function unitScoped(query: Prisma.Sql): Prisma.Sql {
+  const unitId = currentUnitId();
+  if (!unitId) return query;
+  const ctes = Prisma.join(
+    UNIT_SCOPED_TABLES.map((t) => Prisma.sql`${Prisma.raw(`"${t}" AS (SELECT * FROM public."${t}" WHERE unit_id = `)}${unitId}::uuid)`),
+    ', ',
+  );
+  const first = query.strings[0] ?? '';
+  const m = /^\s*WITH\s+/i.exec(first);
+  if (m) {
+    const strings = [first.slice(m[0].length), ...query.strings.slice(1)];
+    const rest = Prisma.sql(Object.assign(strings, { raw: strings }) as unknown as TemplateStringsArray, ...query.values);
+    return Prisma.sql`WITH ${ctes}, ${rest}`;
+  }
+  return Prisma.sql`WITH ${ctes} ${query}`;
+}
+
+/** For hand-written SQL on unit-scoped tables: `AND <alias>.unit_id = <unit>` when a unit is set (Q-085). */
+export function unitFilter(alias?: string): Prisma.Sql {
+  const unitId = currentUnitId();
+  if (!unitId) return Prisma.empty;
+  return alias ? Prisma.sql`AND ${Prisma.raw(`${alias}.unit_id`)} = ${unitId}::uuid` : Prisma.sql`AND unit_id = ${unitId}::uuid`;
+}
 
 export type Tx = Prisma.TransactionClient;
 export type Isolation = 'ReadCommitted' | 'RepeatableRead' | 'Serializable';

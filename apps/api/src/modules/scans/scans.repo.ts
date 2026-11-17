@@ -84,7 +84,7 @@ export const scansRepo = {
   sameInvoice(vendorId: string, invoiceNo: string, excludeId: string) {
     return prisma.invoiceScan.findMany({
       where: { vendorId, vendorInvoiceNo: { equals: invoiceNo, mode: 'insensitive' }, id: { not: excludeId }, status: { in: ['NEEDS_REVIEW', 'READY', 'APPLIED'] } },
-      select: { id: true, status: true, appliedDocType: true, appliedDocId: true },
+      select: { id: true, status: true, target: true, appliedDocType: true, appliedDocId: true },
     });
   },
   purgeable(before: Date) {

@@ -208,6 +208,12 @@ describe('panel job work', () => {
       lines: [{ componentCode: 'FRONT', colour: 'NAVY', size: '2Y', pcs: 2 }],
     });
     expect(r.docNo).toMatch(/^RCS\/26-27\/\d{4}$/);
+    // The print shows the panel D.C. the slip is raised against.
+    const g = await owner.get(`/api/v1/recut-slips/${r.id}`);
+    ok(g);
+    const dc = (await owner.get(`/api/v1/panel-dcs/${pdcOut.id}`)).body.data;
+    expect(g.body.data.panelDc).toEqual({ id: pdcOut.id, docNo: dc.docNo, docDate: '2026-10-11' });
+    expect(g.body.data.panelDc.docNo).toBeTruthy();
   });
 });
 

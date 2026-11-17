@@ -15,7 +15,7 @@ import { BusinessSettings } from './BusinessSettings';
 
 type Company = CompanySettingsInput & { isPlaceholder: boolean };
 
-const FIELDS: { key: keyof CompanySettingsInput; label: string; span?: boolean }[] = [
+export const COMPANY_FIELDS: { key: keyof CompanySettingsInput; label: string; span?: boolean }[] = [
   { key: 'legalName', label: 'Legal name', span: true },
   { key: 'tradeName', label: 'Trade name' },
   { key: 'gstin', label: 'GSTIN' },
@@ -38,7 +38,7 @@ const FIELDS: { key: keyof CompanySettingsInput; label: string; span?: boolean }
 ];
 
 export function SettingsPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['settings', 'company'], queryFn: () => api.get<Company>('/settings/company') });
   const form = useForm<CompanySettingsInput>({ resolver: zodResolver(zCompanySettings) });
@@ -70,14 +70,16 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Company {q.data?.isPlaceholder ? <Badge variant="warning">Placeholder — please complete</Badge> : null}
+            Exporter: {user?.unit.exporter.name} {q.data?.isPlaceholder ? <Badge variant="warning">Placeholder — please complete</Badge> : null}
           </CardTitle>
-          <CardDescription>GSTIN, address and bank details used in print layouts.</CardDescription>
+          <CardDescription>
+            GSTIN, address and bank details printed on documents of the unit you are logged into ({user?.unit.name}). Other exporters are edited in Exporters &amp; units.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit((v) => save.mutate(v))} noValidate>
             <fieldset disabled={!editable} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {FIELDS.map((f) => (
+              {COMPANY_FIELDS.map((f) => (
                 <div key={f.key} className={f.span ? 'sm:col-span-2' : ''}>
                   <Label htmlFor={f.key}>{f.label}</Label>
                   <Input

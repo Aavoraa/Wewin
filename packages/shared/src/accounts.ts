@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { zBoolString, zListQuery, zRef } from './api';
 import { daysBetween, zDate } from './dates';
-import { D, type DecimalLike, Dec, zMoney, zQty, zRate } from './decimal';
+import { D, type DecimalLike, Dec, zDecimal, zMoney, zPct, zQty, zRate } from './decimal';
 import { zDocStatus, zUnit } from './constants';
 import { zOptional } from './masters';
 
@@ -30,24 +30,115 @@ export const zRateListQuery = zListQuery.extend({
   active: z.enum(['true', 'false', 'all']).optional(),
 });
 
-export const BILL_SOURCE_TYPES = ['INWARD_DC', 'PANEL_IN'] as const;
-export const zBillInput = z.object({
+export const BILL_SOURCE_TYPES = ['INWARD_DC', 'PANEL_IN', 'YARN_RECEIPT', 'STOCK_INWARD'] as const;
+export type BillSourceType = (typeof BILL_SOURCE_TYPES)[number];
+/** JOBWORK bills cover inward D.C.s and panel receipts; PURCHASE bills cover yarn receipts and inward from others (Q-079). */
+export const BILL_KINDS = ['JOBWORK', 'PURCHASE'] as const;
+export type BillKind = (typeof BILL_KINDS)[number];
+export const BILL_KIND_SOURCES: Record<BillKind, readonly BillSourceType[]> = {
+  JOBWORK: ['INWARD_DC', 'PANEL_IN'],
+  PURCHASE: ['YARN_RECEIPT', 'STOCK_INWARD'],
+};
+
+/**
+ * Tax type on a bill (desktop "Tax Type", Q-087): CGST + SGST, IGST, or no tax. Left blank, it follows
+ * the supplier's state (IGST when inter-state).
+ */
+export const BILL_TAX_TYPES = ['GST', 'IGST', 'NONE'] as const;
+export type BillTaxType = (typeof BILL_TAX_TYPES)[number];
+
+const billShape = z.object({
+  kind: z.enum(BILL_KINDS).default('JOBWORK'),
   docDate: zDate(),
   vendorId: zRef(),
   orderId: zOptional(zRef()),
+  /** Job-work bills only: the process this invoice is for (Q-079). */
+  processId: zOptional(zRef()),
   vendorInvoiceNo: text(40).min(1, 'Vendor invoice no. is required'),
   vendorInvoiceDate: zDate(),
   taxableAmount: zMoney(),
+  /** GST % the amounts were worked out from (record only). */
+  gstRatePct: zOptional(zDecimal({ scale: 3, max: '100' })),
+  taxType: zOptional(z.enum(BILL_TAX_TYPES)),
+  /** Part of the taxable amount GST is charged on (desktop "100"), default all of it. Record only. */
+  taxablePct: zPct({ positive: true }).default('100'),
   cgstAmount: zMoney().default('0'),
   sgstAmount: zMoney().default('0'),
   igstAmount: zMoney().default('0'),
+  /** Round-off / adjustments on the invoice (Q-079). */
+  addAmount: zMoney().default('0'),
+  lessAmount: zMoney().default('0'),
   remarks: zOptional(text(500)),
   lines: z
-    .array(z.object({ sourceType: z.enum(BILL_SOURCE_TYPES), sourceId: zRef(), invoicedAmount: zOptional(zMoney()) }))
-    .min(1, 'Tick the inward D.C.s this invoice covers')
+    .array(
+      z.object({
+        sourceType: z.enum(BILL_SOURCE_TYPES),
+        sourceId: zRef(),
+        invoicedAmount: zOptional(zMoney()),
+        /** Quantity billed when it differs from the received quantity (never more). */
+        billQty: zOptional(zQty({ positive: true })),
+        billPcs: zOptional(z.coerce.number().int().min(0).max(1_000_000)),
+      }),
+    )
+    .min(1, 'Tick the documents this invoice covers')
     .max(500),
 });
-export const zBillUpdate = zBillInput.extend({ version: z.number().int().min(1) });
+type BillShape = z.output<typeof billShape>;
+function billRules(v: Pick<BillShape, 'kind' | 'processId' | 'lines' | 'taxType' | 'cgstAmount' | 'sgstAmount' | 'igstAmount'>, ctx: z.RefinementCtx) {
+  const allowed = BILL_KIND_SOURCES[v.kind];
+  v.lines.forEach((l, i) => {
+    if (!allowed.includes(l.sourceType)) {
+      ctx.addIssue({ code: 'custom', path: ['lines', i, 'sourceType'], message: v.kind === 'PURCHASE' ? 'A purchase bill covers yarn receipts and inward from others' : 'A job-work bill covers inward D.C.s and panel receipts' });
+    }
+  });
+  if (v.kind === 'PURCHASE' && v.processId) ctx.addIssue({ code: 'custom', path: ['processId'], message: 'A purchase bill has no process' });
+  // A chosen tax type must match the tax amounts typed.
+  const nz = (x: string) => !D(x).isZero();
+  if (v.taxType === 'NONE') {
+    for (const f of ['cgstAmount', 'sgstAmount', 'igstAmount'] as const) if (nz(v[f])) ctx.addIssue({ code: 'custom', path: [f], message: 'No tax: leave GST at 0' });
+  } else if (v.taxType === 'GST' && nz(v.igstAmount)) {
+    ctx.addIssue({ code: 'custom', path: ['igstAmount'], message: 'Tax type GST: CGST + SGST, not IGST' });
+  } else if (v.taxType === 'IGST') {
+    for (const f of ['cgstAmount', 'sgstAmount'] as const) if (nz(v[f])) ctx.addIssue({ code: 'custom', path: [f], message: 'Tax type IGST: no CGST / SGST' });
+  }
+}
+export const zBillInput = billShape.superRefine(billRules);
+export const zBillUpdate = billShape.extend({ version: z.number().int().min(1) }).superRefine(billRules);
+/** Header part of the bill form (the lines are handled separately). */
+export const zBillHeader = billShape.omit({ lines: true });
+
+/**
+ * GST on a bill worked out from a rate (Q-079): IGST at the full rate when the supplier is in another
+ * state, else CGST and SGST each at half the rate, each rounded to the paisa (half up).
+ */
+export function billGst(taxable: DecimalLike, ratePct: DecimalLike, interState: boolean, taxablePct: DecimalLike = 100) {
+  const t = D(taxable).times(D(taxablePct)).div(100);
+  const r = D(ratePct);
+  if (interState) return { cgst: '0.00', sgst: '0.00', igst: t.times(r).div(100).toDecimalPlaces(2, Dec.ROUND_HALF_UP).toFixed(2) };
+  const half = t.times(r).div(200).toDecimalPlaces(2, Dec.ROUND_HALF_UP).toFixed(2);
+  return { cgst: half, sgst: half, igst: '0.00' };
+}
+
+/**
+ * GST for a tax type (Q-087): GST → CGST + SGST, IGST → IGST, NONE → nothing; blank follows the state.
+ * Tax is charged on `taxablePct` % of the taxable amount.
+ */
+export function billTax(taxable: DecimalLike, ratePct: DecimalLike, taxType: BillTaxType | null | undefined, interState: boolean, taxablePct: DecimalLike = 100) {
+  const type = taxType ?? (interState ? 'IGST' : 'GST');
+  if (type === 'NONE') return { cgst: '0.00', sgst: '0.00', igst: '0.00' };
+  return billGst(taxable, ratePct, type === 'IGST', taxablePct);
+}
+
+/** Invoice total on a bill = taxable + GST + add − less (Q-079). */
+export function billInvoiceTotal(b: { taxableAmount: DecimalLike; cgstAmount: DecimalLike; sgstAmount: DecimalLike; igstAmount: DecimalLike; addAmount?: DecimalLike; lessAmount?: DecimalLike }) {
+  return D(b.taxableAmount)
+    .plus(D(b.cgstAmount))
+    .plus(D(b.sgstAmount))
+    .plus(D(b.igstAmount))
+    .plus(D(b.addAmount ?? 0))
+    .minus(D(b.lessAmount ?? 0))
+    .toFixed(2);
+}
 export const zBillListQuery = zListQuery.extend({
   status: zDocStatus.optional(),
   vendorId: zRef().optional(),
@@ -56,8 +147,20 @@ export const zBillListQuery = zListQuery.extend({
   to: zDate().optional(),
   payStatus: z.enum(['UNPAID', 'PARTIAL', 'PAID']).optional(),
   approval: z.enum(['PENDING', 'APPROVED', 'NOT_REQUIRED']).optional(),
+  kind: z.enum(BILL_KINDS).optional(),
+  processId: zRef().optional(),
+  /** Bills passing queues (Q-078): waiting for the 1st / 2nd audit, held at either, or fully passed. */
+  audit: z.enum(['PENDING1', 'PENDING2', 'HELD', 'PASSED']).optional(),
 });
 export const zApprove = z.object({ note: text(500).min(3, 'Give the approval reason') });
+
+/** Bills passing (Q-078): pass a posted bill at the 1st or 2nd audit, or hold it with a reason. */
+export const zBillAudit = z
+  .object({ level: z.union([z.literal(1), z.literal(2)]), decision: z.enum(['PASS', 'HOLD']), note: zOptional(text(500)) })
+  .superRefine((v, ctx) => {
+    if (v.decision === 'HOLD' && (!v.note || v.note.length < 3)) ctx.addIssue({ code: 'custom', path: ['note'], message: 'Say why the bill is held' });
+  });
+export type BillAuditInput = z.input<typeof zBillAudit>;
 
 export const zDebitNoteInput = z.object({
   docDate: zDate(),
@@ -98,7 +201,7 @@ export const zAccountsListQuery = zListQuery.extend({
   to: zDate().optional(),
 });
 
-export const zBillMatchQuery = z.object({ vendorId: zRef(), orderId: zRef().optional() });
+export const zBillMatchQuery = z.object({ vendorId: zRef(), orderId: zRef().optional(), kind: z.enum(BILL_KINDS).default('JOBWORK'), processId: zRef().optional() });
 export const zPaymentSuggestQuery = z.object({
   vendorId: zRef(),
   amount: zMoney().default('0'),
@@ -251,3 +354,10 @@ export function ageingSummary(rows: { bucket: AgeingBucket; outstanding: Decimal
   return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, v.toFixed(2)])) as Record<AgeingBucket | 'total', string>;
 }
 
+/** Debit note posting to Tally (Q-084): the queue to post (new + cancelled after posting) or those already posted. */
+export const zTallyQueueQuery = z.object({ queue: z.enum(['PENDING', 'POSTED']).default('PENDING') });
+export const zTallyExport = z.object({
+  ids: z.array(zRef()).min(1, 'Tick the debit notes to post').max(500),
+  /** false = download again without marking (already posted notes). */
+  mark: z.boolean().default(true),
+});

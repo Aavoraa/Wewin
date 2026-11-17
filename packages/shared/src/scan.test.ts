@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { HEADER_FIELDS, LINE_FIELDS, type Review, type ReviewLine, type ScanField, emptyField } from './scan';
+import { HEADER_FIELDS, LINE_FIELDS, SCAN_TARGETS, CLASS_TARGET, isBillTarget, zReviewPatch, type Review, type ReviewLine, type ScanField, emptyField } from './scan';
 import { gstinCheckChar, isValidGstin, normalizeDate, normalizeGstin, normalizeNumber, normalizeUnit, parseAttributes } from './scan-normalize';
-import { matchItem, matchOrderRef, matchVendor } from './scan-match';
+import { matchItem, matchOrderRef, matchPurchaseSources, matchVendor } from './scan-match';
 import { type ValidationContext, buildPayload, linkAllocation, reconcile, validateReview } from './scan-mapping';
 
 const base = '33ABCDE1234F1Z';
@@ -173,6 +173,41 @@ describe('validateReview', () => {
     expect(r.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['SOURCES_UNCONFIRMED', 'OUTSIDE_TOLERANCE']));
     r = validateReview({ ...rv, confirmed: ['sources'] }, ctx({ billMatch: { withinTolerance: true, variance: '0.00', missingRates: 0 } }));
     expect(r.ready).toBe(true);
+  });
+  it('purchase bill needs confirmed receipts; an unpriced receipt only warns (bill module asks for approval)', () => {
+    const rv = review({ target: 'PURCHASE_BILL', lines: [], sources: [{ sourceType: 'YARN_RECEIPT', sourceId: 'r1', docNo: 'YRN/26-27/0001', reason: '' }] });
+    expect(validateReview({ ...rv, sources: [] }, ctx()).issues.map((i) => i.code)).toContain('NO_SOURCES');
+    let r = validateReview(rv, ctx({ billMatch: { withinTolerance: false, variance: '0.00', missingRates: 1 } }));
+    expect(r.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['SOURCES_UNCONFIRMED', 'RATE_MISSING']));
+    expect(r.issues.find((i) => i.code === 'RATE_MISSING')?.level).toBe('WARNING');
+    r = validateReview({ ...rv, confirmed: ['sources'] }, ctx({ billMatch: { withinTolerance: true, variance: '0.00', missingRates: 0 } }));
+    expect(r.ready).toBe(true);
+  });
+});
+
+describe('purchase bill target (Q-083)', () => {
+  it('is a scan target, a bill target, and never chosen by the classifier', () => {
+    expect(SCAN_TARGETS).toContain('PURCHASE_BILL');
+    expect(isBillTarget('PURCHASE_BILL') && isBillTarget('VENDOR_BILL') && !isBillTarget('YARN_RECEIPT')).toBe(true);
+    expect(Object.values(CLASS_TARGET)).not.toContain('PURCHASE_BILL');
+    expect(CLASS_TARGET.YARN_PURCHASE).toBe('YARN_RECEIPT');
+    expect(zReviewPatch.safeParse({ version: 1, sources: [{ sourceType: 'YARN_RECEIPT', sourceId: '7a1b0b44-5c43-4b8e-9f43-0d5b1a2c3d4e' }] }).success).toBe(true);
+  });
+  it('matches receipts by supplier invoice no. (case / space-insensitive) or by the receipt no. on the invoice', () => {
+    const cands = [
+      { sourceType: 'YARN_RECEIPT' as const, sourceId: 'r1', docNo: 'YRN/26-27/0007', against: 'ksm / 1187', vendorDcNo: 'ksm / 1187' },
+      { sourceType: 'YARN_RECEIPT' as const, sourceId: 'r2', docNo: 'YRN/26-27/0008', against: 'KSM/1188', vendorDcNo: 'KSM/1188' },
+      { sourceType: 'STOCK_INWARD' as const, sourceId: 's1', docNo: 'SIN/26-27/0003', against: 'KSM/1187', vendorDcNo: null },
+      { sourceType: 'STOCK_INWARD' as const, sourceId: 's2', docNo: 'SIN/26-27/0004', against: 'Kaveri', vendorDcNo: null },
+    ];
+    // s1's `against` is a party name on inward from others, never a supplier invoice no.
+    expect(matchPurchaseSources(cands, { invoiceNo: 'KSM/1187', dcRefs: null }).map((s) => s.sourceId)).toEqual(['r1']);
+    expect(matchPurchaseSources(cands, { invoiceNo: 'OTHER', dcRefs: 'sin/26-27/0004, YRN / 26-27 / 0008' }).map((s) => s.sourceId)).toEqual(['r2', 's2']);
+    expect(matchPurchaseSources(cands, { invoiceNo: null, dcRefs: null })).toEqual([]);
+  });
+  it('builds a PURCHASE bill from the confirmed receipts', () => {
+    const rv = review({ target: 'PURCHASE_BILL', sources: [{ sourceType: 'YARN_RECEIPT', sourceId: 'r1', docNo: 'X', reason: '' }] });
+    expect(buildPayload(rv, { docDate: '2026-10-16' })).toMatchObject({ kind: 'PURCHASE', vendorInvoiceNo: 'KSM/1187', vendorInvoiceDate: '2026-10-09', taxableAmount: '5650.00', lines: [{ sourceType: 'YARN_RECEIPT', sourceId: 'r1', invoicedAmount: null }] });
   });
 });
 

@@ -3,12 +3,17 @@ import { D, amountInWords } from '@wewin/shared';
 import { api } from '@/lib/api';
 import { formatDate, formatInr, formatQty } from '@/lib/format';
 import { LoadingState } from '@/components/states';
-import { type BuyerReceipt, type Shipment } from '@/features/export/types';
+import { type BuyerReceipt, type ExportPartyBuyer, type Shipment } from '@/features/export/types';
 import { BillDoc } from './BillDoc';
 
 /** Foreign-currency amount, same style as the export invoice print. */
 const amt = (v: string) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fc = (cur: string, v: string) => `${cur} ${amt(v)}`;
+/** Address line and contact line under the buyer name, as on the order print. */
+const buyerLines = (b: ExportPartyBuyer) => [
+  [b.addressLine1, b.addressLine2, b.city, b.country].filter(Boolean).join(', '),
+  [b.contactPerson, b.phone, b.email].filter(Boolean).join(' · '),
+];
 
 /** Shipment advice: buyer, shipping bill / B/L or AWB, vessel, container, and the export invoices shipped. */
 export function ShipmentPrint({ id }: { id: string }) {
@@ -29,7 +34,7 @@ export function ShipmentPrint({ id }: { id: string }) {
       docNo={s.docNo}
       docDate={s.docDate}
       status={s.status}
-      party={{ label: 'Buyer / consignee', name: s.buyer.name, lines: [s.buyer.country] }}
+      party={{ label: 'Buyer / consignee', name: s.buyer.name, lines: buyerLines(s.buyer) }}
       details={[
         ['Mode', s.mode],
         ['Shipping bill no.', s.shippingBillNo],
@@ -69,7 +74,7 @@ export function BuyerReceiptPrint({ id }: { id: string }) {
       docNo={r.docNo}
       docDate={r.docDate}
       status={r.status}
-      party={{ label: 'Received from (buyer)', name: r.buyer.name, lines: [r.buyer.country] }}
+      party={{ label: 'Received from (buyer)', name: r.buyer.name, lines: buyerLines(r.buyer) }}
       details={[
         ['Credit date', formatDate(r.docDate)],
         ['Amount credited', fc(r.currency, r.amountFc)],

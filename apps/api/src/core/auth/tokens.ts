@@ -9,10 +9,12 @@ const AUDIENCE = 'wewin-web';
 export interface AccessClaims {
   sub: string;
   sid: string;
+  /** Unit of the session (Q-085); tokens issued before units existed have none. */
+  unit?: string;
 }
 
-export function signAccessToken(userId: string, sessionId: string): string {
-  return jwt.sign({ sid: sessionId }, env.JWT_SECRET, {
+export function signAccessToken(userId: string, sessionId: string, unitId: string): string {
+  return jwt.sign({ sid: sessionId, unit: unitId }, env.JWT_SECRET, {
     algorithm: 'HS256',
     subject: userId,
     issuer: ISSUER,
@@ -28,7 +30,7 @@ export function verifyAccessToken(token: string): AccessClaims {
     audience: AUDIENCE,
   }) as jwt.JwtPayload;
   if (typeof p.sub !== 'string' || typeof p.sid !== 'string') throw new Error('bad token claims');
-  return { sub: p.sub, sid: p.sid };
+  return { sub: p.sub, sid: p.sid, unit: typeof p.unit === 'string' ? p.unit : undefined };
 }
 
 /** Opaque refresh token; only its SHA-256 hash is stored. */

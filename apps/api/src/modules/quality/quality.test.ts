@@ -130,6 +130,10 @@ describe('fabric roll inspection (Q-063)', () => {
     const a = await owner.post(`/api/v1/qc/${hold.body.data.id}/approve`, { note: 'Held for shade check' });
     ok(a);
     expect(a.body.data.docNo).toMatch(/^QC\/26-27\/\d{4}$/);
+    // The approver (the user who posted it) comes back for the print.
+    const ownerName = (await prisma.user.findUniqueOrThrow({ where: { id: owner.userId } })).fullName;
+    expect(a.body.data.approvedBy).toEqual({ id: owner.userId, fullName: ownerName });
+    expect(hold.body.data.approvedBy).toBeNull();
     expect((await owner.post(`/api/v1/qc/${hold.body.data.id}/approve`, { note: 'again' })).body.error.code).toBe('DOC_ALREADY_POSTED');
 
     const blocked = await supervisor.post('/api/v1/cut-lays', layBody(roll.id, '10'));

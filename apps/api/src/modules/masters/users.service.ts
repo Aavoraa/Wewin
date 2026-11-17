@@ -10,9 +10,13 @@ import { usersRepo as repo } from './users.repo';
 
 const RC = { isolation: 'ReadCommitted' } as const;
 
-function shapeUser<T extends { roles: { role: { id: string; code: string; name: string } }[] }>(u: T) {
-  const { roles, ...rest } = u;
-  return { ...rest, roles: roles.map((r) => r.role), roleIds: roles.map((r) => r.role.id) };
+function shapeUser<T extends { roles: { role: { id: string; code: string; name: string } }[]; units: { unitId: string }[] }>(u: T) {
+  const { roles, units, ...rest } = u;
+  return { ...rest, roles: roles.map((r) => r.role), roleIds: roles.map((r) => r.role.id), unitIds: units.map((x) => x.unitId) };
+}
+
+async function checkUnits(unitIds: string[]) {
+  if (unitIds.length && (await repo.countUnits(unitIds)) !== unitIds.length) throw new AppError('VALIDATION_ERROR', 'Unknown unit', 400);
 }
 
 export const usersService = {
@@ -40,6 +44,7 @@ export const usersService = {
 
   async create(input: z.output<typeof zUserCreate>) {
     if ((await repo.countRoles(input.roleIds)) !== input.roleIds.length) throw new AppError('VALIDATION_ERROR', 'Unknown role', 400);
+    await checkUnits(input.unitIds);
     const { password, ...rest } = input;
     const passwordHash = await hashPassword(password);
     return withTx(async (tx) => shapeUser(await repo.create(tx, { ...rest, passwordHash })), RC);
@@ -47,6 +52,7 @@ export const usersService = {
 
   async update(id: string, input: z.output<typeof zUserUpdate>) {
     if ((await repo.countRoles(input.roleIds)) !== input.roleIds.length) throw new AppError('VALIDATION_ERROR', 'Unknown role', 400);
+    await checkUnits(input.unitIds);
     const out = await withTx(async (tx) => {
       const cur = await repo.get(id, tx);
       if (!cur) throw notFound('User');

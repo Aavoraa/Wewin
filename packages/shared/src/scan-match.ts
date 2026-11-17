@@ -183,3 +183,42 @@ export function matchOrderRef(ref: string | null, orders: OrderMaster[]): Match 
   const candidates = scored.map((x) => ({ id: x.o.id, code: x.o.orderNo, name: `${x.o.styleNo} · ${x.o.buyerName}`, score: x.score, reason: x.reason }));
   return { id: candidates[0]!.id, state: 'SUGGESTED', score: candidates[0]!.score, candidates };
 }
+
+/** A purchase-bill candidate as the bills service offers it (only the fields matching needs). */
+export interface PurchaseSourceCandidate {
+  sourceType: 'YARN_RECEIPT' | 'STOCK_INWARD';
+  sourceId: string;
+  docNo: string;
+  /** Yarn receipts: the supplier invoice no.; inward from others: the party name (not a reference). */
+  against: string;
+  /** Yarn receipts: the supplier invoice no. (null on inward from others). */
+  vendorDcNo: string | null;
+}
+
+/** Case- and space-insensitive reference compare (the same normalisation as job-work D.C. refs). */
+const refKey = (s: string | null | undefined) => (s ?? '').toUpperCase().replace(/\s+/g, '');
+
+/**
+ * Purchase invoice → the vendor's posted receipts it covers (Q-083). A receipt matches when its
+ * supplier invoice no. equals the scanned invoice no., or when a reference printed on the invoice
+ * (`dcRefs`, comma-separated) equals the receipt's Wewin no. Only ever a suggestion — the reviewer confirms.
+ */
+export function matchPurchaseSources(
+  cands: PurchaseSourceCandidate[],
+  scanned: { invoiceNo: string | null; dcRefs: string | null },
+): { sourceType: 'YARN_RECEIPT' | 'STOCK_INWARD'; sourceId: string; docNo: string; reason: string }[] {
+  const inv = refKey(scanned.invoiceNo);
+  const refs = (scanned.dcRefs ?? '').split(/\s*,\s*/).map(refKey).filter(Boolean);
+  const out: { sourceType: 'YARN_RECEIPT' | 'STOCK_INWARD'; sourceId: string; docNo: string; reason: string }[] = [];
+  for (const c of cands) {
+    // `against` carries the supplier invoice no. only on yarn receipts (on inward from others it is a party name).
+    const own = [c.vendorDcNo, c.sourceType === 'YARN_RECEIPT' ? c.against : null].map(refKey).filter(Boolean);
+    const doc = refKey(c.docNo);
+    if (inv && own.includes(inv)) out.push({ sourceType: c.sourceType, sourceId: c.sourceId, docNo: c.docNo, reason: `Supplier invoice ${scanned.invoiceNo!.trim()} on the receipt` });
+    else {
+      const hit = doc ? refs.find((r) => r === doc) : undefined;
+      if (hit) out.push({ sourceType: c.sourceType, sourceId: c.sourceId, docNo: c.docNo, reason: `Receipt ${c.docNo} on the invoice` });
+    }
+  }
+  return out;
+}

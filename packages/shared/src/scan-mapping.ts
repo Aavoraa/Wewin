@@ -124,6 +124,25 @@ export const TARGET_SPECS: Record<ScanTarget, TargetSpec> = {
       ...totalsKept.filter((f) => !['header:cgstAmount', 'header:sgstAmount', 'header:igstAmount'].includes(f.source)),
     ],
   },
+  /** Purchase bill (Q-079 kind PURCHASE, Q-083): the same bill header, covering posted yarn receipts / inward from others. */
+  PURCHASE_BILL: {
+    label: 'Purchase bill',
+    module: 'accounts',
+    entity: 'VendorBill (kind PURCHASE)',
+    endpoint: 'POST /api/v1/vendor-bills',
+    route: 'purchase-bills',
+    createPermission: 'accounts.bill.create',
+    itemType: null,
+    fields: [
+      ...common('vendorInvoiceNo', 'vendorInvoiceDate'),
+      { source: 'header:taxableAmount', target: 'taxableAmount', type: 'money', normalize: 'decimal, 2 places', validate: 'matched against receipt qty × receipt rate (existing tolerance)', mandatory: true, confirm: 'if-uncertain', derivable: 'Σ line taxable values' },
+      { source: 'header:cgstAmount', target: 'cgstAmount', type: 'money', normalize: 'decimal, 2 places', validate: 'equals SGST; not with IGST', mandatory: false, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:sgstAmount', target: 'sgstAmount', type: 'money', normalize: 'decimal, 2 places', validate: 'equals CGST; not with IGST', mandatory: false, confirm: 'if-uncertain', derivable: null },
+      { source: 'header:igstAmount', target: 'igstAmount', type: 'money', normalize: 'decimal, 2 places', validate: 'not with CGST/SGST', mandatory: false, confirm: 'if-uncertain', derivable: null },
+      { source: 'review:sources', target: 'lines[].sourceType + sourceId', type: 'ref', normalize: 'invoice no. = supplier invoice no. on the receipt, or receipt no. printed on the invoice → posted yarn receipts / inward from others of the vendor with qty left to bill', validate: 'posted, not billed in full, same vendor', mandatory: true, confirm: 'always', derivable: null },
+      ...totalsKept.filter((f) => !['header:cgstAmount', 'header:sgstAmount', 'header:igstAmount'].includes(f.source)),
+    ],
+  },
   OUTWARD_DC: {
     label: 'Outward D.C.',
     module: 'jobwork',
@@ -322,7 +341,7 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
   const tol = D(ctx.tolerance);
   const spec = review.target ? TARGET_SPECS[review.target] : null;
 
-  if (!spec) push('ERROR', 'TARGET_REQUIRED', 'target', 'Choose what this document is: yarn receipt, trims receipt, job-work bill, outward or inward D.C., or buyer order');
+  if (!spec) push('ERROR', 'TARGET_REQUIRED', 'target', 'Choose what this document is: yarn receipt, trims receipt, job-work bill, purchase bill, outward or inward D.C., or buyer order');
   const docWord = spec?.dc ? 'D.C.' : spec?.po ? 'PO' : 'Invoice';
   const party = spec?.po ? 'buyer' : 'vendor';
 
@@ -412,6 +431,17 @@ export function validateReview(review: Review, ctx: ValidationContext): { issues
     if (ctx.billMatch) {
       if (ctx.billMatch.missingRates) push('ERROR', 'RATE_MISSING', 'sources', `${ctx.billMatch.missingRates} D.C.(s) have no rate contract on their date`);
       else if (!ctx.billMatch.withinTolerance) push('WARNING', 'OUTSIDE_TOLERANCE', 'header:taxableAmount', `Taxable amount differs from D.C. qty × contract rate by ₹${ctx.billMatch.variance}; the bill will need owner approval before posting`);
+    }
+  }
+
+  // Purchase bill: receipts covered, matched at the receipts' own rates (Q-079). A receipt without
+  // rates has no expected amount: the bill module accepts it with owner approval, so it only warns here.
+  if (review.target === 'PURCHASE_BILL') {
+    if (!review.sources.length) push('ERROR', 'NO_SOURCES', 'sources', 'Tick the yarn receipts / inward from others this invoice covers');
+    else if (!confirmed.has('sources')) push('ERROR', 'SOURCES_UNCONFIRMED', 'sources', 'Confirm the receipts matched to this invoice');
+    if (ctx.billMatch) {
+      if (ctx.billMatch.missingRates) push('WARNING', 'RATE_MISSING', 'sources', `${ctx.billMatch.missingRates} receipt(s) have no rate; the bill will need owner approval before posting`);
+      else if (!ctx.billMatch.withinTolerance) push('WARNING', 'OUTSIDE_TOLERANCE', 'header:taxableAmount', `Taxable amount differs from receipt qty × rate by ₹${ctx.billMatch.variance}; the bill will need owner approval before posting`);
     }
   }
 
@@ -606,6 +636,20 @@ export function buildPayload(review: Review, opts: { docDate: string }): Record<
       };
     case 'VENDOR_BILL':
       return {
+        docDate: opts.docDate,
+        vendorId: review.vendor.id,
+        vendorInvoiceNo: v(h.invoiceNo),
+        vendorInvoiceDate: v(h.invoiceDate),
+        taxableAmount: v(h.taxableAmount) ?? reconcile(review).linesTotal,
+        cgstAmount: v(h.cgstAmount) ?? '0',
+        sgstAmount: v(h.sgstAmount) ?? '0',
+        igstAmount: v(h.igstAmount) ?? '0',
+        remarks: 'Entered from a scanned invoice',
+        lines: review.sources.map((s) => ({ sourceType: s.sourceType, sourceId: s.sourceId, invoicedAmount: null })),
+      };
+    case 'PURCHASE_BILL':
+      return {
+        kind: 'PURCHASE',
         docDate: opts.docDate,
         vendorId: review.vendor.id,
         vendorInvoiceNo: v(h.invoiceNo),

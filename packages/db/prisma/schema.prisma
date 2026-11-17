@@ -81,6 +81,7 @@ model User {
   updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   roles              UserRole[]
   sessions           Session[]
+  units              UserUnit[]
   notifications      Notification[]
   outwardApprovals   OutwardDc[]    @relation("outwardApprovedBy")
   layApprovals       CutLay[]       @relation("layApprovedBy")
@@ -138,6 +139,8 @@ model Session {
   id           String    @id @default(uuid()) @db.Uuid
   userId       String    @map("user_id") @db.Uuid
   familyId     String    @map("family_id") @db.Uuid
+  /// Unit the session logged into (Q-085).
+  unitId       String?   @map("unit_id") @db.Uuid
   tokenHash    String    @unique @map("token_hash")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
@@ -223,10 +226,12 @@ model NumberSeries {
   id         String   @id @default(uuid()) @db.Uuid
   seriesCode String   @map("series_code")
   fyCode     String   @map("fy_code")
+  /// Each unit numbers its documents separately (Q-085).
+  unitId     String   @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   lastNo     Int      @default(0) @map("last_no")
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@unique([seriesCode, fyCode])
+  @@unique([seriesCode, fyCode, unitId])
   @@map("number_series")
 }
 
@@ -316,6 +321,8 @@ model Item {
 /// The single stock ledger. Written only by core/ledger. Append-only (reversals are new rows).
 model StockMovement {
   id             String   @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId         String   @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   itemId         String   @map("item_id") @db.Uuid
   lot            String   @default("")
   colour         String   @default("")
@@ -347,6 +354,7 @@ model StockMovement {
   @@index([rollId])
   @@index([bundleId])
   @@index([docDate])
+  @@index([unitId])
   @@map("stock_movements")
 }
 
@@ -370,6 +378,8 @@ model Attachment {
 /// System alerts (overdue D.C., GST time limit, excess loss, payment due). One ACTIVE row per dedupe_key (partial unique index in SQL).
 model Alert {
   id               String         @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId           String         @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   kind             String
   severity         String
   title            String
@@ -389,6 +399,7 @@ model Alert {
 
   @@index([status, kind])
   @@index([dedupeKey])
+  @@index([unitId])
   @@map("alerts")
 }
 
@@ -430,6 +441,8 @@ model NotificationDelivery {
 
 model ReportExport {
   id            String       @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String       @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   reportKey     String       @map("report_key")
   params        Json
   status        ExportStatus @default(QUEUED)
@@ -443,6 +456,7 @@ model ReportExport {
   completedAt   DateTime?    @map("completed_at") @db.Timestamptz(3)
 
   @@index([requestedById, createdAt])
+  @@index([unitId])
   @@map("report_exports")
 }
 
@@ -470,6 +484,7 @@ model Process {
   outwardDcs        OutwardDc[]            @relation("outwardProcess")
   panelDcs          PanelDc[]              @relation("panelProcess")
   rateContracts     RateContract[]         @relation("rateProcess")
+  vendorBills       VendorBill[]           @relation("billProcess")
 
   @@map("processes")
 }
@@ -505,6 +520,8 @@ model Vendor {
   /// Vendor certificate (Q-074): required on the vendor form; nullable for vendors created before it and by imports.
   certificateNo          String?          @map("certificate_no")
   certificateExpiry      DateTime?        @map("certificate_expiry") @db.Date
+  /// Ledger name of this vendor in Tally, when it differs from the name here (Q-084).
+  tallyLedgerName        String?          @map("tally_ledger_name")
   isActive               Boolean          @default(true) @map("is_active")
   version                Int              @default(1)
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -580,6 +597,8 @@ enum ProgramStatus {
 /// Buyer order (PO) for one style; quantities per colour × size in order_lines.
 model Order {
   id                 String              @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId             String              @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   orderNo            String              @unique @map("order_no")
   buyerId            String              @map("buyer_id") @db.Uuid
   buyerPoNo          String              @map("buyer_po_no")
@@ -633,6 +652,7 @@ model Order {
 
   @@index([buyerId])
   @@index([status])
+  @@index([unitId])
   @@map("orders")
 }
 
@@ -697,6 +717,8 @@ model OrderCostingLine {
 /// Fabric program: route from yarn to finished fabric with allowed loss % per process (A§7.1).
 model FabricProgram {
   id                String                 @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId            String                 @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   programNo         String                 @unique @map("program_no")
   orderId           String                 @map("order_id") @db.Uuid
   fabricItemId      String?                @map("fabric_item_id") @db.Uuid
@@ -735,6 +757,7 @@ model FabricProgram {
   processes         FabricProgramProcess[]
 
   @@index([orderId])
+  @@index([unitId])
   @@map("fabric_programs")
 }
 
@@ -763,6 +786,8 @@ model FabricProgramProcess {
 /// mixing %, the yarn coming out, and the allowed loss %. Approved before yarn is delivered under it.
 model YarnProgram {
   id                String             @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId            String             @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   programNo         String             @unique @map("program_no")
   orderId           String             @map("order_id") @db.Uuid
   processId         String             @map("process_id") @db.Uuid
@@ -788,6 +813,7 @@ model YarnProgram {
 
   @@index([orderId])
   @@index([processId, status])
+  @@index([unitId])
   @@map("yarn_programs")
 }
 
@@ -833,6 +859,8 @@ model TrimsBomLine {
 /// Yarn receipt from a mill → posts SUPPLIER → YARN_STORE.
 model YarnReceipt {
   id                  String            @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId              String            @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo               String?           @unique @map("doc_no")
   docDate             DateTime          @map("doc_date") @db.Date
   vendorId            String            @map("vendor_id") @db.Uuid
@@ -842,6 +870,10 @@ model YarnReceipt {
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
   sourceScanId        String?           @unique @map("source_scan_id") @db.Uuid
   vehicleNo           String?           @map("vehicle_no")
+  /// Set when a purchase bill covering this receipt is posted (never billed twice) (Q-079).
+  billId              String?           @map("bill_id") @db.Uuid
+  /// False while only part of the document is billed; it stays billable for the rest (Q-081).
+  billedInFull        Boolean           @default(true) @map("billed_in_full")
   remarks             String?
   status              DocStatus         @default(DRAFT)
   version             Int               @default(1)
@@ -859,20 +891,24 @@ model YarnReceipt {
 
   @@index([status, docDate])
   @@index([vendorId])
+  @@index([unitId])
   @@map("yarn_receipts")
 }
 
 model YarnReceiptLine {
-  id        String      @id @default(uuid()) @db.Uuid
-  receiptId String      @map("receipt_id") @db.Uuid
-  lineNo    Int         @map("line_no")
-  itemId    String      @map("item_id") @db.Uuid
+  id        String             @id @default(uuid()) @db.Uuid
+  receiptId String             @map("receipt_id") @db.Uuid
+  lineNo    Int                @map("line_no")
+  itemId    String             @map("item_id") @db.Uuid
   lot       String
   bags      Int?
-  qtyKg     Decimal     @map("qty_kg") @db.Decimal(12, 3)
-  ratePerKg Decimal?    @map("rate_per_kg") @db.Decimal(12, 4)
-  receipt   YarnReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  item      Item        @relation("yarnReceiptItem", fields: [itemId], references: [id], onDelete: Restrict)
+  qtyKg     Decimal            @map("qty_kg") @db.Decimal(12, 3)
+  ratePerKg Decimal?           @map("rate_per_kg") @db.Decimal(12, 4)
+  /// Yarn PO line this line is received against (GRN against PO, Q-080).
+  poLineId  String?            @map("po_line_id") @db.Uuid
+  receipt   YarnReceipt        @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  item      Item               @relation("yarnReceiptItem", fields: [itemId], references: [id], onDelete: Restrict)
+  poLine    PurchaseOrderLine? @relation("yarnPoLine", fields: [poLineId], references: [id], onDelete: Restrict)
 
   @@index([itemId])
   @@map("yarn_receipt_lines")
@@ -883,6 +919,8 @@ model YarnReceiptLine {
 /// Outward delivery challan (Rule 55): material sent to a job worker under an approved program process.
 model OutwardDc {
   id                 String                @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId             String                @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo              String?               @unique @map("doc_no")
   docDate            DateTime              @map("doc_date") @db.Date
   vendorId           String                @map("vendor_id") @db.Uuid
@@ -939,6 +977,7 @@ model OutwardDc {
   @@index([vendorId, status])
   @@index([orderId])
   @@index([yarnProgramId])
+  @@index([unitId])
   @@map("outward_dcs")
 }
 
@@ -965,6 +1004,8 @@ model OutwardDcLine {
 /// Inward delivery challan: processed material returned by a job worker, roll by roll.
 model InwardDc {
   id            String         @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String         @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?        @unique @map("doc_no")
   docDate       DateTime       @map("doc_date") @db.Date
   vendorId      String         @map("vendor_id") @db.Uuid
@@ -985,6 +1026,8 @@ model InwardDc {
   cancelReason  String?        @map("cancel_reason")
   /// Set by accounts when a vendor bill covering this D.C. is posted (never billed twice).
   billId        String?        @map("bill_id") @db.Uuid
+  /// False while only part of the document is billed; it stays billable for the rest (Q-081).
+  billedInFull  Boolean        @default(true) @map("billed_in_full")
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   createdById   String?        @map("created_by_id") @db.Uuid
   updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -995,6 +1038,7 @@ model InwardDc {
 
   @@index([status, docDate])
   @@index([vendorId, status])
+  @@index([unitId])
   @@map("inward_dcs")
 }
 
@@ -1046,6 +1090,8 @@ model DcConsumption {
 /// Fabric roll created by a posted inward D.C. Its location is derived from the ledger (roll_id).
 model FabricRoll {
   id           String             @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId       String             @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   rollNo       String             @unique @map("roll_no")
   itemId       String             @map("item_id") @db.Uuid
   lot          String             @default("")
@@ -1063,6 +1109,7 @@ model FabricRoll {
   qcLines      QcInspectionLine[] @relation("qcRoll")
 
   @@index([itemId, lot])
+  @@index([unitId])
   @@map("fabric_rolls")
 }
 
@@ -1076,6 +1123,8 @@ enum PanelDcType {
 /// Cutting lay: rolls consumed (FABRIC_STORE → CONSUMED), bundles produced (PRODUCTION → CUT_STORE).
 model CutLay {
   id            String       @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String       @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?      @unique @map("doc_no")
   docDate       DateTime     @map("doc_date") @db.Date
   orderId       String       @map("order_id") @db.Uuid
@@ -1106,6 +1155,7 @@ model CutLay {
 
   @@index([orderId])
   @@index([status, docDate])
+  @@index([unitId])
   @@map("cut_lays")
 }
 
@@ -1125,6 +1175,8 @@ model CutLayRoll {
 /// Bundle of cut panels; number assigned at posting. Location derived from the ledger (bundle_id).
 model CutBundle {
   id            String             @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String             @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   layId         String             @map("lay_id") @db.Uuid
   lineNo        Int                @map("line_no")
   bundleNo      String?            @unique @map("bundle_no")
@@ -1141,12 +1193,15 @@ model CutBundle {
   qcLines       QcInspectionLine[] @relation("qcBundle")
 
   @@index([orderId, colour, size])
+  @@index([unitId])
   @@map("cut_bundles")
 }
 
 /// Panel delivery challan for printing / embroidery: type OUT (bundles out) or IN (good / rejected back).
 model PanelDc {
   id                 String        @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId             String        @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   type               PanelDcType
   docNo              String?       @unique @map("doc_no")
   docDate            DateTime      @map("doc_date") @db.Date
@@ -1169,6 +1224,8 @@ model PanelDc {
   closeReason        String?       @map("close_reason")
   /// IN documents: set when billed by accounts.
   billId             String?       @map("bill_id") @db.Uuid
+  /// False while only part of the document is billed; it stays billable for the rest (Q-081).
+  billedInFull       Boolean       @default(true) @map("billed_in_full")
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   createdById        String?       @map("created_by_id") @db.Uuid
   updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1179,6 +1236,7 @@ model PanelDc {
 
   @@index([type, status, docDate])
   @@index([vendorId, type, status])
+  @@index([unitId])
   @@map("panel_dcs")
 }
 
@@ -1208,6 +1266,8 @@ model PanelDcLine {
 /// Recut slip (Q-013): non-stock request to recut rejected / missing panels.
 model RecutSlip {
   id           String          @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId       String          @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo        String?         @unique @map("doc_no")
   docDate      DateTime        @map("doc_date") @db.Date
   orderId      String          @map("order_id") @db.Uuid
@@ -1225,6 +1285,7 @@ model RecutSlip {
   order        Order           @relation("recutOrder", fields: [orderId], references: [id], onDelete: Restrict)
   lines        RecutSlipLine[]
 
+  @@index([unitId])
   @@map("recut_slips")
 }
 
@@ -1246,6 +1307,8 @@ model RecutSlipLine {
 /// Sewing issue: bundles CUT_STORE → SEWING_WIP.
 model SewingIssue {
   id            String            @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String            @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?           @unique @map("doc_no")
   docDate       DateTime          @map("doc_date") @db.Date
   orderId       String            @map("order_id") @db.Uuid
@@ -1264,6 +1327,7 @@ model SewingIssue {
   order         Order             @relation("sewIssueOrder", fields: [orderId], references: [id], onDelete: Restrict)
   lines         SewingIssueLine[]
 
+  @@index([unitId])
   @@map("sewing_issues")
 }
 
@@ -1282,6 +1346,8 @@ model SewingIssueLine {
 /// Daily sewing output: panels SEWING_WIP → CONSUMED, garments PRODUCTION → FINISHING.
 model SewingEntry {
   id            String            @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String            @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?           @unique @map("doc_no")
   docDate       DateTime          @map("doc_date") @db.Date
   orderId       String            @map("order_id") @db.Uuid
@@ -1302,6 +1368,7 @@ model SewingEntry {
   lines         SewingEntryLine[]
 
   @@index([orderId, docDate])
+  @@index([unitId])
   @@map("sewing_entries")
 }
 
@@ -1320,6 +1387,8 @@ model SewingEntryLine {
 /// Packed carton: garments FINISHING → FG_STORE.
 model Carton {
   id            String       @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String       @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?      @unique @map("doc_no")
   docDate       DateTime     @map("doc_date") @db.Date
   orderId       String       @map("order_id") @db.Uuid
@@ -1347,6 +1416,7 @@ model Carton {
 
   @@unique([orderId, cartonSeq])
   @@index([orderId, status])
+  @@index([unitId])
   @@map("cartons")
 }
 
@@ -1365,6 +1435,8 @@ model CartonLine {
 /// Packing list: posted cartons of one order grouped for shipment (non-stock).
 model PackingList {
   id              String                     @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId          String                     @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo           String?                    @unique @map("doc_no")
   docDate         DateTime                   @map("doc_date") @db.Date
   orderId         String                     @map("order_id") @db.Uuid
@@ -1383,6 +1455,7 @@ model PackingList {
   cartons         Carton[]
   exportLinks     ExportInvoicePackingList[] @relation("exportPl")
 
+  @@index([unitId])
   @@map("packing_lists")
 }
 
@@ -1400,6 +1473,8 @@ enum TrimsDocType {
 
 model TrimsDoc {
   id                String         @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId            String         @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   type              TrimsDocType
   docNo             String?        @unique @map("doc_no")
   docDate           DateTime       @map("doc_date") @db.Date
@@ -1434,6 +1509,7 @@ model TrimsDoc {
   lines             TrimsDocLine[]
 
   @@index([type, status, docDate])
+  @@index([unitId])
   @@map("trims_docs")
 }
 
@@ -1499,12 +1575,27 @@ model RateContract {
 /// Vendor bill matched against posted inward D.C.s / panel inwards (3-way match, A§7.3).
 model VendorBill {
   id                String              @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId            String              @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo             String?             @unique @map("doc_no")
   docDate           DateTime            @map("doc_date") @db.Date
   vendorId          String              @map("vendor_id") @db.Uuid
   orderId           String?             @map("order_id") @db.Uuid
   vendorInvoiceNo   String              @map("vendor_invoice_no")
   vendorInvoiceDate DateTime            @map("vendor_invoice_date") @db.Date
+  /// JOBWORK (inward D.C.s, panel receipts) or PURCHASE (yarn receipts, yarn / fabric inward from others) (Q-079).
+  kind              String              @default("JOBWORK")
+  /// Job-work bills may be entered for one process, as the desktop per-process invoices are (Q-079).
+  processId         String?             @map("process_id") @db.Uuid
+  /// Round-off / adjustments on the vendor's invoice, added to or taken off the invoice total (Q-079).
+  addAmount         Decimal             @default(0) @map("add_amount") @db.Decimal(14, 2)
+  lessAmount        Decimal             @default(0) @map("less_amount") @db.Decimal(14, 2)
+  /// GST % the tax amounts were worked out from (record only; the amounts are what count).
+  gstRatePct        Decimal?            @map("gst_rate_pct") @db.Decimal(6, 3)
+  /// GST | IGST | NONE; null = follows the supplier's state (Q-087).
+  taxType           String?             @map("tax_type")
+  /// Part of the taxable amount GST is charged on (desktop "100"); record only.
+  taxablePct        Decimal             @default(100) @map("taxable_pct") @db.Decimal(7, 4)
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
   sourceScanId      String?             @unique @map("source_scan_id") @db.Uuid
   /// Opening balance from the go-live import (posted directly, no D.C. lines; Q-027).
@@ -1521,6 +1612,15 @@ model VendorBill {
   approvedById      String?             @map("approved_by_id") @db.Uuid
   approvedAt        DateTime?           @map("approved_at") @db.Timestamptz(3)
   approvalNote      String?             @map("approval_note")
+  /// Bills passing (Q-078): 1st audit, then 2nd (final) audit, after posting. Opening bills are not audited.
+  audit1Status      BillAuditStatus     @default(PENDING) @map("audit1_status")
+  audit1ById        String?             @map("audit1_by_id") @db.Uuid
+  audit1At          DateTime?           @map("audit1_at") @db.Timestamptz(3)
+  audit1Note        String?             @map("audit1_note")
+  audit2Status      BillAuditStatus     @default(PENDING) @map("audit2_status")
+  audit2ById        String?             @map("audit2_by_id") @db.Uuid
+  audit2At          DateTime?           @map("audit2_at") @db.Timestamptz(3)
+  audit2Note        String?             @map("audit2_note")
   remarks           String?
   status            DocStatus           @default(DRAFT)
   version           Int                 @default(1)
@@ -1534,11 +1634,13 @@ model VendorBill {
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
   vendor            Vendor              @relation("billVendor", fields: [vendorId], references: [id], onDelete: Restrict)
   order             Order?              @relation("billOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  process           Process?            @relation("billProcess", fields: [processId], references: [id], onDelete: Restrict)
   lines             VendorBillLine[]
   debitNotes        DebitNote[]
   allocations       PaymentAllocation[]
 
   @@index([vendorId, status])
+  @@index([unitId])
   @@map("vendor_bills")
 }
 
@@ -1546,14 +1648,20 @@ model VendorBillLine {
   id             String     @id @default(uuid()) @db.Uuid
   billId         String     @map("bill_id") @db.Uuid
   lineNo         Int        @map("line_no")
-  /// INWARD_DC (billable = received kg) or PANEL_IN (billable = good pcs).
+  /// INWARD_DC (received kg), PANEL_IN (good pcs), YARN_RECEIPT (received kg) or STOCK_INWARD (received qty).
   sourceType     String     @map("source_type")
   sourceId       String     @map("source_id") @db.Uuid
   sourceDocNo    String     @map("source_doc_no")
   sourceDate     DateTime   @map("source_date") @db.Date
-  processId      String     @map("process_id") @db.Uuid
+  /// Job-work process; empty on purchase lines.
+  processId      String?    @map("process_id") @db.Uuid
   itemId         String?    @map("item_id") @db.Uuid
+  /// Received (GRN) quantity of the document.
   billableQty    Decimal    @map("billable_qty") @db.Decimal(12, 3)
+  /// Quantity the vendor bills when it differs from the received quantity (never more) (Q-079).
+  billQty        Decimal?   @map("bill_qty") @db.Decimal(12, 3)
+  /// Pieces / rolls billed, as the vendor states them (record only).
+  billPcs        Int?       @map("bill_pcs")
   unit           Unit
   rate           Decimal?   @db.Decimal(12, 4)
   rateContractId String?    @map("rate_contract_id") @db.Uuid
@@ -1567,31 +1675,38 @@ model VendorBillLine {
 
 /// Debit note to a vendor: automatic (excess loss, panel rejects / shortages) or manual.
 model DebitNote {
-  id            String          @id @default(uuid()) @db.Uuid
-  docNo         String?         @unique @map("doc_no")
-  docDate       DateTime        @map("doc_date") @db.Date
-  vendorId      String          @map("vendor_id") @db.Uuid
-  billId        String?         @map("bill_id") @db.Uuid
-  isAuto        Boolean         @default(false) @map("is_auto")
-  taxableAmount Decimal         @default(0) @map("taxable_amount") @db.Decimal(14, 2)
-  gstRatePct    Decimal?        @map("gst_rate_pct") @db.Decimal(6, 3)
-  gstAmount     Decimal         @default(0) @map("gst_amount") @db.Decimal(14, 2)
-  totalAmount   Decimal         @default(0) @map("total_amount") @db.Decimal(14, 2)
-  remarks       String?
-  status        DocStatus       @default(DRAFT)
-  version       Int             @default(1)
-  postedAt      DateTime?       @map("posted_at") @db.Timestamptz(3)
-  postedById    String?         @map("posted_by_id") @db.Uuid
-  cancelledAt   DateTime?       @map("cancelled_at") @db.Timestamptz(3)
-  cancelledById String?         @map("cancelled_by_id") @db.Uuid
-  cancelReason  String?         @map("cancel_reason")
-  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
-  vendor        Vendor          @relation("dnVendor", fields: [vendorId], references: [id], onDelete: Restrict)
-  bill          VendorBill?     @relation(fields: [billId], references: [id], onDelete: Restrict)
-  lines         DebitNoteLine[]
+  id                    String          @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId                String          @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
+  docNo                 String?         @unique @map("doc_no")
+  docDate               DateTime        @map("doc_date") @db.Date
+  vendorId              String          @map("vendor_id") @db.Uuid
+  billId                String?         @map("bill_id") @db.Uuid
+  isAuto                Boolean         @default(false) @map("is_auto")
+  taxableAmount         Decimal         @default(0) @map("taxable_amount") @db.Decimal(14, 2)
+  gstRatePct            Decimal?        @map("gst_rate_pct") @db.Decimal(6, 3)
+  gstAmount             Decimal         @default(0) @map("gst_amount") @db.Decimal(14, 2)
+  totalAmount           Decimal         @default(0) @map("total_amount") @db.Decimal(14, 2)
+  /// Posted to Tally (Q-084): when it was exported as a Tally voucher, and when its cancellation was.
+  tallyExportedAt       DateTime?       @map("tally_exported_at") @db.Timestamptz(3)
+  tallyExportedById     String?         @map("tally_exported_by_id") @db.Uuid
+  tallyCancelExportedAt DateTime?       @map("tally_cancel_exported_at") @db.Timestamptz(3)
+  remarks               String?
+  status                DocStatus       @default(DRAFT)
+  version               Int             @default(1)
+  postedAt              DateTime?       @map("posted_at") @db.Timestamptz(3)
+  postedById            String?         @map("posted_by_id") @db.Uuid
+  cancelledAt           DateTime?       @map("cancelled_at") @db.Timestamptz(3)
+  cancelledById         String?         @map("cancelled_by_id") @db.Uuid
+  cancelReason          String?         @map("cancel_reason")
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  vendor                Vendor          @relation("dnVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  bill                  VendorBill?     @relation(fields: [billId], references: [id], onDelete: Restrict)
+  lines                 DebitNoteLine[]
 
   @@index([vendorId, status])
+  @@index([unitId])
   @@map("debit_notes")
 }
 
@@ -1627,6 +1742,8 @@ enum PaymentMode {
 /// Payment voucher allocated to bills (oldest first by default, A§7.4). Unallocated = vendor advance.
 model PaymentVoucher {
   id            String              @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String              @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?             @unique @map("doc_no")
   docDate       DateTime            @map("doc_date") @db.Date
   vendorId      String              @map("vendor_id") @db.Uuid
@@ -1652,6 +1769,7 @@ model PaymentVoucher {
   allocations   PaymentAllocation[]
 
   @@index([vendorId, status])
+  @@index([unitId])
   @@map("payment_vouchers")
 }
 
@@ -1670,6 +1788,8 @@ model PaymentAllocation {
 /// Nightly ageing snapshot so month-end figures can be reproduced (A§7.5).
 model AgeingSnapshot {
   id           String   @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId       String   @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   snapshotDate DateTime @map("snapshot_date") @db.Date
   vendorId     String   @map("vendor_id") @db.Uuid
   billId       String   @map("bill_id") @db.Uuid
@@ -1682,6 +1802,7 @@ model AgeingSnapshot {
 
   @@unique([snapshotDate, billId])
   @@index([snapshotDate, vendorId])
+  @@index([unitId])
   @@map("ageing_snapshots")
 }
 
@@ -1716,6 +1837,8 @@ enum AliasStatus {
 /// Scanning never changes stock or accounts: it only creates a DRAFT of an existing document.
 model InvoiceScan {
   id              String             @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId          String             @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   /// Server-generated storage key (never the user's file name).
   fileKey         String             @unique @map("file_key")
   originalName    String             @map("original_name")
@@ -1755,6 +1878,7 @@ model InvoiceScan {
   @@index([status, createdAt])
   @@index([vendorId, vendorInvoiceNo])
   @@index([sha256])
+  @@index([unitId])
   @@map("invoice_scans")
 }
 
@@ -1802,6 +1926,8 @@ model VendorItemAlias {
 /// Export invoice raised from posted packing lists. Posting moves the cartons FG_STORE → SHIPPED.
 model ExportInvoice {
   id                   String                     @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId               String                     @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo                String?                    @unique @map("doc_no")
   docDate              DateTime                   @map("doc_date") @db.Date
   buyerId              String                     @map("buyer_id") @db.Uuid
@@ -1842,6 +1968,7 @@ model ExportInvoice {
 
   @@index([buyerId, status])
   @@index([status, docDate])
+  @@index([unitId])
   @@map("export_invoices")
 }
 
@@ -1878,6 +2005,8 @@ model ExportInvoicePackingList {
 /// Shipment of one or more posted export invoices of a buyer (shipping bill, BL / AWB, container).
 model Shipment {
   id               String          @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId           String          @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo            String?         @unique @map("doc_no")
   docDate          DateTime        @map("doc_date") @db.Date
   buyerId          String          @map("buyer_id") @db.Uuid
@@ -1911,12 +2040,15 @@ model Shipment {
   invoices         ExportInvoice[]
 
   @@index([buyerId, status])
+  @@index([unitId])
   @@map("shipments")
 }
 
 /// Money received from a buyer (inward remittance), allocated to export invoices (realisation).
 model BuyerReceipt {
   id            String                   @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String                   @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?                  @unique @map("doc_no")
   docDate       DateTime                 @map("doc_date") @db.Date
   buyerId       String                   @map("buyer_id") @db.Uuid
@@ -1942,6 +2074,7 @@ model BuyerReceipt {
   allocations   BuyerReceiptAllocation[]
 
   @@index([buyerId, status])
+  @@index([unitId])
   @@map("buyer_receipts")
 }
 
@@ -1963,6 +2096,8 @@ model BuyerReceiptAllocation {
 /// opening stock movements / opening bills / draft orders / draft outward D.C.s in one transaction.
 model OpeningImport {
   id            String    @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String    @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?   @unique @map("doc_no")
   kind          String
   asOfDate      DateTime  @map("as_of_date") @db.Date
@@ -1986,6 +2121,7 @@ model OpeningImport {
   cancelReason  String?   @map("cancel_reason")
 
   @@index([kind, status])
+  @@index([unitId])
   @@map("opening_imports")
 }
 
@@ -2007,6 +2143,8 @@ enum QcResult {
 /// Non-stock document. Draft → POSTED (= approved by qc.approve, numbered QC/FY/NNNN) → CANCELLED.
 model QcInspection {
   id            String             @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String             @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?            @unique @map("doc_no")
   docDate       DateTime           @map("doc_date") @db.Date
   kind          QcKind
@@ -2030,6 +2168,7 @@ model QcInspection {
 
   @@index([kind, status, docDate])
   @@index([orderId])
+  @@index([unitId])
   @@map("qc_inspections")
 }
 
@@ -2079,6 +2218,8 @@ enum PoPurpose {
 /// CANCELLED; an approval can be reverted to DRAFT (the number is kept). Moves no stock.
 model PurchaseOrder {
   id                String              @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId            String              @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo             String?             @unique @map("doc_no")
   docDate           DateTime            @map("doc_date") @db.Date
   kind              PoKind
@@ -2128,37 +2269,40 @@ model PurchaseOrder {
   @@index([kind, status, docDate])
   @@index([vendorId])
   @@index([orderId])
+  @@index([unitId])
   @@map("purchase_orders")
 }
 
 model PurchaseOrderLine {
-  id          String         @id @default(uuid()) @db.Uuid
-  poId        String         @map("po_id") @db.Uuid
-  lineNo      Int            @map("line_no")
-  itemId      String         @map("item_id") @db.Uuid
-  orderId     String?        @map("order_id") @db.Uuid
-  colour      String?
-  size        String?
-  millName    String?        @map("mill_name")
-  bags        Int?
-  counts      String?
-  gsm         Int?
-  gauge       String?
-  loopLength  String?        @map("loop_length")
-  dia         String?
-  design      String?
-  description String?
-  qty         Decimal        @db.Decimal(14, 3)
-  unit        String
-  altQty      Decimal?       @map("alt_qty") @db.Decimal(14, 3)
-  rate        Decimal        @db.Decimal(14, 4)
-  per         Decimal        @default(1) @db.Decimal(14, 3)
-  amount      Decimal        @db.Decimal(14, 2)
-  remarks     String?
-  po          PurchaseOrder  @relation(fields: [poId], references: [id], onDelete: Cascade)
-  item        Item           @relation("poLineItem", fields: [itemId], references: [id], onDelete: Restrict)
-  order       Order?         @relation("poLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
-  trimsLines  TrimsDocLine[] @relation("trimsPoLine")
+  id               String            @id @default(uuid()) @db.Uuid
+  poId             String            @map("po_id") @db.Uuid
+  lineNo           Int               @map("line_no")
+  itemId           String            @map("item_id") @db.Uuid
+  orderId          String?           @map("order_id") @db.Uuid
+  colour           String?
+  size             String?
+  millName         String?           @map("mill_name")
+  bags             Int?
+  counts           String?
+  gsm              Int?
+  gauge            String?
+  loopLength       String?           @map("loop_length")
+  dia              String?
+  design           String?
+  description      String?
+  qty              Decimal           @db.Decimal(14, 3)
+  unit             String
+  altQty           Decimal?          @map("alt_qty") @db.Decimal(14, 3)
+  rate             Decimal           @db.Decimal(14, 4)
+  per              Decimal           @default(1) @db.Decimal(14, 3)
+  amount           Decimal           @db.Decimal(14, 2)
+  remarks          String?
+  po               PurchaseOrder     @relation(fields: [poId], references: [id], onDelete: Cascade)
+  item             Item              @relation("poLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  order            Order?            @relation("poLineOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  trimsLines       TrimsDocLine[]    @relation("trimsPoLine")
+  yarnReceiptLines YarnReceiptLine[] @relation("yarnPoLine")
+  stockDocLines    StockDocLine[]    @relation("stockDocPoLine")
 
   @@index([poId])
   @@index([itemId])
@@ -2179,6 +2323,8 @@ enum StockDocKind {
 /// (store ↔ OTHERS, store → ORDER_TRANSFER → store, store → REJECTED); cancelling reverses it.
 model StockDoc {
   id             String         @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId         String         @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo          String?        @unique @map("doc_no")
   docDate        DateTime       @map("doc_date") @db.Date
   kind           StockDocKind
@@ -2195,6 +2341,10 @@ model StockDoc {
   cones          Int?
   raiseDebitNote Boolean        @default(false) @map("raise_debit_note")
   debitNoteId    String?        @map("debit_note_id") @db.Uuid
+  /// Inward from others with a vendor: set when a purchase bill covering it is posted (Q-079).
+  billId         String?        @map("bill_id") @db.Uuid
+  /// False while only part of the document is billed; it stays billable for the rest (Q-081).
+  billedInFull   Boolean        @default(true) @map("billed_in_full")
   remarks        String?
   status         DocStatus      @default(DRAFT)
   version        Int            @default(1)
@@ -2212,26 +2362,30 @@ model StockDoc {
   lines          StockDocLine[]
 
   @@index([kind, status, docDate])
+  @@index([unitId])
   @@map("stock_docs")
 }
 
 model StockDocLine {
-  id       String   @id @default(uuid()) @db.Uuid
-  docId    String   @map("doc_id") @db.Uuid
-  lineNo   Int      @map("line_no")
-  itemId   String   @map("item_id") @db.Uuid
-  colour   String   @default("")
-  size     String   @default("")
-  lot      String   @default("")
-  millName String?  @map("mill_name")
+  id       String             @id @default(uuid()) @db.Uuid
+  docId    String             @map("doc_id") @db.Uuid
+  lineNo   Int                @map("line_no")
+  itemId   String             @map("item_id") @db.Uuid
+  colour   String             @default("")
+  size     String             @default("")
+  lot      String             @default("")
+  millName String?            @map("mill_name")
   counts   String?
   bags     Int?
-  qty      Decimal  @db.Decimal(14, 3)
+  qty      Decimal            @db.Decimal(14, 3)
   unit     String
-  rate     Decimal? @db.Decimal(14, 4)
+  rate     Decimal?           @db.Decimal(14, 4)
   reason   String?
-  doc      StockDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
-  item     Item     @relation("stockDocLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  /// Yarn / fabric PO line an inward from others receives (GRN against PO, Q-082).
+  poLineId String?            @map("po_line_id") @db.Uuid
+  doc      StockDoc           @relation(fields: [docId], references: [id], onDelete: Cascade)
+  item     Item               @relation("stockDocLineItem", fields: [itemId], references: [id], onDelete: Restrict)
+  poLine   PurchaseOrderLine? @relation("stockDocPoLine", fields: [poLineId], references: [id], onDelete: Restrict)
 
   @@index([docId])
   @@index([itemId])
@@ -2245,6 +2399,8 @@ model StockDocLine {
 /// order's accessories requirement (BalanceReqQty on the accessories PO). Moves no stock.
 model SplRequest {
   id            String           @id @default(uuid()) @db.Uuid
+  /// Exporter / unit the document belongs to (Q-085); every query is filtered to the unit logged into.
+  unitId        String           @default(dbgenerated("'00000000-0000-4000-8000-000000000001'::uuid")) @map("unit_id") @db.Uuid
   docNo         String?          @unique @map("doc_no")
   docDate       DateTime         @map("doc_date") @db.Date
   orderId       String           @map("order_id") @db.Uuid
@@ -2265,6 +2421,7 @@ model SplRequest {
   lines         SplRequestLine[]
 
   @@index([orderId, status])
+  @@index([unitId])
   @@map("spl_requests")
 }
 
@@ -2282,4 +2439,73 @@ model SplRequestLine {
 
   @@index([requestId])
   @@map("spl_request_lines")
+}
+
+/// Bills passing audit state (Q-078).
+enum BillAuditStatus {
+  PENDING
+  PASSED
+  HELD
+}
+
+/// Exporter = a company with its own GSTIN and letterhead (Q-085). The first one is the old company settings.
+model Exporter {
+  id            String         @id @default(uuid()) @db.Uuid
+  code          String         @unique
+  legalName     String         @map("legal_name")
+  tradeName     String?        @map("trade_name")
+  addressLine1  String         @map("address_line1")
+  addressLine2  String?        @map("address_line2")
+  city          String
+  state         String
+  stateCode     String         @map("state_code")
+  pincode       String
+  gstin         String
+  pan           String?
+  phone         String?
+  email         String?
+  iec           String?
+  lutNumber     String?        @map("lut_number")
+  lutValidFrom  DateTime?      @map("lut_valid_from") @db.Date
+  lutValidTo    DateTime?      @map("lut_valid_to") @db.Date
+  bankName      String?        @map("bank_name")
+  bankAccount   String?        @map("bank_account")
+  bankIfsc      String?        @map("bank_ifsc")
+  isPlaceholder Boolean        @default(false) @map("is_placeholder")
+  isActive      Boolean        @default(true) @map("is_active")
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  units         BusinessUnit[]
+
+  @@map("exporters")
+}
+
+/// Unit of an exporter (factory / branch): its own documents, numbers and stock (Q-085).
+model BusinessUnit {
+  id         String     @id @default(uuid()) @db.Uuid
+  code       String     @unique
+  name       String
+  exporterId String     @map("exporter_id") @db.Uuid
+  /// Put in front of every document number of this unit (blank for the first unit, so old numbers stay).
+  docPrefix  String     @default("") @map("doc_prefix")
+  isActive   Boolean    @default(true) @map("is_active")
+  version    Int        @default(1)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  exporter   Exporter   @relation(fields: [exporterId], references: [id], onDelete: Restrict)
+  users      UserUnit[]
+
+  @@map("units")
+}
+
+/// Units a user may log into; a user with none may log into every active unit (Q-085).
+model UserUnit {
+  userId String       @map("user_id") @db.Uuid
+  unitId String       @map("unit_id") @db.Uuid
+  unit   BusinessUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, unitId])
+  @@map("user_units")
 }

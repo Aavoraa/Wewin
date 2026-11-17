@@ -1,6 +1,6 @@
 import { type Prisma } from '@wewin/db';
 import { type z } from 'zod';
-import { STOCK_DOC_ITEM_TYPES, STOCK_DOC_NAMES, STORE_FOR_TYPE, type StockDocKind, stockDocTotals, type zStockDocInput, type zStockDocListQuery } from '@wewin/shared';
+import { D, STOCK_DOC_ITEM_TYPES, STOCK_DOC_NAMES, STORE_FOR_TYPE, type StockDocKind, stockDocTotals, type zStockDocInput, type zStockDocListQuery } from '@wewin/shared';
 import { type Tx, prisma, withTx } from '../../core/db';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
 import { orderBy, paging } from '../../core/list';
@@ -11,6 +11,7 @@ import { assertDraft, assertPosted, dateOnly, toDbDate } from '../../core/docume
 import { type CurrentUser } from '../../core/auth/auth.types';
 import { assertPermission } from '../../core/auth/auth.middleware';
 import { mastersService } from '../masters/masters.service';
+import { poRatePerUnit, purchaseService } from '../purchase/purchase.service';
 import { ordersService } from '../orders/orders.service';
 import { debitNotesService } from '../accounts/debitnotes.service';
 import { type StockDocDetail, type StockDocLineRow, stockDocsRepo as repo } from './stockdocs.repo';
@@ -20,15 +21,25 @@ const RC = { isolation: 'ReadCommitted' } as const;
 const what = (k: StockDocKind) => STOCK_DOC_NAMES[k];
 
 function shape(d: StockDocDetail) {
-  const lines = d.lines.map((l) => ({ ...l, qty: l.qty.toFixed(3), rate: l.rate?.toString() ?? null }));
+  const lines = d.lines.map((l) => ({ ...l, qty: l.qty.toFixed(3), rate: l.rate?.toString() ?? null, poNo: l.poLine?.po.docNo ?? null, poRate: l.poLine ? poRatePerUnit(l.poLine) : null }));
   return { ...d, docDate: dateOnly(d.docDate)!, grossKg: d.grossKg?.toFixed(3) ?? null, lines, totals: stockDocTotals(lines) };
 }
 
-async function validate(input: Input, db: Tx | typeof prisma): Promise<StockDocLineRow[]> {
+async function validate(input: Input, db: Tx | typeof prisma, exceptId?: string): Promise<StockDocLineRow[]> {
   const items = new Map((await repo.itemsByIds([...new Set(input.lines.map((l) => l.itemId))], db)).map((i) => [i.id, i]));
   const allowed = STOCK_DOC_ITEM_TYPES[input.kind];
   for (const id of [input.orderId, input.toOrderId].filter((x): x is string => !!x)) await ordersService.getDetail(id, db);
   if (input.vendorId) await mastersService.vendorById(input.vendorId, db);
+  if (input.kind !== 'OTHER_INWARD' && input.lines.some((l) => l.poLineId)) throw new AppError('VALIDATION_ERROR', 'Only an inward from others is received against a PO', 400);
+  if (input.kind === 'OTHER_INWARD') {
+    await purchaseService.checkReceiptAgainstPo(
+      input.lines.map((l) => ({ poLineId: l.poLineId, itemId: l.itemId, qty: l.qty })),
+      input.vendorId ?? null,
+      ['YARN', 'FABRIC'],
+      db,
+      exceptId ? { stockDocId: exceptId } : {},
+    );
+  }
   return input.lines.map((l, i) => {
     const it = items.get(l.itemId);
     if (!it) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: unknown item`, 400);
@@ -43,8 +54,9 @@ async function validate(input: Input, db: Tx | typeof prisma): Promise<StockDocL
       bags: l.bags ?? null,
       qty: l.qty,
       unit: it.unit,
-      rate: input.kind === 'REJECTION' ? (l.rate ?? null) : null,
+      rate: input.kind === 'REJECTION' || input.kind === 'OTHER_INWARD' ? (l.rate ?? null) : null,
       reason: input.kind === 'REJECTION' ? (l.reason ?? null) : null,
+      poLineId: input.kind === 'OTHER_INWARD' ? (l.poLineId ?? null) : null,
     };
   });
 }
@@ -106,11 +118,62 @@ function inputFrom(d: StockDocDetail): Input {
     cones: d.cones,
     raiseDebitNote: d.raiseDebitNote,
     remarks: d.remarks,
-    lines: d.lines.map((l) => ({ itemId: l.itemId, colour: l.colour, size: l.size, lot: l.lot, millName: l.millName, counts: l.counts, bags: l.bags, qty: l.qty.toFixed(3), rate: l.rate?.toString() ?? null, reason: l.reason })),
+    lines: d.lines.map((l) => ({ itemId: l.itemId, colour: l.colour, size: l.size, lot: l.lot, millName: l.millName, counts: l.counts, bags: l.bags, qty: l.qty.toFixed(3), rate: l.rate?.toString() ?? null, reason: l.reason, poLineId: l.poLineId })),
+  };
+}
+
+/** An inward from others as a purchase-bill source (Q-079). Units follow the items (kg for yarn / fabric). */
+function forBill(d: StockDocDetail) {
+  const qty = d.lines.reduce((a, l) => a.plus(D(l.qty.toString())), D(0));
+  const priced = d.lines.every((l) => l.rate !== null);
+  const value = d.lines.reduce((a, l) => (l.rate ? a.plus(D(l.qty.toString()).times(D(l.rate.toString()))) : a), D(0));
+  const items = [...new Set(d.lines.map((l) => l.itemId))];
+  return {
+    id: d.id,
+    docNo: d.docNo ?? '',
+    docDate: dateOnly(d.docDate)!,
+    qty: qty.toFixed(3),
+    unit: (d.lines[0]?.unit === 'PCS' ? 'PCS' : 'KG') as 'KG' | 'PCS',
+    processId: null,
+    processName: 'Inward from others',
+    orderId: d.orderId,
+    itemId: items.length === 1 ? items[0]! : null,
+    rate: priced && qty.greaterThan(0) ? value.div(qty).toDecimalPlaces(4).toString() : null,
+    value: priced ? value.toDecimalPlaces(2).toFixed(2) : null,
+    against: d.partyName ?? '',
+    vendorDcNo: null as string | null,
+    items: [...new Set(d.lines.map((l) => l.item.name))].join(', '),
+    poNos: [...new Set(d.lines.map((l) => l.poLine?.po.docNo).filter(Boolean))].join(', ') || null,
+    poRate: d.lines.length && d.lines.every((l) => l.poLine) ? [...new Set(d.lines.map((l) => poRatePerUnit(l.poLine!)))].join(', ') : null,
+    lots: [...new Set(d.lines.map((l) => l.lot).filter(Boolean))].join(', '),
+    bags: d.lines.reduce((a, l) => a + (l.bags ?? 0), 0),
+    status: d.status,
+    vendorId: d.vendorId,
+    billId: d.billId,
+    billedInFull: d.billedInFull,
   };
 }
 
 export const stockDocsService = {
+  /** Approved yarn / fabric PO lines of a supplier with qty still to come — "Load from PO" (Q-082). */
+  openPoLines: (vendorId: string, orderId?: string) => purchaseService.openReceiptLines(['YARN', 'FABRIC'], vendorId, orderId),
+
+  // ═════════ For purchase bills (Q-079) ═════════
+  /** Posted "inward from others" of a vendor not yet on a purchase bill: qty received, the document's rates. */
+  async billable(vendorId: string, orderId: string | null) {
+    return (await repo.billable(vendorId, orderId)).map(forBill);
+  },
+  async forBill(ids: string[], db: Tx | typeof prisma = prisma) {
+    return (await repo.byIdsForBill(ids, db)).map(forBill);
+  },
+  lockForBill: (tx: Tx, ids: string[]) => repo.lockForBill(tx, ids),
+  async markBilled(tx: Tx, ids: string[], billId: string, full = true) {
+    const r = await repo.setBill(tx, ids, billId, full);
+    if (r.count !== ids.length) throw new AppError('ALREADY_BILLED', 'An inward on this bill is already billed or no longer posted', 409);
+  },
+  clearBilled: (tx: Tx, billId: string) => repo.clearBill(tx, billId),
+  restoreBilled: (tx: Tx, id: string, billId: string | null, full: boolean) => repo.setBillState(tx, id, billId, full),
+
   async list(q: z.output<typeof zStockDocListQuery>) {
     const p = paging(q);
     const where: Prisma.StockDocWhereInput = {
@@ -179,7 +242,7 @@ export const stockDocsService = {
       const d = await repo.get(id, tx);
       if (!d) throw notFound('Document');
       assertDraft(d, what(d.kind));
-      await validate(inputFrom(d), tx);
+      await validate(inputFrom(d), tx, id);
       const docDate = dateOnly(d.docDate)!;
       const { docNo } = await numbering.next(d.kind, docDate, tx);
       try {
@@ -219,6 +282,7 @@ export const stockDocsService = {
       const d = await repo.get(id, tx);
       if (!d) throw notFound('Document');
       assertPosted(d, 'cancelled', what(d.kind));
+      if (d.billId) throw new AppError('DOC_HAS_DEPENDENTS', 'This inward is on a purchase bill; cancel the bill first', 409);
       try {
         await ledger.reverse(tx, { type: d.kind, id }, user.id, { perOrder: d.kind === 'ORDER_TRANSFER' });
       } catch (e) {
