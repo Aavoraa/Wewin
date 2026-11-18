@@ -102,7 +102,8 @@ export const overviewRepo = {
         (SELECT COUNT(*) FROM vendor_bills WHERE status = 'DRAFT' AND approval_status = 'PENDING') AS bills_awaiting_approval,
         (SELECT COUNT(*) FROM debit_notes WHERE status = 'DRAFT') AS debit_notes_draft,
         (SELECT COUNT(*) FROM vendor_bills b WHERE b.status = 'POSTED'
-           AND b.taxable_amount + b.cgst_amount + b.sgst_amount + b.igst_amount
+           AND b.taxable_amount + b.cgst_amount + b.sgst_amount + b.igst_amount + b.add_amount - b.less_amount
+             - b.discount_amount + b.packing_amount + b.tcs_amount
              - COALESCE((SELECT SUM(n.total_amount) FROM debit_notes n WHERE n.bill_id = b.id AND n.status = 'POSTED'), 0)
              > COALESCE((SELECT SUM(a.amount) FROM payment_allocations a JOIN payment_vouchers p ON p.id = a.payment_id WHERE a.bill_id = b.id AND p.status = 'POSTED'), 0)) AS bills_open,
         (SELECT COALESCE(SUM(l.qty), 0) FROM order_lines l JOIN orders o ON o.id = l.order_id WHERE o.status = 'CONFIRMED') AS ordered_pcs,

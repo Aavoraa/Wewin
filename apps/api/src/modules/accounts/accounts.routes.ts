@@ -56,7 +56,7 @@ accountsRouter.post('/rate-contracts/:id/deactivate', rates, handle(id, ({ param
 
 // ───────── Vendor bills ─────────
 const billCreate = requirePermission('accounts.bill.create');
-accountsRouter.get('/vendor-bills/match', billCreate, handle({ query: zBillMatchQuery }, async ({ query }) => (query.kind === 'PURCHASE' ? all(await billsService.purchaseCandidates(query.vendorId, query.orderId ?? null)) : all(await billsService.candidates(query.vendorId, query.orderId ?? null, query.processId)))));
+accountsRouter.get('/vendor-bills/match', billCreate, handle({ query: zBillMatchQuery }, async ({ query }) => (query.kind === 'ACCESSORY' ? all(await billsService.accessoryCandidates(query.vendorId, query.orderId ?? null)) : query.kind === 'PURCHASE' ? all(await billsService.purchaseCandidates(query.vendorId, query.orderId ?? null)) : all(await billsService.candidates(query.vendorId, query.orderId ?? null, query.processId)))));
 accountsRouter.post('/vendor-bills/preview', billCreate, handle({ body: zBillInput }, ({ body }) => billsService.preview(body)));
 accountsRouter.get('/tally/debit-notes', requirePermission('accounts.tally.export'), handle({ query: zTallyQueueQuery }, ({ query }) => tallyService.queue(query.queue)));
 accountsRouter.post('/tally/debit-notes/export', requirePermission('accounts.tally.export'), handle({ body: zTallyExport }, ({ body, user }) => tallyService.export(body, user)));

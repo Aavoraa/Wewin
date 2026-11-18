@@ -15,7 +15,7 @@ describe('module choice at login (Q-088)', () => {
     expect(labels('ORDER_PLANNING')).not.toContain('Bills Entry');
     expect(labels('YARN_TO_FABRIC')).toEqual(expect.arrayContaining(['Transaction', 'Job work', 'Bills Entry', 'Accounts', 'Stores']));
     expect(labels('YARN_TO_FABRIC')).not.toContain('Production');
-    expect(labels('PRODUCTION')).toEqual(expect.arrayContaining(['Production', 'Accessories', 'Stores']));
+    expect(labels('PRODUCTION')).toEqual(expect.arrayContaining(['Production', 'Accessories', 'Stores', 'Export']));
     expect(labels('PRODUCTION')).not.toContain('Transaction');
   });
   it('every menu is reachable from some module', () => {

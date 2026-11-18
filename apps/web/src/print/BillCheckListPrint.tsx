@@ -1,14 +1,41 @@
 import { useQuery } from '@tanstack/react-query';
-import { D } from '@wewin/shared';
+import { D, rupeesInWords } from '@wewin/shared';
 import { api } from '@/lib/api';
 import { formatDate, formatDateTimeIst, formatInr, formatKg, formatPct, formatQty } from '@/lib/format';
 import { LoadingState } from '@/components/states';
 import { type VendorBill } from '@/features/accounts/types';
 import { CompanyBlock, PrintLayout, VendorCertificate, useCompany } from './PrintLayout';
 
+interface AccessoryItem {
+  receiptId: string;
+  receiptNo: string;
+  partyDcNo: string | null;
+  docDate: string;
+  itemName: string;
+  colour: string | null;
+  size: string | null;
+  unit: string;
+  qty: string;
+  rate: string | null;
+  poNo: string | null;
+  poRate: string | null;
+}
+interface PoPosition {
+  poLineId: string;
+  poNo: string;
+  item: string;
+  colour: string | null;
+  size: string | null;
+  unit: string;
+  poQty: string;
+  receivedQty: string;
+  balance: string;
+}
 interface CheckList {
   bill: VendorBill & { postedAt: string | null };
   buyer: string | null;
+  accessoryItems: AccessoryItem[];
+  poLines: PoPosition[];
   lines: (VendorBill['lines'][number] & { partyDcNo: string | null; items: string | null; lots: string | null; processName: string | null; billRate: string | null; billedQty: string; amount: string | null })[];
   reconciliation: {
     outwardId: string;
@@ -46,7 +73,8 @@ export function BillCheckListPrint({ id }: { id: string }) {
   if (!q.data || company.isLoading) return <LoadingState />;
   const { bill: b, lines, reconciliation: rec, people } = q.data;
   const processes = [...new Set(rec.map((r) => r.process))];
-  const title = b.kind === 'PURCHASE' ? 'Purchase Bill Check List' : processes.length === 1 ? `${processes[0]} Bill Check List` : 'Job Work Bill Check List';
+  const acc = b.kind === 'ACCESSORY';
+  const title = acc ? 'Accessories Purchase Bill Chk.List' : b.kind === 'PURCHASE' ? 'Purchase Bill Check List' : processes.length === 1 ? `${processes[0]} Bill Check List` : 'Job Work Bill Check List';
   const f = b.figures;
   const auditLine = (lvl: 1 | 2) => {
     const status = lvl === 1 ? b.audit1Status : b.audit2Status;
@@ -99,6 +127,7 @@ export function BillCheckListPrint({ id }: { id: string }) {
         </div>
       </div>
 
+      {acc ? <AccessoryTables items={q.data.accessoryItems} poLines={q.data.poLines} taxable={b.taxableAmount} /> : (
       <table className="mt-2 w-full border-collapse">
         <thead>
           <tr className="border-y border-black text-left">
@@ -159,6 +188,7 @@ export function BillCheckListPrint({ id }: { id: string }) {
           </tr>
         </tfoot>
       </table>
+      )}
 
       {rec.length ? (
         <>
@@ -267,6 +297,27 @@ export function BillCheckListPrint({ id }: { id: string }) {
                 <td />
               </tr>
             ))}
+          {Number(b.discountAmount) ? (
+            <tr>
+              <td className="py-0.5">Discount{b.discountPct ? ` @ ${Number(b.discountPct)} %` : ''}</td>
+              <td className="text-right">({formatInr(b.discountAmount, { symbol: false })})</td>
+              <td />
+            </tr>
+          ) : null}
+          {Number(b.packingAmount) ? (
+            <tr>
+              <td className="py-0.5">Packing &amp; forwarding</td>
+              <td className="text-right">{formatInr(b.packingAmount, { symbol: false })}</td>
+              <td />
+            </tr>
+          ) : null}
+          {Number(b.tcsAmount) ? (
+            <tr>
+              <td className="py-0.5">TCS{b.tcsPct ? ` @ ${Number(b.tcsPct)} %` : ''}</td>
+              <td className="text-right">{formatInr(b.tcsAmount, { symbol: false })}</td>
+              <td />
+            </tr>
+          ) : null}
           {Number(b.addAmount) ? (
             <tr>
               <td className="py-0.5">Add amount</td>
@@ -294,6 +345,7 @@ export function BillCheckListPrint({ id }: { id: string }) {
         </tbody>
       </table>
       {b.debitNotes.length ? <div className="text-[10px]">Debit notes: {b.debitNotes.map((n) => n.docNo).join(', ')}</div> : null}
+      <div className="mt-3">Rupees {rupeesInWords(f.netPayable)}</div>
 
       <div className="mt-10 grid grid-cols-3 gap-6">
         <div className="flex flex-col justify-end text-center text-[10px]">
@@ -307,5 +359,110 @@ export function BillCheckListPrint({ id }: { id: string }) {
         {auditLine(2)}
       </div>
     </PrintLayout>
+  );
+}
+
+/**
+ * Accessories bill check list (Q-089), as the desktop print: each received item with GRN / bill qty,
+ * PO rate and bill rate; then each PO line behind the receipts with PO qty, received qty and balance.
+ */
+function AccessoryTables({ items, poLines, taxable }: { items: AccessoryItem[]; poLines: PoPosition[]; taxable: string }) {
+  const rateOf = (i: AccessoryItem) => (i.rate !== null ? D(i.rate) : i.poRate ? D(i.poRate.split('/')[0]!).div(D(i.poRate.split('/')[1] || '1')) : null);
+  const total = items.reduce((a, i) => a.plus(D(i.qty)), D(0));
+  return (
+    <>
+      <table className="mt-2 w-full border-collapse">
+        <thead>
+          <tr className="border-y border-black text-left">
+            <th className="py-1">P.DC</th>
+            <th>GRN</th>
+            <th>Date</th>
+            <th>Acc. description</th>
+            <th>Colour</th>
+            <th>Size</th>
+            <th>UoM</th>
+            <th className="text-right">GRN qty</th>
+            <th className="text-right">Bill qty</th>
+            <th className="text-right">PO rate</th>
+            <th className="text-right">Bill rate</th>
+            <th className="text-right">Amount ₹</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((i, n) => {
+            const r = rateOf(i);
+            return (
+              <tr key={`${i.receiptId}-${n}`} className="border-b border-slate-300 align-top">
+                <td className="py-0.5">{i.partyDcNo ?? '—'}</td>
+                <td>{i.receiptNo}</td>
+                <td>{formatDate(i.docDate)}</td>
+                <td>{i.itemName}</td>
+                <td>{i.colour || '—'}</td>
+                <td>{i.size || '—'}</td>
+                <td>{i.unit}</td>
+                <td className="text-right">{formatQty(i.qty)}</td>
+                <td className="text-right">{formatQty(i.qty)}</td>
+                <td className="text-right">{i.poRate ?? '—'}</td>
+                <td className={`text-right ${r && i.poRate && i.rate !== null && !r.equals(rateOf({ ...i, rate: null }) ?? r) ? 'font-bold' : ''}`}>{r ? r.toFixed(2) : '—'}</td>
+                <td className="text-right">{r ? formatInr(D(i.qty).times(r).toFixed(2), { symbol: false }) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="border-b border-black font-bold">
+            <td colSpan={7} className="py-1 text-right">
+              Total
+            </td>
+            <td className="text-right">{formatQty(total.toFixed(3))}</td>
+            <td className="text-right">{formatQty(total.toFixed(3))}</td>
+            <td colSpan={2} className="text-right">
+              Invoiced taxable
+            </td>
+            <td className="text-right">{formatInr(taxable, { symbol: false })}</td>
+          </tr>
+        </tfoot>
+      </table>
+      {poLines.length ? (
+        <table className="mt-3 w-full border-collapse">
+          <thead>
+            <tr className="border-y border-black text-left">
+              <th className="py-1">PO no.</th>
+              <th>Item description</th>
+              <th>Colour</th>
+              <th>Size</th>
+              <th>UoM</th>
+              <th className="text-right">PO qty</th>
+              <th className="text-right">Recd qty</th>
+              <th className="text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {poLines.map((p) => (
+              <tr key={p.poLineId} className="border-b border-slate-300">
+                <td className="py-0.5">{p.poNo}</td>
+                <td>{p.item}</td>
+                <td>{p.colour || '—'}</td>
+                <td>{p.size || '—'}</td>
+                <td>{p.unit}</td>
+                <td className="text-right">{formatQty(p.poQty)}</td>
+                <td className="text-right">{formatQty(p.receivedQty)}</td>
+                <td className={`text-right ${Number(p.balance) > 0 ? 'font-bold' : ''}`}>{Number(p.balance) ? formatQty(p.balance) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-y border-black font-bold">
+              <td colSpan={5} className="py-1">
+                Total
+              </td>
+              <td className="text-right">{formatQty(poLines.reduce((a, p) => a.plus(D(p.poQty)), D(0)).toFixed(3))}</td>
+              <td className="text-right">{formatQty(poLines.reduce((a, p) => a.plus(D(p.receivedQty)), D(0)).toFixed(3))}</td>
+              <td className="text-right">{formatQty(poLines.reduce((a, p) => a.plus(D(p.balance)), D(0)).toFixed(3))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      ) : null}
+    </>
   );
 }

@@ -16,6 +16,7 @@ import { panelsService } from '../panels/panels.service';
 import { ordersService } from '../orders/orders.service';
 import { yarnService } from '../yarn/yarn.service';
 import { stockDocsService } from '../stockdocs/stockdocs.service';
+import { trimsService } from '../trims/trims.service';
 import { type BillableDoc, expectedAmount, lineVariance, matchBill, priceLines } from './accounts.match';
 import { type BillDetail, type BillLineData, accountsRepo as repo } from './accounts.repo';
 import { excessLossEvents, panelEvents, raiseAutoDebitNote } from './debits.service';
@@ -34,6 +35,9 @@ export function billFigures(b: BillDetail) {
       igstAmount: b.igstAmount.toString(),
       addAmount: b.addAmount.toString(),
       lessAmount: b.lessAmount.toString(),
+      discountAmount: b.discountAmount.toString(),
+      packingAmount: b.packingAmount.toString(),
+      tcsAmount: b.tcsAmount.toString(),
     }),
   );
   const gst = D(b.cgstAmount.toString()).plus(D(b.sgstAmount.toString())).plus(D(b.igstAmount.toString()));
@@ -67,6 +71,11 @@ function shape(b: BillDetail) {
     variance: b.variance.toFixed(2),
     addAmount: b.addAmount.toFixed(2),
     lessAmount: b.lessAmount.toFixed(2),
+    discountPct: b.discountPct?.toString() ?? null,
+    discountAmount: b.discountAmount.toFixed(2),
+    packingAmount: b.packingAmount.toFixed(2),
+    tcsPct: b.tcsPct?.toString() ?? null,
+    tcsAmount: b.tcsAmount.toFixed(2),
     gstRatePct: b.gstRatePct?.toString() ?? null,
     taxType: (b.taxType as BillTaxType | null) ?? null,
     taxablePct: D(b.taxablePct.toString()).toFixed(2),
@@ -130,16 +139,19 @@ export interface BillLineDetails {
   /** Yarn PO(s) and PO rate per kg behind a yarn receipt (Q-080). */
   poNos?: string | null;
   poRate?: string | null;
+  /** Accessories receipts (Q-089): sizes received. */
+  sizes?: string | null;
 }
 
 /** Descriptions of the documents on a saved bill, keyed `sourceType|sourceId`. */
 async function lineDetails(lines: { sourceType: string; sourceId: string }[]) {
   const ids = (t: string) => lines.filter((l) => l.sourceType === t).map((l) => l.sourceId);
-  const [ins, pns, yrs, sis] = await Promise.all([
+  const [ins, pns, yrs, sis, trs] = await Promise.all([
     jobworkService.inwardsForBill(ids('INWARD_DC')),
     panelsService.insForBill(ids('PANEL_IN')),
     yarnService.forBill(ids('YARN_RECEIPT')),
     stockDocsService.forBill(ids('STOCK_INWARD')),
+    trimsService.forBill(ids('TRIMS_RECEIPT')),
   ]);
   const out = new Map<string, BillLineDetails>();
   const none = { orderNo: null, items: null, fabricDescription: null, colours: null, gsm: null, dia: null, gauge: null, loopLength: null, rolls: null, lots: null, bags: null };
@@ -161,6 +173,21 @@ async function lineDetails(lines: { sourceType: string; sourceId: string }[]) {
     });
   }
   for (const d of pns) out.set(`PANEL_IN|${d.id}`, { ...none, vendorDcNo: 'vendorDcNo' in d ? ((d as { vendorDcNo?: string | null }).vendorDcNo ?? null) : null, against: d.against, processName: d.processName });
+  for (const d of trs) {
+    out.set(`TRIMS_RECEIPT|${d.id}`, {
+      ...none,
+      vendorDcNo: d.vendorDcNo,
+      against: d.against,
+      orderNo: d.orderNo,
+      processName: d.processName,
+      items: d.items || null,
+      colours: d.colours || null,
+      sizes: d.sizes || null,
+      lots: d.lots || null,
+      poNos: d.poNos,
+      poRate: d.poRate,
+    });
+  }
   for (const [t, list] of [['YARN_RECEIPT', yrs], ['STOCK_INWARD', sis]] as const) {
     for (const d of list) {
       out.set(`${t}|${d.id}`, {
@@ -205,7 +232,7 @@ function leftToBill(qty: string, billed: { qty: ReturnType<typeof D> } | undefin
 }
 
 type JobSource = 'INWARD_DC' | 'PANEL_IN';
-type BuySource = 'YARN_RECEIPT' | 'STOCK_INWARD';
+type BuySource = 'YARN_RECEIPT' | 'STOCK_INWARD' | 'TRIMS_RECEIPT';
 const idsOf = (input: Input, t: string) => input.lines.filter((l) => l.sourceType === t).map((l) => l.sourceId);
 
 /**
@@ -221,6 +248,7 @@ async function buildLines(input: Input, db: Tx | typeof prisma) {
   const buyDocs = [
     ...(await yarnService.forBill(idsOf(input, 'YARN_RECEIPT'), db)).map((d) => ({ ...d, sourceType: 'YARN_RECEIPT' as BuySource })),
     ...(await stockDocsService.forBill(idsOf(input, 'STOCK_INWARD'), db)).map((d) => ({ ...d, sourceType: 'STOCK_INWARD' as BuySource })),
+    ...(await trimsService.forBill(idsOf(input, 'TRIMS_RECEIPT'), db)).map((d) => ({ ...d, sourceType: 'TRIMS_RECEIPT' as BuySource })),
   ];
   const docs = [...jobDocs, ...buyDocs];
   if (docs.length !== input.lines.length) throw new AppError('VALIDATION_ERROR', 'A document on this bill was not found', 400);
@@ -313,6 +341,11 @@ async function header(input: Input, match: ReturnType<typeof matchBill>, db: Tx 
     igstAmount: input.igstAmount,
     addAmount: input.addAmount,
     lessAmount: input.lessAmount,
+    discountPct: input.discountPct ?? null,
+    discountAmount: input.discountAmount,
+    packingAmount: input.packingAmount,
+    tcsPct: input.tcsPct ?? null,
+    tcsAmount: input.tcsAmount,
     gstRatePct: input.gstRatePct ?? null,
     taxType: input.taxType ?? null,
     taxablePct: input.taxablePct,
@@ -349,6 +382,11 @@ function inputFrom(b: BillDetail): Input {
     taxablePct: D(b.taxablePct.toString()).toFixed(2),
     addAmount: b.addAmount.toFixed(2),
     lessAmount: b.lessAmount.toFixed(2),
+    discountPct: b.discountPct?.toString() ?? null,
+    discountAmount: b.discountAmount.toFixed(2),
+    packingAmount: b.packingAmount.toFixed(2),
+    tcsPct: b.tcsPct?.toString() ?? null,
+    tcsAmount: b.tcsAmount.toFixed(2),
     docDate: dateOnly(b.docDate)!,
     vendorId: b.vendorId,
     orderId: b.orderId,
@@ -369,6 +407,26 @@ function inputFrom(b: BillDetail): Input {
   };
 }
 
+/** Receipts offered on a purchase / accessories bill, each for what is left after posted bills (Q-081). */
+async function withLeftToBill<T extends { id: string; qty: string; rate: string | null; value: string | null }>(docs: T[]) {
+  const before = await billedSoFar(docs.map((d) => d.id), prisma);
+  return docs
+    .map((d) => {
+      const b = before.get(d.id);
+      const left = leftToBill(d.qty, b);
+      return {
+        ...d,
+        sourceId: d.id,
+        rateContractId: null,
+        receivedQty: d.qty,
+        billedBefore: b ? b.qty.toFixed(3) : null,
+        qty: b ? left.toFixed(3) : d.qty,
+        expected: b ? (d.rate === null ? null : expectedAmount(left.toFixed(3), d.rate)) : d.value,
+      };
+    })
+    .filter((d) => D(d.qty).greaterThan(0));
+}
+
 export const billsService = {
   /** Match screen (A§8 /vendor-bills/match): posted, unbilled documents of a vendor with expected amounts. */
   /**
@@ -377,24 +435,13 @@ export const billsService = {
    */
   async purchaseCandidates(vendorId: string, orderId: string | null) {
     const [yr, si] = await Promise.all([yarnService.billable(vendorId, orderId), stockDocsService.billable(vendorId, orderId)]);
-    const docs = [...yr.map((d) => ({ ...d, sourceType: 'YARN_RECEIPT' as const })), ...si.map((d) => ({ ...d, sourceType: 'STOCK_INWARD' as const }))];
-    const before = await billedSoFar(docs.map((d) => d.id), prisma);
-    return docs
-      .map((d) => {
-        const b = before.get(d.id);
-        const left = leftToBill(d.qty, b);
-        return {
-          ...d,
-          sourceId: d.id,
-          rateContractId: null,
-          receivedQty: d.qty,
-          billedBefore: b ? b.qty.toFixed(3) : null,
-          qty: b ? left.toFixed(3) : d.qty,
-          expected: b ? (d.rate === null ? null : expectedAmount(left.toFixed(3), d.rate)) : d.value,
-        };
-      })
-      .filter((d) => D(d.qty).greaterThan(0));
+    return withLeftToBill([...yr.map((d) => ({ ...d, sourceType: 'YARN_RECEIPT' as const })), ...si.map((d) => ({ ...d, sourceType: 'STOCK_INWARD' as const }))]);
   },
+  /** Accessories Purchase Bill Entry (Q-089): the supplier's posted accessory purchase receipts not yet billed in full. */
+  async accessoryCandidates(vendorId: string, orderId: string | null) {
+    return withLeftToBill((await trimsService.billable(vendorId, orderId)).map((d) => ({ ...d, sourceType: 'TRIMS_RECEIPT' as const })));
+  },
+
   async candidates(vendorId: string, orderId: string | null, processId?: string) {
     const [ins, pns] = await Promise.all([jobworkService.billableInwards(vendorId, orderId), panelsService.billableIns(vendorId, orderId)]);
     const all = [...ins.map((d) => ({ d, t: 'INWARD_DC' as const })), ...pns.map((d) => ({ d, t: 'PANEL_IN' as const }))].filter(({ d }) => !processId || d.processId === processId);
@@ -508,9 +555,15 @@ export const billsService = {
     const debits = new Map((await repo.excessLossDebits(outwardIds)).map((d) => [d.originId, d._sum]));
     const name = (uid: string | null) => people.find((p) => p.id === uid)?.fullName ?? null;
     const inwardById = new Map(inwards.map((i) => [i.id, i]));
+    // Accessories bills (Q-089): each received item, and the position of every PO line behind the receipts.
+    const trimsIds = bill.lines.filter((l) => l.sourceType === 'TRIMS_RECEIPT').map((l) => l.sourceId);
+    const [receipts, poLines] = trimsIds.length ? await Promise.all([trimsService.forBill(trimsIds), trimsService.poPositionsForReceipts(trimsIds)]) : [[], []];
+    const accessoryItems = receipts.flatMap((r) => r.lines.map((x) => ({ receiptId: r.id, receiptNo: r.docNo, partyDcNo: r.vendorDcNo, docDate: r.docDate, ...x })));
     return {
       bill,
       buyer: order?.buyer.name ?? null,
+      accessoryItems,
+      poLines,
       lines: bill.lines.map((l) => {
         const inward = l.sourceType === 'INWARD_DC' ? inwardById.get(l.sourceId) : undefined;
         const det = l.details;
@@ -605,10 +658,12 @@ export const billsService = {
       const pnIds = idsOf(input, 'PANEL_IN');
       const yrIds = idsOf(input, 'YARN_RECEIPT');
       const siIds = idsOf(input, 'STOCK_INWARD');
+      const trIds = idsOf(input, 'TRIMS_RECEIPT');
       await jobworkService.lockInwards(tx, inIds);
       await panelsService.lockIns(tx, pnIds);
       await yarnService.lockForBill(tx, yrIds);
       await stockDocsService.lockForBill(tx, siIds);
+      await trimsService.lockForBill(tx, trIds);
       const { lines: fresh, match } = await buildLines(input, tx);
       // Another bill may have billed part of a document since this draft was saved (Q-081).
       for (const f of fresh) {
@@ -635,6 +690,7 @@ export const billsService = {
         [panelsService, pnIds],
         [yarnService, yrIds],
         [stockDocsService, siIds],
+        [trimsService, trIds],
       ] as const) {
         await svc.markBilled(tx, whole(ids), id, true);
         await svc.markBilled(tx, part(ids), id, false);
@@ -689,7 +745,7 @@ export const billsService = {
       if ((await repo.postedAllocationCount(id, tx)) > 0) throw new AppError('DOC_HAS_DEPENDENTS', 'Payments are allocated to this bill; cancel them first', 409);
       // Each document goes back to the posted bills still covering it: none → unbilled; some → part-billed (Q-081).
       const others = await billedSoFar(b.lines.map((l) => l.sourceId), tx, id);
-      const svcFor = { INWARD_DC: jobworkService, PANEL_IN: panelsService, YARN_RECEIPT: yarnService, STOCK_INWARD: stockDocsService } as const;
+      const svcFor = { INWARD_DC: jobworkService, PANEL_IN: panelsService, YARN_RECEIPT: yarnService, STOCK_INWARD: stockDocsService, TRIMS_RECEIPT: trimsService } as const;
       for (const l of b.lines) {
         const o = others.get(l.sourceId);
         await svcFor[l.sourceType as keyof typeof svcFor].restoreBilled(tx, l.sourceId, o ? o.latestBillId : null, !o);

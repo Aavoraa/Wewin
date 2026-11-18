@@ -183,7 +183,7 @@ export function PaymentVoucherPrint({ id }: { id: string }) {
   );
 }
 
-const SOURCE: Record<string, string> = { INWARD_DC: 'Inward D.C.', PANEL_IN: 'Panel inward', YARN_RECEIPT: 'Yarn receipt', STOCK_INWARD: 'Inward from others' };
+const SOURCE: Record<string, string> = { INWARD_DC: 'Inward D.C.', PANEL_IN: 'Panel inward', YARN_RECEIPT: 'Yarn receipt', STOCK_INWARD: 'Inward from others', TRIMS_RECEIPT: 'Accessories receipt' };
 
 /** Vendor bill (A4): vendor with certificate no. and expiry (Q-074), invoice, D.C.s billed, GST, debit notes, net payable. */
 export function VendorBillPrint({ id }: { id: string }) {
@@ -193,10 +193,10 @@ export function VendorBillPrint({ id }: { id: string }) {
   const b = q.data;
   const v = b.vendor;
   const f = b.figures;
-  const purchase = b.kind === 'PURCHASE';
+  const purchase = b.kind !== 'JOBWORK';
   const showBillQty = b.lines.some((l) => l.billQty !== null || l.billPcs !== null);
   return (
-    <PrintLayout title={`${purchase ? 'Purchase bill' : 'Vendor bill'} ${b.docNo ?? ''}`}>
+    <PrintLayout title={`${b.kind === 'ACCESSORY' ? 'Accessories purchase bill' : purchase ? 'Purchase bill' : 'Vendor bill'} ${b.docNo ?? ''}`}>
       <div className="flex items-start justify-between border-b border-black pb-2">
         <CompanyBlock c={company.data} />
         <div className="text-right">

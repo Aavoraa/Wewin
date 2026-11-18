@@ -1501,6 +1501,9 @@ model TrimsDoc {
   createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   createdById       String?        @map("created_by_id") @db.Uuid
   updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  /// Accessories purchase bill this receipt is on (Q-089); billedInFull false while part is left to bill.
+  billId            String?        @map("bill_id") @db.Uuid
+  billedInFull      Boolean        @default(true) @map("billed_in_full")
   vendor            Vendor?        @relation("trimsVendor", fields: [vendorId], references: [id], onDelete: Restrict)
   order             Order?         @relation("trimsOrder", fields: [orderId], references: [id], onDelete: Restrict)
   toOrder           Order?         @relation("trimsToOrder", fields: [toOrderId], references: [id], onDelete: Restrict)
@@ -1510,6 +1513,7 @@ model TrimsDoc {
 
   @@index([type, status, docDate])
   @@index([unitId])
+  @@index([billId])
   @@map("trims_docs")
 }
 
@@ -1596,6 +1600,12 @@ model VendorBill {
   taxType           String?             @map("tax_type")
   /// Part of the taxable amount GST is charged on (desktop "100"); record only.
   taxablePct        Decimal             @default(100) @map("taxable_pct") @db.Decimal(7, 4)
+  /// Desktop charges panel (Q-089): discount (% recorded, amount counts), packing & forwarding, TCS.
+  discountPct       Decimal?            @map("discount_pct") @db.Decimal(7, 4)
+  discountAmount    Decimal             @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  packingAmount     Decimal             @default(0) @map("packing_amount") @db.Decimal(14, 2)
+  tcsPct            Decimal?            @map("tcs_pct") @db.Decimal(7, 4)
+  tcsAmount         Decimal             @default(0) @map("tcs_amount") @db.Decimal(14, 2)
   /// Scanned invoice this draft was created from (one draft per scan — idempotent apply).
   sourceScanId      String?             @unique @map("source_scan_id") @db.Uuid
   /// Opening balance from the go-live import (posted directly, no D.C. lines; Q-027).

@@ -143,6 +143,7 @@ export const NAV: NavGroup[] = [
       { label: 'Purchase Order Close', to: '/accessories/po-close', icon: CircleCheckBig, perm: 'trims.view' },
       { label: 'Transfer Between Order', to: '/accessories/TRANSFER', icon: ArrowLeftRight, perm: 'trims.view' },
       { label: 'SPL.Request', to: '/spl-requests', icon: FilePlus2, perm: 'trims.view' },
+      { label: 'Accessories Purchase Bill Entry', to: '/accessory-bills', icon: FileText, perm: 'accounts.view' },
     ],
   },
   {
@@ -173,7 +174,8 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Export',
-    modules: ['ORDER_PLANNING'],
+    // The desktop Production module's menu has Shipment (Q-088).
+    modules: ['ORDER_PLANNING', 'PRODUCTION'],
     items: [
       { label: 'Export invoices', to: '/export-invoices', icon: FileOutput, perm: 'export.view' },
       { label: 'Shipments', to: '/shipments', icon: Ship, perm: 'export.view' },

@@ -67,7 +67,7 @@ export const tallyService = {
         docNo: n.docNo!,
         docDate: dateOnly(n.docDate)!,
         partyLedger: n.vendor.tallyLedgerName || n.vendor.name,
-        kind: n.bill?.kind === 'PURCHASE' ? 'PURCHASE' : 'JOBWORK',
+        kind: n.bill?.kind === 'PURCHASE' || n.bill?.kind === 'ACCESSORY' ? 'PURCHASE' : 'JOBWORK',
         againstRef: n.bill?.vendorInvoiceNo ?? null,
         taxable: n.taxableAmount.toString(),
         gst: n.gstAmount.toString(),

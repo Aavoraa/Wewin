@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billGst, billInvoiceTotal, billTax, zBillInput } from './accounts';
+import { billCharges, billGst, billInvoiceTotal, billTax, billTcs, zBillInput } from './accounts';
 
 const ref = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const base = {
@@ -35,6 +35,15 @@ describe('bill entry details (Q-079)', () => {
     expect(zBillInput.safeParse({ ...base, ...line, taxType: 'IGST', igstAmount: '10' }).success).toBe(true);
     expect(zBillInput.safeParse({ ...base, ...line, taxablePct: '0' }).success).toBe(false);
     expect(zBillInput.safeParse({ ...base, ...line, taxablePct: '101' }).success).toBe(false);
+  });
+
+  it('charges (Q-089): discount from a % or the amount, packing added, TCS on value + GST, all in the total', () => {
+    expect(billCharges('912.00', { discountPct: '10', packingAmount: '20' })).toEqual({ discount: '91.20', assessable: '840.80' });
+    expect(billCharges('912.00', { discountPct: null, discountAmount: '12', packingAmount: '0' })).toEqual({ discount: '12.00', assessable: '900.00' });
+    expect(billTcs('185.00', '9.25', '0.1')).toBe('0.19');
+    expect(billInvoiceTotal({ taxableAmount: '200', cgstAmount: '4.63', sgstAmount: '4.62', igstAmount: '0', discountAmount: '20', packingAmount: '5', tcsAmount: '0.19' })).toBe('194.44');
+    // The desktop example: 912 + 5 % GST 45.60 + 0.40 add = 958.
+    expect(billInvoiceTotal({ taxableAmount: '912.00', cgstAmount: '22.80', sgstAmount: '22.80', igstAmount: '0', addAmount: '0.40' })).toBe('958.00');
   });
 
   it('invoice total = taxable + GST + add − less', () => {

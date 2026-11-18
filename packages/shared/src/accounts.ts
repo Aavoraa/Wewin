@@ -30,14 +30,21 @@ export const zRateListQuery = zListQuery.extend({
   active: z.enum(['true', 'false', 'all']).optional(),
 });
 
-export const BILL_SOURCE_TYPES = ['INWARD_DC', 'PANEL_IN', 'YARN_RECEIPT', 'STOCK_INWARD'] as const;
+export const BILL_SOURCE_TYPES = ['INWARD_DC', 'PANEL_IN', 'YARN_RECEIPT', 'STOCK_INWARD', 'TRIMS_RECEIPT'] as const;
 export type BillSourceType = (typeof BILL_SOURCE_TYPES)[number];
 /** JOBWORK bills cover inward D.C.s and panel receipts; PURCHASE bills cover yarn receipts and inward from others (Q-079). */
-export const BILL_KINDS = ['JOBWORK', 'PURCHASE'] as const;
+/** ACCESSORY: Accessories Purchase Bill Entry (Q-089), covering accessory purchase receipts. */
+export const BILL_KINDS = ['JOBWORK', 'PURCHASE', 'ACCESSORY'] as const;
 export type BillKind = (typeof BILL_KINDS)[number];
 export const BILL_KIND_SOURCES: Record<BillKind, readonly BillSourceType[]> = {
   JOBWORK: ['INWARD_DC', 'PANEL_IN'],
   PURCHASE: ['YARN_RECEIPT', 'STOCK_INWARD'],
+  ACCESSORY: ['TRIMS_RECEIPT'],
+};
+const KIND_SOURCES_TEXT: Record<BillKind, string> = {
+  JOBWORK: 'A job-work bill covers inward D.C.s and panel receipts',
+  PURCHASE: 'A purchase bill covers yarn receipts and inward from others',
+  ACCESSORY: 'An accessories bill covers accessory purchase receipts',
 };
 
 /**
@@ -68,6 +75,12 @@ const billShape = z.object({
   /** Round-off / adjustments on the invoice (Q-079). */
   addAmount: zMoney().default('0'),
   lessAmount: zMoney().default('0'),
+  /** Desktop charges panel (Q-089): discount, packing & forwarding, TCS. The amounts count; the % are recorded. */
+  discountPct: zOptional(zPct()),
+  discountAmount: zMoney().default('0'),
+  packingAmount: zMoney().default('0'),
+  tcsPct: zOptional(zPct()),
+  tcsAmount: zMoney().default('0'),
   remarks: zOptional(text(500)),
   lines: z
     .array(
@@ -88,10 +101,10 @@ function billRules(v: Pick<BillShape, 'kind' | 'processId' | 'lines' | 'taxType'
   const allowed = BILL_KIND_SOURCES[v.kind];
   v.lines.forEach((l, i) => {
     if (!allowed.includes(l.sourceType)) {
-      ctx.addIssue({ code: 'custom', path: ['lines', i, 'sourceType'], message: v.kind === 'PURCHASE' ? 'A purchase bill covers yarn receipts and inward from others' : 'A job-work bill covers inward D.C.s and panel receipts' });
+      ctx.addIssue({ code: 'custom', path: ['lines', i, 'sourceType'], message: KIND_SOURCES_TEXT[v.kind] });
     }
   });
-  if (v.kind === 'PURCHASE' && v.processId) ctx.addIssue({ code: 'custom', path: ['processId'], message: 'A purchase bill has no process' });
+  if (v.kind !== 'JOBWORK' && v.processId) ctx.addIssue({ code: 'custom', path: ['processId'], message: 'A purchase bill has no process' });
   // A chosen tax type must match the tax amounts typed.
   const nz = (x: string) => !D(x).isZero();
   if (v.taxType === 'NONE') {
@@ -123,15 +136,44 @@ export function billGst(taxable: DecimalLike, ratePct: DecimalLike, interState: 
  * GST for a tax type (Q-087): GST → CGST + SGST, IGST → IGST, NONE → nothing; blank follows the state.
  * Tax is charged on `taxablePct` % of the taxable amount.
  */
+/**
+ * Desktop charges panel (Q-089): discount from a % of the taxable amount (else the amount typed), and
+ * the value GST is charged on = taxable − discount + packing & forwarding. To the paisa, half up.
+ */
+export function billCharges(taxable: DecimalLike, o: { discountPct?: DecimalLike | null; discountAmount?: DecimalLike; packingAmount?: DecimalLike }) {
+  const t = D(taxable);
+  const hasPct = o.discountPct !== null && o.discountPct !== undefined && String(o.discountPct) !== '';
+  const discount = hasPct ? t.times(D(o.discountPct!)).div(100).toDecimalPlaces(2, Dec.ROUND_HALF_UP) : D(o.discountAmount ?? 0);
+  return { discount: discount.toFixed(2), assessable: t.minus(discount).plus(D(o.packingAmount ?? 0)).toFixed(2) };
+}
+
+/** TCS (Q-089): the % of (value GST is charged on + GST), to the paisa, half up. */
+export function billTcs(assessable: DecimalLike, gstTotal: DecimalLike, tcsPct: DecimalLike) {
+  return D(assessable).plus(D(gstTotal)).times(D(tcsPct)).div(100).toDecimalPlaces(2, Dec.ROUND_HALF_UP).toFixed(2);
+}
+
 export function billTax(taxable: DecimalLike, ratePct: DecimalLike, taxType: BillTaxType | null | undefined, interState: boolean, taxablePct: DecimalLike = 100) {
   const type = taxType ?? (interState ? 'IGST' : 'GST');
   if (type === 'NONE') return { cgst: '0.00', sgst: '0.00', igst: '0.00' };
   return billGst(taxable, ratePct, type === 'IGST', taxablePct);
 }
 
-/** Invoice total on a bill = taxable + GST + add − less (Q-079). */
-export function billInvoiceTotal(b: { taxableAmount: DecimalLike; cgstAmount: DecimalLike; sgstAmount: DecimalLike; igstAmount: DecimalLike; addAmount?: DecimalLike; lessAmount?: DecimalLike }) {
+/** Invoice total on a bill = taxable − discount + packing & forwarding + GST + TCS + add − less (Q-079, Q-089). */
+export function billInvoiceTotal(b: {
+  taxableAmount: DecimalLike;
+  cgstAmount: DecimalLike;
+  sgstAmount: DecimalLike;
+  igstAmount: DecimalLike;
+  addAmount?: DecimalLike;
+  lessAmount?: DecimalLike;
+  discountAmount?: DecimalLike;
+  packingAmount?: DecimalLike;
+  tcsAmount?: DecimalLike;
+}) {
   return D(b.taxableAmount)
+    .minus(D(b.discountAmount ?? 0))
+    .plus(D(b.packingAmount ?? 0))
+    .plus(D(b.tcsAmount ?? 0))
     .plus(D(b.cgstAmount))
     .plus(D(b.sgstAmount))
     .plus(D(b.igstAmount))

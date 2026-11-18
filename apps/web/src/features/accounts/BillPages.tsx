@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calculator, ClipboardList, Plus, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { type BillTaxType, D, billInvoiceTotal, billTax, isInterState, todayIst, zBillHeader } from '@wewin/shared';
+import { type BillTaxType, D, billCharges, billInvoiceTotal, billTax, billTcs, isInterState, todayIst, zBillHeader } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
@@ -36,10 +36,21 @@ import { useVoiceFill } from '@/lib/voice';
 
 /** A taxable % between 0 (exclusive) and 100. */
 const okPct = (v: string | undefined) => !!v && /^\d+(\.\d{1,4})?$/.test(v) && D(v).greaterThan(0) && !D(v).greaterThan(100);
-const qtyText = (q: string, unit: string) => (unit === 'KG' ? `${formatKg(q)} kg` : `${formatQty(q)} pcs`);
-const billRoute = (kind: BillKind) => (kind === 'PURCHASE' ? 'purchase-bills' : 'vendor-bills');
+const qtyText = (q: string, unit: string) => (unit === 'KG' ? `${formatKg(q)} kg` : `${formatQty(q)} ${unit === 'PCS' ? 'pcs' : unit.toLowerCase()}`);
+const billRoute = (kind: BillKind) => (kind === 'PURCHASE' ? 'purchase-bills' : kind === 'ACCESSORY' ? 'accessory-bills' : 'vendor-bills');
+const BILL_TITLE: Record<BillKind, string> = { JOBWORK: 'Vendor bill', PURCHASE: 'Purchase bill', ACCESSORY: 'Accessories purchase bill' };
+/** A plain number (a PO rate like "44.00/1" is rate per N units and is not compared). */
+const plainNum = (v: string | null | undefined) => !!v && /^\d+(\.\d+)?$/.test(v);
 const sourceHref = (t: BillSourceType, id: string) =>
-  t === 'INWARD_DC' ? `/inward-dcs/${id}` : t === 'PANEL_IN' ? `/panel-in/${id}` : t === 'YARN_RECEIPT' ? `/yarn-receipts/${id}` : `/stock-docs/OTHER_INWARD/${id}`;
+  t === 'INWARD_DC'
+    ? `/inward-dcs/${id}`
+    : t === 'PANEL_IN'
+      ? `/panel-in/${id}`
+      : t === 'YARN_RECEIPT'
+        ? `/yarn-receipts/${id}`
+        : t === 'TRIMS_RECEIPT'
+          ? `/accessories/RECEIPT/${id}`
+          : `/stock-docs/OTHER_INWARD/${id}`;
 const isMoney = (s: string | null | undefined) => /^\d+(\.\d{1,2})?$/.test(s ?? '');
 const isQty = (s: string) => /^\d+(\.\d{1,3})?$/.test(s) && D(s).greaterThan(0);
 const dash = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? '—' : v);
@@ -57,14 +68,17 @@ function BillsRegister({ kind, process }: { kind: BillKind; process?: ProcessRef
   const [status, setStatus] = useState('');
   const [pay, setPay] = useState('');
   const [approval, setApproval] = useState('');
-  const purchase = kind === 'PURCHASE';
+  const purchase = kind !== 'JOBWORK';
+  const acc = kind === 'ACCESSORY';
   const route = billRoute(kind);
   return (
     <div>
       <PageHeader
-        title={purchase ? 'Purchase bills' : process ? `${process.name} JobWork Invoice` : 'Vendor bills'}
+        title={acc ? 'Accessories Purchase Bill Entry' : purchase ? 'Purchase bills' : process ? `${process.name} JobWork Invoice` : 'Vendor bills'}
         description={
-          purchase
+          acc
+            ? 'Accessories bought from suppliers (thread, labels, trims), matched against accessory purchase receipts and their PO rates'
+            : purchase
             ? 'Yarn and fabric bought from mills and suppliers, matched against yarn receipts and inward from others'
             : process
               ? `${process.name} job-work invoices, matched against that process's inward D.C.s at contract rates (3-way match).`
@@ -72,7 +86,7 @@ function BillsRegister({ kind, process }: { kind: BillKind; process?: ProcessRef
         }
         actions={
           <>
-            {purchase ? <ScanInvoiceButton target="PURCHASE_BILL" /> : <ScanInvoiceButton target="VENDOR_BILL" />}
+            {acc ? null : purchase ? <ScanInvoiceButton target="PURCHASE_BILL" /> : <ScanInvoiceButton target="VENDOR_BILL" />}
             {can('accounts.bill.create') ? (
               <Button asChild>
                 <Link to={process ? `/${route}/new?process=${process.id}&processName=${encodeURIComponent(process.name)}` : `/${route}/new`}>
@@ -86,7 +100,7 @@ function BillsRegister({ kind, process }: { kind: BillKind; process?: ProcessRef
       <DataTable<VendorBill>
         id={process ? `${route}-${process.code}` : route}
         endpoint="/vendor-bills"
-        exportTitle={purchase ? 'Purchase bills' : 'Vendor bills'}
+        exportTitle={acc ? 'Accessories purchase bills' : purchase ? 'Purchase bills' : 'Vendor bills'}
         rowHref={(r) => `/${route}/${r.id}`}
         filters={{ kind, processId: process?.id, status: status || undefined, payStatus: pay || undefined, approval: approval || undefined, from: fy.start, to: fy.end }}
         filterBar={
@@ -166,6 +180,11 @@ export function PurchaseBillsPage() {
   return <BillsRegister kind="PURCHASE" />;
 }
 
+/** Accessories Purchase Bill Entry (Q-089): bills for accessory purchase receipts. */
+export function AccessoryBillsPage() {
+  return <BillsRegister kind="ACCESSORY" />;
+}
+
 interface Header {
   kind: BillKind;
   docDate: string;
@@ -183,6 +202,11 @@ interface Header {
   igstAmount: string;
   addAmount: string;
   lessAmount: string;
+  discountPct: string;
+  discountAmount: string;
+  packingAmount: string;
+  tcsPct: string;
+  tcsAmount: string;
   remarks: string;
 }
 /** Per ticked document: invoiced amount, bill qty and bill pcs as typed (blank = not given / same as received). */
@@ -278,7 +302,7 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
   const d = useDocument<VendorBill>('/vendor-bills', billRoute(routeKind), id);
   const doc = d.doc;
   const kind: BillKind = doc?.kind ?? routeKind;
-  const purchase = kind === 'PURCHASE';
+  const purchase = kind !== 'JOBWORK';
   const status = doc?.status ?? 'DRAFT';
   const editable = status === 'DRAFT' && can('accounts.bill.create');
   const [labels, setLabels] = useState<Record<string, string>>(startProcess && startProcessName ? { [startProcess]: startProcessName } : {});
@@ -302,6 +326,11 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
       sgstAmount: '0',
       igstAmount: '0',
       addAmount: '0',
+      discountPct: '',
+      discountAmount: '0',
+      packingAmount: '0',
+      tcsPct: '',
+      tcsAmount: '0',
       lessAmount: '0',
       remarks: '',
     },
@@ -326,6 +355,11 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
       sgstAmount: doc.sgstAmount,
       igstAmount: doc.igstAmount,
       addAmount: doc.addAmount,
+      discountPct: doc.discountPct ?? '',
+      discountAmount: doc.discountAmount,
+      packingAmount: doc.packingAmount,
+      tcsPct: doc.tcsPct ?? '',
+      tcsAmount: doc.tcsAmount,
       lessAmount: doc.lessAmount,
       remarks: doc.remarks ?? '',
     });
@@ -346,6 +380,11 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
   const processId = purchase ? null : form.watch('processId');
   const taxable = form.watch('taxableAmount');
   const [cgst, sgst, igst, addAmt, lessAmt, gstPct, taxType, taxablePct] = form.watch(['cgstAmount', 'sgstAmount', 'igstAmount', 'addAmount', 'lessAmount', 'gstRatePct', 'taxType', 'taxablePct']);
+  const [discPct, discAmt, packAmt, tcsPct, tcsAmt] = form.watch(['discountPct', 'discountAmount', 'packingAmount', 'tcsPct', 'tcsAmount']);
+  // Charges panel (Q-089): GST is charged on taxable − discount + packing & forwarding.
+  const assessable = isMoney(taxable) && isMoney(packAmt) && (okPct(discPct) || discPct === '0' || isMoney(discAmt))
+    ? billCharges(taxable, { discountPct: discPct || null, discountAmount: discAmt, packingAmount: packAmt })
+    : null;
 
   const candidates = useQuery({
     queryKey: ['vendor-bills', 'match', kind, vendorId, orderId, processId],
@@ -369,7 +408,8 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
     const none = form.getValues('taxType') === 'NONE';
     if (!none && (!/^\d+(\.\d{1,3})?$/.test(pct) || D(pct).greaterThan(100))) return toast.error('Enter the GST %');
     if (!okPct(form.getValues('taxablePct'))) return toast.error('Tax on % of taxable must be more than 0 and at most 100');
-    const g = billTax(t, pct || '0', form.getValues('taxType') || null, interState, form.getValues('taxablePct'));
+    const base = billCharges(t, { discountPct: form.getValues('discountPct') || null, discountAmount: form.getValues('discountAmount') || '0', packingAmount: form.getValues('packingAmount') || '0' }).assessable;
+    const g = billTax(base, pct || '0', form.getValues('taxType') || null, interState, form.getValues('taxablePct'));
     const opts = { shouldDirty: true, shouldValidate: true };
     form.setValue('cgstAmount', g.cgst, opts);
     form.setValue('sgstAmount', g.sgst, opts);
@@ -377,20 +417,32 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
   }
   // Automatic GST (Q-079): when the taxable amount or the GST % is typed, CGST / SGST / IGST follow.
   // Editing a tax amount afterwards keeps the edit; loading a saved bill changes nothing.
-  const dirtyTax =
-    !!form.formState.dirtyFields.taxableAmount || !!form.formState.dirtyFields.gstRatePct || !!form.formState.dirtyFields.taxType || !!form.formState.dirtyFields.taxablePct;
+  const df = form.formState.dirtyFields;
+  const dirtyTax = !!df.taxableAmount || !!df.gstRatePct || !!df.taxType || !!df.taxablePct || !!df.discountPct || !!df.discountAmount || !!df.packingAmount;
   useEffect(() => {
     if (!editable || !dirtyTax || !isMoney(taxable) || !okPct(taxablePct)) return;
     // No tax needs no rate; the others need a GST %.
     if (taxType !== 'NONE' && (!/^\d+(\.\d{1,3})?$/.test(gstPct ?? '') || D(gstPct!).greaterThan(100))) return;
-    const g = billTax(taxable, gstPct || '0', taxType || null, interState, taxablePct);
+    if (!assessable) return;
+    const g = billTax(assessable.assessable, gstPct || '0', taxType || null, interState, taxablePct);
     const opts = { shouldDirty: true, shouldValidate: true };
     form.setValue('cgstAmount', g.cgst, opts);
     form.setValue('sgstAmount', g.sgst, opts);
     form.setValue('igstAmount', g.igst, opts);
-  }, [editable, dirtyTax, taxable, gstPct, taxType, taxablePct, interState, form]);
+  }, [editable, dirtyTax, taxable, gstPct, taxType, taxablePct, interState, form, assessable?.assessable]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Discount from its %, and TCS from its % of (value + GST), follow what is typed (Q-089).
+  useEffect(() => {
+    if (!editable || !df.discountPct || !assessable || !okPct(discPct)) return;
+    form.setValue('discountAmount', assessable.discount, { shouldDirty: true, shouldValidate: true });
+  }, [editable, df.discountPct, discPct, assessable?.discount]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!editable || !df.tcsPct || !assessable || !okPct(tcsPct) || ![cgst, sgst, igst].every(isMoney)) return;
+    form.setValue('tcsAmount', billTcs(assessable.assessable, D(cgst).plus(D(sgst)).plus(D(igst)).toFixed(2), tcsPct), { shouldDirty: true, shouldValidate: true });
+  }, [editable, df.tcsPct, tcsPct, cgst, sgst, igst, assessable?.assessable]); // eslint-disable-line react-hooks/exhaustive-deps
   const net =
-    [taxable, cgst, sgst, igst, addAmt, lessAmt].every(isMoney) ? billInvoiceTotal({ taxableAmount: taxable, cgstAmount: cgst, sgstAmount: sgst, igstAmount: igst, addAmount: addAmt, lessAmount: lessAmt }) : null;
+    [taxable, cgst, sgst, igst, addAmt, lessAmt, discAmt, packAmt, tcsAmt].every(isMoney)
+      ? billInvoiceTotal({ taxableAmount: taxable, cgstAmount: cgst, sgstAmount: sgst, igstAmount: igst, addAmount: addAmt, lessAmount: lessAmt, discountAmount: discAmt, packingAmount: packAmt, tcsAmount: tcsAmt })
+      : null;
 
   const picked = useMemo(() => (candidates.data ?? []).filter((c) => sel[key(c)]?.picked), [candidates.data, sel]);
   const payloadLines = picked.map((c) => {
@@ -431,7 +483,7 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
       : null;
   const dirty = form.formState.isDirty;
   const canApprove = !!doc && status === 'DRAFT' && doc.approvalStatus === 'PENDING' && can('accounts.bill.approve');
-  const money = (name: 'cgstAmount' | 'sgstAmount' | 'igstAmount' | 'addAmount' | 'lessAmount', label: string) => (
+  const money = (name: 'cgstAmount' | 'sgstAmount' | 'igstAmount' | 'addAmount' | 'lessAmount' | 'discountPct' | 'discountAmount' | 'packingAmount' | 'tcsPct' | 'tcsAmount', label: string) => (
     <Field label={label} error={e[name]?.message}>
       <Input inputMode="decimal" className="text-right" {...form.register(name)} />
     </Field>
@@ -441,7 +493,7 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
     <>
       <DocumentForm
         voice={voice}
-        title={purchase ? 'Purchase bill' : 'Vendor bill'}
+        title={BILL_TITLE[kind]}
         docNo={doc?.docNo}
         status={status}
         postedAt={doc?.postedAt}
@@ -572,9 +624,18 @@ export function VendorBillPage({ kind: routeKind = 'JOBWORK' }: { kind?: BillKin
             {money('cgstAmount', 'CGST ₹')}
             {money('sgstAmount', 'SGST ₹')}
             {money('igstAmount', 'IGST ₹')}
+            {purchase || Number(discAmt) || Number(packAmt) || Number(tcsAmt) ? (
+              <>
+                {money('discountPct', 'Discount %')}
+                {money('discountAmount', 'Discount ₹')}
+                {money('packingAmount', 'Packing & forwarding ₹')}
+                {money('tcsPct', 'TCS %')}
+                {money('tcsAmount', 'TCS ₹')}
+              </>
+            ) : null}
             {money('addAmount', 'Add amount ₹')}
             {money('lessAmount', 'Less amount ₹')}
-            <Field label="Net amount ₹ (taxable + GST + add − less)">
+            <Field label={purchase ? 'Net amount ₹ (taxable − discount + packing + GST + TCS + add − less)' : 'Net amount ₹ (taxable + GST + add − less)'}>
               <div className="flex h-9 items-center justify-end rounded-md border bg-muted/50 px-3 font-semibold tabular-nums">{net ? formatInr(net) : '—'}</div>
             </Field>
             <Field label="Remarks" className="sm:col-span-2 xl:col-span-3">
@@ -644,6 +705,7 @@ function CandidateTable({
   previewError: unknown;
 }) {
   const jw = kind === 'JOBWORK';
+  const acc = kind === 'ACCESSORY';
   const docs = jw ? 'D.C.s' : 'receipts';
   // GRN selection (desktop "Party dcwise / GRN wise"): find documents by the party's D.C. / invoice no. or ours.
   const [find, setFind] = useState('');
@@ -755,10 +817,10 @@ function CandidateTable({
                 <>
                   <TH>GRN / receipt</TH>
                   <TH>Date</TH>
-                  <TH>Type</TH>
-                  <TH>Supplier inv. / party</TH>
+                  <TH>{acc ? 'Party D.C.' : 'Type'}</TH>
+                  <TH>{acc ? 'Order ref' : 'Supplier inv. / party'}</TH>
                   <TH>Items</TH>
-                  <TH>Lots</TH>
+                  <TH>{acc ? 'Colour / size' : 'Lots'}</TH>
                   <TH>PO</TH>
                   <TH className="text-right">P.O. rate</TH>
                   <TH className="text-right">Bags</TH>
@@ -818,16 +880,16 @@ function CandidateTable({
                     </>
                   ) : (
                     <>
-                      <TD>{c.processName}</TD>
-                      <TD className="font-mono text-xs">{dash(c.against)}</TD>
+                      <TD className={acc ? 'font-mono text-xs' : undefined}>{acc ? dash(c.vendorDcNo) : c.processName}</TD>
+                      <TD className="font-mono text-xs">{acc ? dash(c.orderNo) : dash(c.against)}</TD>
                       <TD className="max-w-64 truncate" title={c.items ?? undefined}>
                         {dash(c.items)}
                       </TD>
-                      <TD className="max-w-40 truncate" title={c.lots ?? undefined}>
-                        {dash(c.lots)}
+                      <TD className="max-w-40 truncate" title={(acc ? [c.colours, c.sizes].filter(Boolean).join(' / ') : c.lots) ?? undefined}>
+                        {acc ? dash([c.colours, c.sizes].filter(Boolean).join(' / ')) : dash(c.lots)}
                       </TD>
                       <TD className="font-mono text-xs">{dash(c.poNos)}</TD>
-                      <TD className={cn('text-right tabular-nums', c.poRate && c.rate && !D(c.rate).equals(D(c.poRate.split(',')[0]!)) && 'font-semibold text-red-700')}>{dash(c.poRate)}</TD>
+                      <TD className={cn('text-right tabular-nums', c.rate && plainNum(c.poRate?.split(',')[0]) && !D(c.rate).equals(D(c.poRate!.split(',')[0]!)) && 'font-semibold text-red-700')}>{dash(c.poRate)}</TD>
                       <TD className="text-right tabular-nums">{c.bags ? c.bags : '—'}</TD>
                       <TD className="text-right tabular-nums">
                         {qtyText(c.qty, c.unit)}
@@ -907,7 +969,7 @@ function CandidateTable({
 }
 
 function PostedLines({ doc }: { doc: VendorBill }) {
-  const jw = doc.kind !== 'PURCHASE';
+  const jw = doc.kind === 'JOBWORK';
   return (
     <Card>
       <CardHeader>

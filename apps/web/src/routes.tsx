@@ -69,6 +69,7 @@ const DirectDeliveryPage = lazy(() => import('@/features/stock/DirectDeliveryPag
 const VendorBillPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillPage })));
 const VendorBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.VendorBillsPage })));
 const PurchaseBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.PurchaseBillsPage })));
+const AccessoryBillsPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.AccessoryBillsPage })));
 const JobworkInvoicesPage = lazy(() => import('@/features/accounts/BillPages').then((m) => ({ default: m.JobworkInvoicesPage })));
 const TallyPostingPage = lazy(() => import('@/features/accounts/TallyPostingPage').then((m) => ({ default: m.TallyPostingPage })));
 const BillAuditPage = lazy(() => import('@/features/accounts/BillAuditPages').then((m) => ({ default: m.BillAuditPage })));
@@ -158,6 +159,8 @@ const PAGES: { path: string; perm: PermissionKey; element: ReactNode }[] = [
   { path: 'vendor-bills/:id', perm: 'accounts.view', element: <VendorBillPage /> },
   { path: 'purchase-bills', perm: 'accounts.view', element: <PurchaseBillsPage /> },
   { path: 'purchase-bills/:id', perm: 'accounts.view', element: <VendorBillPage kind="PURCHASE" /> },
+  { path: 'accessory-bills', perm: 'accounts.view', element: <AccessoryBillsPage /> },
+  { path: 'accessory-bills/:id', perm: 'accounts.view', element: <VendorBillPage kind="ACCESSORY" /> },
   { path: 'bill-audit/:level', perm: 'accounts.view', element: <BillAuditPage /> },
   { path: 'tally/debit-notes', perm: 'accounts.tally.export', element: <TallyPostingPage /> },
   { path: 'jobwork-invoices/:processCode', perm: 'accounts.view', element: <JobworkInvoicesPage /> },

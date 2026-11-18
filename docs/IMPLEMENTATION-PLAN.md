@@ -107,6 +107,12 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-17 — Accessories Purchase Bill Entry; discount, packing, TCS on bills (Q-089)
+- Migration `20261118100000_accessory_bills`: `trims_docs.bill_id / billed_in_full`; bill kind ACCESSORY (CHECK); `vendor_bills.discount_pct / discount_amount / packing_amount / tcs_pct / tcs_amount` (CHECK ≥ 0, % 0–100).
+- Shared: bill source `TRIMS_RECEIPT`, kind `ACCESSORY`; `billCharges()`, `billTcs()`; `billInvoiceTotal()` takes discount / packing / TCS. API: trims `billable / forBill / lock / markBilled / restoreBilled`, `poPositionsForReceipts`; bills offer, price, post, cancel accessory receipts; check list `accessoryItems`, `poLines`; overview open-bills SQL counts add / less / charges; Tally posts accessory debit notes to the purchase ledger.
+- Web: Accessories › Accessories Purchase Bill Entry (`/accessory-bills`), party D.C. / order / colour-size columns, PO rate "rate/per"; charges fields on purchase-type bills with automatic discount, GST base and TCS; check list print laid out as the desktop Accessories Purchase Bill Chk.List with the PO-wise table and amount in words. Export menu also shows in the Production module.
+- Verified: Vitest (charges, TCS, totals incl. the desktop 958.00 example; nav modules), Supertest `accessory-bills.test.ts` (offered at PO rate on the accessories bill only, purchase bill refuses it, charges in the net 194.44, post marks billed, second bill refused, check list item and PO position, cancel frees the receipt).
+
 ### 2026-11-17 — Module choice at login (Q-088)
 - `nav.ts`: `MODULES` (All, Order & Planning, Yarn to Fabric, Production), `modules` on each menu group, `navFor()`; `lib/module.ts` remembers the choice on the computer.
 - Login page: module picker; top bar: Module list. The sidebar shows the chosen module's menus plus Overview / Masters / Settings. UI only — permissions unchanged.

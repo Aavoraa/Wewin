@@ -19,8 +19,8 @@ export interface RateContract {
   order: { orderNo: string } | null;
 }
 
-export type BillKind = 'JOBWORK' | 'PURCHASE';
-export type BillSourceType = 'INWARD_DC' | 'PANEL_IN' | 'YARN_RECEIPT' | 'STOCK_INWARD';
+export type BillKind = 'JOBWORK' | 'PURCHASE' | 'ACCESSORY';
+export type BillSourceType = 'INWARD_DC' | 'PANEL_IN' | 'YARN_RECEIPT' | 'STOCK_INWARD' | 'TRIMS_RECEIPT';
 
 /**
  * A posted, unbilled document offered on the match screen. Job-work candidates (inward D.C.s, panel
@@ -60,6 +60,7 @@ export interface BillCandidate {
   /** Yarn PO(s) behind a yarn receipt and their rate per kg (GRN against PO, Q-080). */
   poNos?: string | null;
   poRate?: string | null;
+  sizes?: string | null;
 }
 
 export interface MatchResult {
@@ -100,6 +101,7 @@ export interface BillLineDetails {
   bags: number | null;
   poNos?: string | null;
   poRate?: string | null;
+  sizes?: string | null;
 }
 
 export interface VendorBill {
@@ -123,6 +125,11 @@ export interface VendorBill {
   taxablePct: string;
   addAmount: string;
   lessAmount: string;
+  discountPct: string | null;
+  discountAmount: string;
+  packingAmount: string;
+  tcsPct: string | null;
+  tcsAmount: string;
   expectedTaxable: string;
   variance: string;
   withinTolerance: boolean;
