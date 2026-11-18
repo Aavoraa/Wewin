@@ -52,10 +52,12 @@ export const zStockDocLine = z.object({
   counts: zOptional(text(40)),
   bags: zOptional(z.coerce.number().int().min(0).max(100_000)),
   qty: zQty({ positive: true }),
-  /** Rejection: rate per unit for the debit note. */
+  /** Rejection: rate per unit for the debit note. Inward from others: purchase rate (Q-082). */
   rate: zOptional(zRate()),
   /** Rejection: why it was rejected. */
   reason: zOptional(text(200)),
+  /** Inward from others: approved yarn / fabric PO line received against (Q-082). */
+  poLineId: zOptional(zRef()),
 });
 export type StockDocLineInput = z.input<typeof zStockDocLine>;
 

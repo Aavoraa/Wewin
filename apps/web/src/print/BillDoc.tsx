@@ -38,6 +38,8 @@ export function BillDoc(p: {
   after?: ReactNode;
   remarks?: string | null;
   signatures?: string[];
+  /** Text printed above each signature line (e.g. who approved, and when), by position. */
+  signed?: (string | null | undefined)[];
 }) {
   const company = useCompany();
   const details = (p.details ?? []).filter(([, v]) => v !== null && v !== undefined && v !== '');
@@ -124,7 +126,7 @@ export function BillDoc(p: {
       </table>
       {p.after}
       {p.remarks ? <div className="mt-2">Remarks: {p.remarks}</div> : null}
-      <Signatures labels={p.signatures ?? ['Prepared by', 'Checked by', 'Authorised signatory']} />
+      <Signatures labels={p.signatures ?? ['Prepared by', 'Checked by', 'Authorised signatory']} signed={p.signed} />
     </PrintLayout>
   );
 }

@@ -13,20 +13,29 @@ const billInclude = {
     },
   },
   order: { select: { id: true, orderNo: true, styleNo: true } },
+  process: { select: { id: true, code: true, name: true } },
   lines: { orderBy: { lineNo: 'asc' } },
   debitNotes: { where: { status: 'POSTED' }, select: { id: true, docNo: true, docDate: true, totalAmount: true, isAuto: true } },
   allocations: { where: { payment: { status: 'POSTED' } }, select: { amount: true, payment: { select: { id: true, docNo: true, docDate: true } } } },
 } satisfies Prisma.VendorBillInclude;
 export type BillDetail = Prisma.VendorBillGetPayload<{ include: typeof billInclude }>;
 
+const tallyNoteInclude = {
+  vendor: { select: { id: true, name: true, tallyLedgerName: true, stateCode: true, gstin: true } },
+  bill: { select: { id: true, docNo: true, kind: true, vendorInvoiceNo: true } },
+  lines: { select: { reason: true } },
+} satisfies Prisma.DebitNoteInclude;
+
 export interface BillLineData {
   sourceType: string;
   sourceId: string;
   sourceDocNo: string;
   sourceDate: Date;
-  processId: string;
+  processId: string | null;
   itemId: string | null;
   billableQty: string;
+  billQty: string | null;
+  billPcs: number | null;
   unit: 'KG' | 'PCS' | 'NOS';
   rate: string | null;
   rateContractId: string | null;
@@ -144,6 +153,42 @@ export const accountsRepo = {
     });
   },
   /** Posted bills of a vendor (for open-bill lists, ledger and ageing). */
+  /** Debit notes to post to Tally (posted, not yet sent; or cancelled after being sent) or already sent (Q-084). */
+  tallyQueue(queue: 'PENDING' | 'POSTED', db: Db = prisma) {
+    const where: Prisma.DebitNoteWhereInput =
+      queue === 'PENDING'
+        ? { OR: [{ status: 'POSTED', tallyExportedAt: null }, { status: 'CANCELLED', tallyExportedAt: { not: null }, tallyCancelExportedAt: null }] }
+        : { tallyExportedAt: { not: null } };
+    return db.debitNote.findMany({ where, orderBy: [{ docDate: 'asc' }, { docNo: 'asc' }], take: 500, include: tallyNoteInclude });
+  },
+  notesForTally(ids: string[], db: Db = prisma) {
+    return db.debitNote.findMany({ where: { id: { in: ids } }, orderBy: [{ docDate: 'asc' }, { docNo: 'asc' }], include: tallyNoteInclude });
+  },
+  setTallyExported(tx: Tx, ids: string[], data: Prisma.DebitNoteUpdateManyMutationInput) {
+    return tx.debitNote.updateMany({ where: { id: { in: ids } }, data });
+  },
+  /** Lines of posted bills covering these documents (optionally leaving one bill out) — Q-081. */
+  postedLinesFor(sourceIds: string[], db: Db = prisma, exceptBillId?: string) {
+    if (!sourceIds.length) return Promise.resolve([]);
+    return db.vendorBillLine.findMany({
+      where: { sourceId: { in: sourceIds }, bill: { status: 'POSTED', ...(exceptBillId ? { id: { not: exceptBillId } } : {}) } },
+      select: { sourceId: true, billQty: true, billableQty: true, billId: true, bill: { select: { postedAt: true } } },
+    });
+  },
+  /** Kg and ₹ of excess loss debited on posted debit notes, per outward D.C. (bill check list). */
+  excessLossDebits(outwardIds: string[], db: Db = prisma) {
+    return db.debitNoteLine.groupBy({
+      by: ['originId'],
+      where: { originType: 'OUTWARD_DC', originId: { in: outwardIds }, reason: 'EXCESS_LOSS', active: true, note: { status: 'POSTED' } },
+      _sum: { qty: true, amount: true },
+    });
+  },
+  userNames(ids: string[], db: Db = prisma) {
+    return db.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true } });
+  },
+  setBillAudit(tx: Tx, id: string, data: Prisma.VendorBillUpdateManyMutationInput) {
+    return tx.vendorBill.update({ where: { id }, data });
+  },
   postedBills(where: Prisma.VendorBillWhereInput, db: Db = prisma) {
     return db.vendorBill.findMany({ where: { ...where, status: 'POSTED' }, include: billInclude, orderBy: [{ dueDate: 'asc' }, { vendorInvoiceDate: 'asc' }] });
   },

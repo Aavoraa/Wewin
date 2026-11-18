@@ -1,6 +1,7 @@
 import { type SeriesCode, formatDocNo, fyCodeFor } from '@wewin/shared';
 import { env } from '../../config/env';
-import { type Tx } from '../db';
+import { MAIN_UNIT_ID, type Tx } from '../db';
+import { currentUnitId } from '../context';
 import { AppError } from '../errors/app-error';
 
 /**
@@ -15,13 +16,16 @@ export const numbering = {
       throw new AppError('SERIES_NOT_CONFIGURED', `Document series ${seriesCode} is not configured`, 500);
     }
     const fyCode = fyCodeFor(docDate, env.FY_START_MONTH);
+    // Each unit numbers its documents separately, behind its own prefix (Q-085).
+    const unitId = currentUnitId() ?? MAIN_UNIT_ID;
+    const unit = await tx.businessUnit.findUnique({ where: { id: unitId }, select: { docPrefix: true } });
     const rows = await tx.$queryRaw<{ last_no: number }[]>`
-      INSERT INTO number_series (id, series_code, fy_code, last_no, updated_at)
-      VALUES (gen_random_uuid(), ${seriesCode}, ${fyCode}, 1, now())
-      ON CONFLICT (series_code, fy_code)
+      INSERT INTO number_series (id, series_code, fy_code, unit_id, last_no, updated_at)
+      VALUES (gen_random_uuid(), ${seriesCode}, ${fyCode}, ${unitId}::uuid, 1, now())
+      ON CONFLICT (series_code, fy_code, unit_id)
       DO UPDATE SET last_no = number_series.last_no + 1, updated_at = now()
       RETURNING last_no`;
     const seq = Number(rows[0]!.last_no);
-    return { docNo: formatDocNo(series.prefix, fyCode, seq, series.padding), fyCode, seq };
+    return { docNo: `${unit?.docPrefix ?? ''}${formatDocNo(series.prefix, fyCode, seq, series.padding)}`, fyCode, seq };
   },
 };

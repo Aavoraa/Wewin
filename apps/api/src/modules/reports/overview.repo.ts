@@ -1,4 +1,5 @@
-import { prisma } from '../../core/db';
+import { Prisma } from '@wewin/db';
+import { prisma, unitScoped } from '../../core/db';
 
 /**
  * Read-only counts for the dashboard's operations overview. Stock comes from the ledger
@@ -49,7 +50,7 @@ export interface OverviewCounts {
 
 export const overviewRepo = {
   async counts(monthStart: string, today: string): Promise<OverviewCounts> {
-    const [row] = await prisma.$queryRaw<Record<string, Num>[]>`
+    const [row] = await prisma.$queryRaw<Record<string, Num>[]>(unitScoped(Prisma.sql`
       WITH bal AS (
         SELECT l.code, l.kind, i.type, m.unit, m.item_id, SUM(m.qty) AS qty
         FROM (
@@ -97,16 +98,17 @@ export const overviewRepo = {
         (SELECT COUNT(*) FROM export_invoices e WHERE e.status = 'POSTED' AND EXISTS (SELECT 1 FROM shipments s WHERE s.id = e.shipment_id AND s.status = 'POSTED')
            AND e.fob_value > COALESCE((SELECT SUM(a.amount_fc) FROM buyer_receipt_allocations a JOIN buyer_receipts r ON r.id = a.receipt_id WHERE a.invoice_id = e.id AND r.status = 'POSTED'), 0)) AS shipped_unrealised,
         (SELECT COUNT(*) FROM vendor_bills WHERE status = 'DRAFT') AS bills_draft,
-        (SELECT COUNT(*) FROM invoice_scans WHERE status IN ('NEEDS_REVIEW','READY') AND target = 'VENDOR_BILL') AS bill_scans_to_review,
+        (SELECT COUNT(*) FROM invoice_scans WHERE status IN ('NEEDS_REVIEW','READY') AND target IN ('VENDOR_BILL', 'PURCHASE_BILL')) AS bill_scans_to_review,
         (SELECT COUNT(*) FROM vendor_bills WHERE status = 'DRAFT' AND approval_status = 'PENDING') AS bills_awaiting_approval,
         (SELECT COUNT(*) FROM debit_notes WHERE status = 'DRAFT') AS debit_notes_draft,
         (SELECT COUNT(*) FROM vendor_bills b WHERE b.status = 'POSTED'
-           AND b.taxable_amount + b.cgst_amount + b.sgst_amount + b.igst_amount
+           AND b.taxable_amount + b.cgst_amount + b.sgst_amount + b.igst_amount + b.add_amount - b.less_amount
+             - b.discount_amount + b.packing_amount + b.tcs_amount
              - COALESCE((SELECT SUM(n.total_amount) FROM debit_notes n WHERE n.bill_id = b.id AND n.status = 'POSTED'), 0)
              > COALESCE((SELECT SUM(a.amount) FROM payment_allocations a JOIN payment_vouchers p ON p.id = a.payment_id WHERE a.bill_id = b.id AND p.status = 'POSTED'), 0)) AS bills_open,
         (SELECT COALESCE(SUM(l.qty), 0) FROM order_lines l JOIN orders o ON o.id = l.order_id WHERE o.status = 'CONFIRMED') AS ordered_pcs,
         (SELECT COALESCE(SUM(cl.pcs), 0) FROM carton_lines cl JOIN cartons c ON c.id = cl.carton_id JOIN orders o ON o.id = c.order_id WHERE c.status = 'POSTED' AND o.status = 'CONFIRMED') AS packed_pcs
-    `;
+    `));
     const r = row ?? {};
     const camel = (k: string) => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
     return Object.fromEntries(Object.entries(r).map(([k, v]) => [camel(k), n(v)])) as unknown as OverviewCounts;

@@ -242,13 +242,13 @@ export const jobworkRepo = {
       where: {
         vendorId,
         status: 'POSTED',
-        billId: null,
+        OR: [{ billId: null }, { billedInFull: false }],
         ...(orderId ? { links: { some: { outward: { orderId } } } } : {}),
       },
       orderBy: { docDate: 'asc' },
       include: {
-        lines: { select: { kg: true, itemId: true } },
-        links: { include: { outward: { select: { id: true, docNo: true, orderId: true, processId: true, process: { select: { name: true } } } } } },
+        lines: { select: { kg: true, itemId: true, colour: true, gsm: true, dia: true, item: { select: { name: true } } } },
+        links: { include: { outward: { select: { id: true, docNo: true, orderId: true, processId: true, process: { select: { name: true } }, order: { select: { orderNo: true } }, programProcess: { select: { program: { select: { programNo: true, gauge: true, loopLength: true, fabricDescription: true } } } } } } } },
       },
     });
   },
@@ -256,8 +256,8 @@ export const jobworkRepo = {
     return db.inwardDc.findMany({
       where: { id: { in: ids } },
       include: {
-        lines: { select: { kg: true, itemId: true } },
-        links: { include: { outward: { select: { id: true, docNo: true, orderId: true, processId: true, status: true, process: { select: { name: true } } } } } },
+        lines: { select: { kg: true, itemId: true, colour: true, gsm: true, dia: true, item: { select: { name: true } } } },
+        links: { include: { outward: { select: { id: true, docNo: true, orderId: true, processId: true, status: true, process: { select: { name: true } }, order: { select: { orderNo: true } }, programProcess: { select: { program: { select: { programNo: true, gauge: true, loopLength: true, fabricDescription: true } } } } } } } },
       },
     });
   },
@@ -265,8 +265,12 @@ export const jobworkRepo = {
     if (!ids.length) return;
     await tx.$queryRaw`SELECT 1 FROM inward_dcs WHERE id = ANY(${[...new Set(ids)].sort()}::uuid[]) ORDER BY id FOR UPDATE`;
   },
-  setBill(tx: Tx, ids: string[], billId: string) {
-    return tx.inwardDc.updateMany({ where: { id: { in: ids }, billId: null, status: 'POSTED' }, data: { billId } });
+  setBill(tx: Tx, ids: string[], billId: string, full = true) {
+    return tx.inwardDc.updateMany({ where: { id: { in: ids }, status: 'POSTED', OR: [{ billId: null }, { billedInFull: false }] }, data: { billId, billedInFull: full } });
+  },
+  /** After a bill is cancelled: the latest other bill still covering the D.C. (part-billed), or none (Q-081). */
+  setBillState(tx: Tx, id: string, billId: string | null, full: boolean) {
+    return tx.inwardDc.update({ where: { id }, data: { billId, billedInFull: full } });
   },
   clearBill(tx: Tx, billId: string) {
     return tx.inwardDc.updateMany({ where: { billId }, data: { billId: null } });

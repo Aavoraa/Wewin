@@ -31,6 +31,20 @@ export const authRepo = {
     });
   },
 
+  /** Active units of active exporters, for login and unit switching (Q-085). */
+  activeUnits() {
+    return prisma.businessUnit.findMany({
+      where: { isActive: true, exporter: { isActive: true } },
+      select: { id: true, code: true, name: true, docPrefix: true, exporter: { select: { id: true, code: true, legalName: true, tradeName: true } } },
+      orderBy: [{ exporter: { code: 'asc' } }, { code: 'asc' }],
+    });
+  },
+
+  /** Units a user is limited to; none = every active unit. */
+  userUnitIds(userId: string) {
+    return prisma.userUnit.findMany({ where: { userId }, select: { unitId: true } });
+  },
+
   recordFailedLogin(tx: Tx, userId: string, failedCount: number, lockedUntil: Date | null) {
     return tx.user.update({
       where: { id: userId },
@@ -54,7 +68,7 @@ export const authRepo = {
 
   createSession(
     tx: Tx,
-    s: { userId: string; familyId: string; tokenHash: string; expiresAt: Date; ip?: string; userAgent?: string },
+    s: { userId: string; familyId: string; unitId: string; tokenHash: string; expiresAt: Date; ip?: string; userAgent?: string },
   ) {
     return tx.session.create({ data: s });
   },

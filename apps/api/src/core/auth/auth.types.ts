@@ -5,6 +5,8 @@ export interface CurrentUser {
   roles: string[];
   permissions: Set<string>;
   sessionId: string;
+  /** Unit the session works in (Q-085). */
+  unitId: string;
 }
 
 declare global {

@@ -404,19 +404,20 @@ export const panelsService = {
   // ───────── For accounts (A§7.2 / A§7.3) ─────────
   /** Posted, unbilled panel inwards: billable qty = good pieces. */
   async billableIns(vendorId: string, orderId: string | null, db: Tx | typeof prisma = prisma) {
-    const rows = await repo.billableIns({ vendorId, status: 'POSTED', billId: null, ...(orderId ? { orderId } : {}) }, db);
+    const rows = await repo.billableIns({ vendorId, status: 'POSTED', OR: [{ billId: null }, { billedInFull: false }], ...(orderId ? { orderId } : {}) }, db);
     return rows.map(shapeBillableIn);
   },
   async insForBill(ids: string[], db: Tx | typeof prisma = prisma) {
     const rows = await repo.billableIns({ id: { in: ids } }, db);
-    return rows.map((d) => ({ ...shapeBillableIn(d), status: d.status, vendorId: d.vendorId, billId: d.billId }));
+    return rows.map((d) => ({ ...shapeBillableIn(d), status: d.status, vendorId: d.vendorId, billId: d.billId, billedInFull: d.billedInFull }));
   },
   lockIns: (tx: Tx, ids: string[]) => repo.lock(tx, ids),
-  async markBilled(tx: Tx, ids: string[], billId: string) {
-    const r = await repo.setBill(tx, ids, billId);
+  async markBilled(tx: Tx, ids: string[], billId: string, full = true) {
+    const r = await repo.setBill(tx, ids, billId, full);
     if (r.count !== ids.length) throw new AppError('ALREADY_BILLED', 'A panel inward on this bill is already billed or no longer posted', 409);
   },
   clearBilled: (tx: Tx, billId: string) => repo.clearBill(tx, billId),
+  restoreBilled: (tx: Tx, id: string, billId: string | null, full: boolean) => repo.setBillState(tx, id, billId, full),
   /** Rejected pieces on the billed inwards → debit events at the order's panel cost (A§7.2). */
   async rejectEvents(tx: Tx, inIds: string[]) {
     return (await repo.rejectLines(tx, inIds)).map((l) => ({
@@ -483,7 +484,9 @@ export const panelsService = {
   async getRecut(id: string) {
     const r = await repo.getRecut(id);
     if (!r) throw notFound('Recut slip');
-    return { ...r, docDate: dateOnly(r.docDate), totalPcs: r.lines.reduce((a, l) => a + l.pcs, 0) };
+    const dc = r.panelDcId ? await repo.recutPanelDc(r.panelDcId) : null;
+    const panelDc = dc ? { ...dc, docDate: dateOnly(dc.docDate) } : null;
+    return { ...r, docDate: dateOnly(r.docDate), totalPcs: r.lines.reduce((a, l) => a + l.pcs, 0), panelDc };
   },
   async recutLines(input: z.output<typeof zRecutSlipInput>, db: Tx | typeof prisma) {
     const order = await ordersService.requireOpen(input.orderId, db);

@@ -161,7 +161,9 @@ export const qualityService = {
   async get(id: string) {
     const q = await repo.get(id);
     if (!q) throw notFound('Quality check');
-    return shape(q);
+    // Approving a check posts it, so the approver is the user who posted it.
+    const approvedBy = q.postedById ? await repo.userName(q.postedById) : null;
+    return { ...shape(q), approvedBy };
   },
 
   async create(input: Input, user: CurrentUser) {

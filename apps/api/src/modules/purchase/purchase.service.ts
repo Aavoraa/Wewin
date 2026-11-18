@@ -184,7 +184,94 @@ async function notifyApprovers(tx: Tx, id: string, version: number, kind: PoKind
   });
 }
 
+/** PO rate per unit: the PO rate is per `per` units (Q-066). */
+export function poRatePerUnit(p: { rate: { toString(): string }; per: { toString(): string } }) {
+  const per = D(p.per.toString());
+  return D(p.rate.toString()).div(per.isZero() ? D(1) : per).toDecimalPlaces(4).toString();
+}
+
+type ReceiptKind = 'YARN' | 'FABRIC';
+
 export const purchaseService = {
+  /**
+   * Approved yarn / fabric PO lines of a supplier with what is still to come (GRN against PO, Q-080,
+   * Q-082): ordered, received on posted receipts / inward from others, pending, PO rate per unit.
+   */
+  async openReceiptLines(kinds: ReceiptKind[], vendorId: string, orderId?: string) {
+    const lines = await repo.receiptLines({ po: { vendorId, status: 'POSTED' }, ...(orderId ? { OR: [{ orderId }, { orderId: null, po: { orderId } }] } : {}) }, kinds);
+    const received = await repo.receivedByPoLine(lines.map((l) => l.id));
+    return lines
+      .map((l) => {
+        const done = D((received.get(l.id) ?? 0).toString());
+        const pending = D(l.qty.toString()).minus(done);
+        return {
+          poLineId: l.id,
+          poId: l.po.id,
+          poNo: l.po.docNo,
+          poDate: dateOnly(l.po.docDate)!,
+          poKind: l.po.kind,
+          orderId: l.orderId ?? l.po.orderId,
+          orderNo: l.order?.orderNo ?? l.po.order?.orderNo ?? null,
+          itemId: l.itemId,
+          item: l.item,
+          unit: l.unit,
+          millName: l.millName,
+          counts: l.counts,
+          colour: l.colour,
+          gsm: l.gsm,
+          dia: l.dia,
+          bags: l.bags,
+          ordered: D(l.qty.toString()).toFixed(3),
+          received: done.toFixed(3),
+          pending: (pending.isNegative() ? D(0) : pending).toFixed(3),
+          ratePerKg: poRatePerUnit(l),
+        };
+      })
+      .filter((l) => D(l.pending).greaterThan(0));
+  },
+
+  /**
+   * A receipt against PO lines (Q-080, Q-082): each line on an approved PO of an allowed kind, of this
+   * supplier, for the same item; received (posted, other documents) + this document may not pass the
+   * ordered qty by more than the kind's over-receipt %.
+   */
+  async checkReceiptAgainstPo(
+    lines: { poLineId?: string | null; itemId: string; qty: string }[],
+    vendorId: string | null,
+    kinds: ReceiptKind[],
+    db: Tx | typeof prisma,
+    except: { yarnReceiptId?: string; stockDocId?: string } = {},
+  ) {
+    const ids = [...new Set(lines.map((l) => l.poLineId).filter((x): x is string => !!x))];
+    if (!ids.length) return;
+    if (!vendorId) throw new AppError('VALIDATION_ERROR', 'Pick the supplier to receive against a PO', 400);
+    const pos = new Map((await repo.receiptLines({ id: { in: ids } }, kinds, db)).map((p) => [p.id, p]));
+    lines.forEach((l, i) => {
+      if (!l.poLineId) return;
+      const p = pos.get(l.poLineId);
+      if (!p) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: not a ${kinds.map((k) => k.toLowerCase()).join(' / ')} PO line`, 400);
+      if (p.po.vendorId !== vendorId) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: PO ${p.po.docNo ?? ''} is to another supplier`, 400);
+      if (p.itemId !== l.itemId) throw new AppError('VALIDATION_ERROR', `Line ${i + 1}: the item must match PO ${p.po.docNo ?? ''}`, 400);
+      if (p.po.status !== 'POSTED') throw new AppError('INVALID_STATE', `PO ${p.po.docNo ?? '(draft)'} is ${p.po.status === 'DRAFT' ? 'not approved' : p.po.status.toLowerCase()} — nothing can be received against it`, 409);
+    });
+    const settings = await settingsService.getAll(db as Tx);
+    const received = await repo.receivedByPoLine(ids, db, except);
+    const want = new Map<string, ReturnType<typeof D>>();
+    for (const l of lines) if (l.poLineId) want.set(l.poLineId, (want.get(l.poLineId) ?? D(0)).plus(D(l.qty)));
+    for (const [id, q] of want) {
+      const p = pos.get(id)!;
+      const over = D((p.po.kind === 'FABRIC' ? settings['purchase.fabricOverReceiptPct'] : settings['purchase.yarnOverReceiptPct']).toString());
+      const ordered = D(p.qty.toString());
+      const limit = ordered.times(D(100).plus(over)).div(100);
+      const done = D((received.get(id) ?? 0).toString());
+      if (done.plus(q).greaterThan(limit)) {
+        const left = limit.minus(done);
+        const unit = p.unit.toLowerCase();
+        throw new AppError('QTY_EXCEEDS_PENDING', `${p.item.name}: PO ${p.po.docNo} has ${(left.isNegative() ? D(0) : left).toFixed(3)} ${unit} left to receive (ordered ${ordered.toFixed(3)}, received ${done.toFixed(3)})`, 409);
+      }
+    }
+  },
+
   async list(q: z.output<typeof zPoListQuery>) {
     const p = paging(q);
     const where: Prisma.PurchaseOrderWhereInput = {
@@ -343,4 +430,5 @@ export const purchaseService = {
 
   /** Accessories PO lines (with PO header) for the trims module (Q-072). */
   accessoryLines: (where: Prisma.PurchaseOrderLineWhereInput, db: Tx | typeof prisma = prisma) => repo.accessoryLines(where, db),
+  yarnLines: (where: Prisma.PurchaseOrderLineWhereInput, db: Tx | typeof prisma = prisma) => repo.yarnLines(where, db),
 };

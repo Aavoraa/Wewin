@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { type MeResponse, withApprovalSwitches } from '@wewin/shared';
+import { type MeResponse, type UnitInfo, withApprovalSwitches } from '@wewin/shared';
 import { env } from '../../config/env';
-import { withTx } from '../db';
+import { MAIN_UNIT_ID, withTx } from '../db';
 import { AppError } from '../errors/app-error';
 import { authRepo } from './auth.repo';
 import { approvalSwitches } from '../settings/settings.service';
@@ -29,6 +29,7 @@ export interface IssuedTokens {
   refreshToken: string;
   refreshExpiresAt: Date;
   userId: string;
+  unitId: string;
 }
 
 const invalidCredentials = () => new AppError('INVALID_CREDENTIALS', 'Invalid username or password', 401);
@@ -36,6 +37,31 @@ const invalidCredentials = () => new AppError('INVALID_CREDENTIALS', 'Invalid us
 function refreshExpiry(): Date {
   return new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 86_400_000);
 }
+
+function toUnitInfo(u: Awaited<ReturnType<typeof authRepo.activeUnits>>[number]): UnitInfo {
+  return {
+    id: u.id,
+    code: u.code,
+    name: u.name,
+    docPrefix: u.docPrefix,
+    exporter: { id: u.exporter.id, code: u.exporter.code, name: u.exporter.tradeName ?? u.exporter.legalName },
+  };
+}
+
+/** Units the user may work in: their assigned active units, or every active unit when none are assigned (Q-085). */
+export async function allowedUnits(userId: string): Promise<UnitInfo[]> {
+  const [units, limited] = await Promise.all([authRepo.activeUnits(), authRepo.userUnitIds(userId)]);
+  const only = new Set(limited.map((u) => u.unitId));
+  return units.filter((u) => only.size === 0 || only.has(u.id)).map(toUnitInfo);
+}
+
+/** Pure rule: the unit asked for if allowed; with none asked, the main unit if allowed, else the first allowed. */
+export function pickUnit(allowed: { id: string }[], requested: string | undefined): string | null {
+  if (requested) return allowed.some((u) => u.id === requested) ? requested : null;
+  return allowed.find((u) => u.id === MAIN_UNIT_ID)?.id ?? allowed[0]?.id ?? null;
+}
+
+const unitNotAllowed = () => new AppError('UNIT_NOT_ALLOWED', 'You cannot log into this unit', 403);
 
 /** Pure lockout rule, unit-tested. */
 export function nextLockState(failedCount: number, now: Date): { failedCount: number; lockedUntil: Date | null } {
@@ -47,7 +73,12 @@ export function nextLockState(failedCount: number, now: Date): { failedCount: nu
 }
 
 export const authService = {
-  async login(usernameRaw: string, password: string, client: ClientInfo): Promise<IssuedTokens> {
+  /** Exporters and their units for the login screen (names only, no other details). */
+  async loginUnits(): Promise<UnitInfo[]> {
+    return (await authRepo.activeUnits()).map(toUnitInfo);
+  },
+
+  async login(usernameRaw: string, password: string, client: ClientInfo, requestedUnitId?: string): Promise<IssuedTokens> {
     const username = usernameRaw.trim().toLowerCase();
     // Failed attempts are committed (not rolled back) so lockout counts survive the 401.
     const outcome = await withTx(
@@ -86,6 +117,11 @@ export const authService = {
           });
           return { ok: false as const, error: invalidCredentials() };
         }
+        const unitId = pickUnit(await allowedUnits(user.id), requestedUnitId);
+        if (!unitId) {
+          await authRepo.logLoginEvent(tx, { username, userId: user.id, success: false, reason: 'UNIT_NOT_ALLOWED', ...client });
+          return { ok: false as const, error: unitNotAllowed() };
+        }
         await authRepo.recordSuccessfulLogin(tx, user.id);
         await authRepo.logLoginEvent(tx, { username, userId: user.id, success: true, ...client });
         const { token, hash } = newRefreshToken();
@@ -93,6 +129,7 @@ export const authService = {
         const session = await authRepo.createSession(tx, {
           userId: user.id,
           familyId: crypto.randomUUID(),
+          unitId,
           tokenHash: hash,
           expiresAt,
           ...client,
@@ -100,10 +137,11 @@ export const authService = {
         return {
           ok: true as const,
           tokens: {
-            accessToken: signAccessToken(user.id, session.id),
+            accessToken: signAccessToken(user.id, session.id, unitId),
             refreshToken: token,
             refreshExpiresAt: expiresAt,
             userId: user.id,
+            unitId,
           },
         };
       },
@@ -113,8 +151,11 @@ export const authService = {
     return outcome.tokens;
   },
 
-  /** Rotate the refresh token. Reuse of an already-rotated token revokes the whole session family. */
-  async refresh(refreshToken: string | undefined, client: ClientInfo): Promise<IssuedTokens> {
+  /**
+   * Rotate the refresh token. Reuse of an already-rotated token revokes the whole session family.
+   * With `switchTo` the new session works in that unit instead (Q-085); `asUser` must own the session.
+   */
+  async refresh(refreshToken: string | undefined, client: ClientInfo, switchTo?: { unitId: string; asUser: string }): Promise<IssuedTokens> {
     if (!refreshToken) throw new AppError('UNAUTHENTICATED', 'No session', 401);
     const outcome = await withTx(
       async (tx) => {
@@ -128,16 +169,25 @@ export const authService = {
           return { ok: false as const, reason: 'Session expired' };
         }
         if (session.expiresAt.getTime() <= now) return { ok: false as const, reason: 'Session expired' };
+        if (switchTo && switchTo.asUser !== session.userId) return { ok: false as const, reason: 'Session not found' };
         const access = await authRepo.findUserAccess(session.userId);
         if (!access?.isActive) {
           await authRepo.revokeFamily(tx, session.familyId, 'USER_INACTIVE');
           return { ok: false as const, reason: 'User inactive' };
+        }
+        // The session keeps its unit; a unit the user lost access to ends it (log in again and pick one).
+        const unitId = pickUnit(await allowedUnits(session.userId), switchTo?.unitId ?? session.unitId ?? MAIN_UNIT_ID);
+        if (!unitId) {
+          if (switchTo) return { ok: false as const, reason: 'Unit not allowed', forbidden: true };
+          await authRepo.revokeFamily(tx, session.familyId, 'UNIT_NOT_ALLOWED');
+          return { ok: false as const, reason: 'Unit not available' };
         }
         const { token, hash } = newRefreshToken();
         const expiresAt = refreshExpiry();
         const next = await authRepo.createSession(tx, {
           userId: session.userId,
           familyId: session.familyId,
+          unitId,
           tokenHash: hash,
           expiresAt,
           ...client,
@@ -146,16 +196,20 @@ export const authService = {
         return {
           ok: true as const,
           tokens: {
-            accessToken: signAccessToken(session.userId, next.id),
+            accessToken: signAccessToken(session.userId, next.id, unitId),
             refreshToken: token,
             refreshExpiresAt: expiresAt,
             userId: session.userId,
+            unitId,
           },
         };
       },
       { isolation: 'Serializable' },
     );
-    if (!outcome.ok) throw new AppError('UNAUTHENTICATED', outcome.reason, 401);
+    if (!outcome.ok) {
+      if ('forbidden' in outcome) throw unitNotAllowed();
+      throw new AppError('UNAUTHENTICATED', outcome.reason, 401);
+    }
     return outcome.tokens;
   },
 
@@ -170,9 +224,12 @@ export const authService = {
     );
   },
 
-  async me(userId: string): Promise<MeResponse> {
+  async me(userId: string, unitId: string): Promise<MeResponse> {
     const u = await authRepo.findUserAccess(userId);
     if (!u?.isActive) throw new AppError('UNAUTHENTICATED', 'User not found or inactive', 401);
+    const units = await allowedUnits(userId);
+    const unit = units.find((x) => x.id === unitId);
+    if (!unit) throw unitNotAllowed();
     const activeRoles = u.roles.filter((r) => r.role.isActive);
     const perms = withApprovalSwitches(activeRoles.flatMap((r) => r.role.permissions.map((p) => p.permissionKey)), await approvalSwitches());
     return {
@@ -182,6 +239,8 @@ export const authService = {
       roles: activeRoles.map((r) => r.role.code),
       permissions: [...perms].sort(),
       mustChangePassword: u.mustChangePassword,
+      unit,
+      units,
     };
   },
 

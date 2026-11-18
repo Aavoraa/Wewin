@@ -1,8 +1,10 @@
 import { type RequestHandler } from 'express';
 import { type PermissionKey, withApprovalSwitches } from '@wewin/shared';
 import { AppError } from '../errors/app-error';
-import { setContextUser } from '../context';
+import { setContextUnit, setContextUser } from '../context';
+import { MAIN_UNIT_ID } from '../db';
 import { authRepo } from './auth.repo';
+import { allowedUnits } from './auth.service';
 import { verifyAccessToken } from './tokens';
 import { type CurrentUser } from './auth.types';
 import { tagPermission } from '../openapi';
@@ -10,7 +12,8 @@ import { approvalSwitches, onApprovalSwitchChanged } from '../settings/settings.
 
 /** Short cache of user permissions; invalidated when roles/users change in this process. */
 const CACHE_MS = 10_000;
-const cache = new Map<string, { at: number; user: Omit<CurrentUser, 'sessionId'> | null }>();
+type Access = Omit<CurrentUser, 'sessionId' | 'unitId'> & { unitIds: Set<string> };
+const cache = new Map<string, { at: number; user: Access | null }>();
 
 export function invalidateAccessCache(userId?: string): void {
   if (userId) cache.delete(userId);
@@ -18,7 +21,7 @@ export function invalidateAccessCache(userId?: string): void {
 }
 onApprovalSwitchChanged(() => invalidateAccessCache());
 
-async function loadAccess(userId: string): Promise<Omit<CurrentUser, 'sessionId'> | null> {
+async function loadAccess(userId: string): Promise<Access | null> {
   const hit = cache.get(userId);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.user;
   const u = await authRepo.findUserAccess(userId);
@@ -34,6 +37,7 @@ async function loadAccess(userId: string): Promise<Omit<CurrentUser, 'sessionId'
             u.roles.filter((r) => r.role.isActive).flatMap((r) => r.role.permissions.map((p) => p.permissionKey)),
             await approvalSwitches(),
           ) as Set<PermissionKey>,
+          unitIds: new Set((await allowedUnits(u.id)).map((x) => x.id)),
         }
       : null;
   cache.set(userId, { at: Date.now(), user });
@@ -52,8 +56,13 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
   }
   const user = await loadAccess(claims.sub);
   if (!user) throw new AppError('UNAUTHENTICATED', 'User not found or inactive', 401);
-  req.user = { ...user, sessionId: claims.sid };
+  // Tokens from before units existed work in the main unit (Q-085).
+  const unitId = claims.unit ?? MAIN_UNIT_ID;
+  if (!user.unitIds.has(unitId)) throw new AppError('UNAUTHENTICATED', 'This unit is no longer available to you', 401);
+  const { unitIds: _unitIds, ...rest } = user;
+  req.user = { ...rest, sessionId: claims.sid, unitId };
   setContextUser(user.id);
+  setContextUnit(unitId);
   next();
 };
 

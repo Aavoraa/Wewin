@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { zChangePassword, zLogin } from '@wewin/shared';
+import { zChangePassword, zLogin, zSwitchUnit } from '@wewin/shared';
 import { env } from '../../config/env';
 import { handle } from '../http';
 import { authController } from './auth.controller';
@@ -8,6 +8,7 @@ import { authenticate } from './auth.middleware';
 
 export const zLoginBody = zLogin;
 export const zChangePasswordBody = zChangePassword;
+export const zSwitchUnitBody = zSwitchUnit;
 
 const limiter = rateLimit({
   windowMs: 15 * 60_000,
@@ -24,5 +25,7 @@ export const authRouter = Router();
 authRouter.post('/login', limiter, handle({ body: zLoginBody }, authController.login, { public: true }));
 authRouter.post('/refresh', limiter, handle({}, authController.refresh, { public: true }));
 authRouter.post('/logout', handle({}, authController.logout, { public: true }));
+authRouter.get('/units', handle({}, authController.units, { public: true }));
 authRouter.get('/me', authenticate, handle({}, authController.me));
+authRouter.post('/switch-unit', limiter, authenticate, handle({ body: zSwitchUnitBody }, authController.switchUnit));
 authRouter.post('/change-password', limiter, authenticate, handle({ body: zChangePasswordBody }, authController.changePassword));

@@ -289,6 +289,16 @@ function shapeBillable(i: Awaited<ReturnType<typeof repo.billableInwards>>[numbe
     itemId: i.lines[0]?.itemId ?? null,
     against: i.links.map((k) => k.outward.docNo).filter(Boolean).join(', '),
     vendorDcNo: i.vendorDcNo,
+    // Desktop bill-entry columns (Q-079): order ref, fabric, colour, GSM, GG, LL, rolls received.
+    orderNo: out?.order.orderNo ?? null,
+    items: [...new Set(i.lines.map((l) => l.item.name))].join(', '),
+    fabricDescription: out?.programProcess?.program.fabricDescription ?? null,
+    colours: [...new Set(i.lines.map((l) => l.colour).filter(Boolean))].join(', '),
+    gsm: [...new Set(i.lines.map((l) => l.gsm).filter((x) => x !== null))].join(', '),
+    dia: [...new Set(i.lines.map((l) => l.dia).filter(Boolean))].join(', '),
+    gauge: out?.programProcess?.program.gauge ?? null,
+    loopLength: out?.programProcess?.program.loopLength ?? null,
+    rolls: i.lines.length,
   };
 }
 
@@ -876,14 +886,15 @@ export const jobworkService = {
     return rows.map(shapeBillable);
   },
   async inwardsForBill(ids: string[], db: Tx | typeof prisma = prisma) {
-    return (await repo.inwardsByIds(ids, db)).map((i) => ({ ...shapeBillable(i), status: i.status, vendorId: i.vendorId, billId: i.billId }));
+    return (await repo.inwardsByIds(ids, db)).map((i) => ({ ...shapeBillable(i), status: i.status, vendorId: i.vendorId, billId: i.billId, billedInFull: i.billedInFull }));
   },
   lockInwards: (tx: Tx, ids: string[]) => repo.lockInwards(tx, ids),
-  async markBilled(tx: Tx, ids: string[], billId: string) {
-    const r = await repo.setBill(tx, ids, billId);
+  async markBilled(tx: Tx, ids: string[], billId: string, full = true) {
+    const r = await repo.setBill(tx, ids, billId, full);
     if (r.count !== ids.length) throw new AppError('ALREADY_BILLED', 'An inward D.C. on this bill is already billed or no longer posted', 409);
   },
   clearBilled: (tx: Tx, billId: string) => repo.clearBill(tx, billId),
+  restoreBilled: (tx: Tx, id: string, billId: string | null, full: boolean) => repo.setBillState(tx, id, billId, full),
   /** Excess-loss debit events for closed outwards linked to these inwards (Q-012). */
   async excessLossEvents(tx: Tx, inwardIds: string[]) {
     const outs = await repo.closedOutwardsOf(tx, inwardIds);

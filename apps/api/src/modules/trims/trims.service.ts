@@ -173,7 +173,97 @@ const inputFrom = (d: TrimsDocDetail): Input => ({
   lines: d.lines.map((l) => ({ itemId: l.itemId, lot: l.lot, qty: l.qty.toFixed(3), rate: l.rate?.toString() ?? null, poLineId: l.poLineId, returnLineId: l.returnLineId, colour: l.colour, size: l.size, reason: l.reason })),
 });
 
+/** PO rate per unit, and as printed ("44.00/1"): rate per `per` units (Q-089). */
+function poRateText(l: { rate: Prisma.Decimal; per: Prisma.Decimal }) {
+  return `${D(l.rate.toString()).toFixed(2)}/${D(l.per.toString()).toString()}`;
+}
+function poRateUnit(l: { rate: Prisma.Decimal; per: Prisma.Decimal }) {
+  const per = D(l.per.toString());
+  return D(l.rate.toString()).div(per.isZero() ? D(1) : per);
+}
+
+/** An accessory purchase receipt as an accessories-bill source (Q-089): qty received, its rates (else the PO's). */
+function forBill(d: TrimsDocDetail) {
+  const qty = d.lines.reduce((a, l) => a.plus(D(l.qty.toString())), D(0));
+  const rateOf = (l: TrimsDocDetail['lines'][number]) => (l.rate !== null ? D(l.rate.toString()) : l.poLine ? poRateUnit(l.poLine) : null);
+  const priced = d.lines.length > 0 && d.lines.every((l) => rateOf(l) !== null);
+  const value = d.lines.reduce((a, l) => {
+    const r = rateOf(l);
+    return r ? a.plus(D(l.qty.toString()).times(r)) : a;
+  }, D(0));
+  const items = [...new Set(d.lines.map((l) => l.itemId))];
+  const units = [...new Set(d.lines.map((l) => l.item.unit))];
+  return {
+    id: d.id,
+    docNo: d.docNo ?? '',
+    docDate: dateOnly(d.docDate)!,
+    qty: qty.toFixed(3),
+    unit: units.length === 1 ? units[0]! : ('NOS' as const),
+    processId: null,
+    processName: 'Accessories receipt',
+    orderId: d.orderId,
+    itemId: items.length === 1 ? items[0]! : null,
+    rate: priced && qty.greaterThan(0) ? value.div(qty).toDecimalPlaces(4).toString() : null,
+    value: priced ? value.toDecimalPlaces(2).toFixed(2) : null,
+    against: d.supplierInvoiceNo ?? '',
+    vendorDcNo: d.dcNo ?? null,
+    orderNo: d.order?.orderNo ?? ([...new Set(d.lines.map((l) => l.poLine?.order?.orderNo).filter(Boolean))].join(', ') || null),
+    items: [...new Set(d.lines.map((l) => l.item.name))].join(', '),
+    colours: [...new Set(d.lines.map((l) => l.colour).filter(Boolean))].join(', '),
+    sizes: [...new Set(d.lines.map((l) => l.size).filter(Boolean))].join(', '),
+    poNos: [...new Set(d.lines.map((l) => l.poLine?.po.docNo).filter(Boolean))].join(', ') || null,
+    poRate: d.lines.length && d.lines.every((l) => l.poLine) ? [...new Set(d.lines.map((l) => poRateText(l.poLine!)))].join(', ') : null,
+    lots: [...new Set(d.lines.map((l) => l.lot).filter(Boolean))].join(', '),
+    bags: 0,
+    status: d.status,
+    vendorId: d.vendorId,
+    billId: d.billId,
+    billedInFull: d.billedInFull,
+    lines: d.lines.map((l) => ({
+      itemName: l.item.name,
+      colour: l.colour,
+      size: l.size,
+      unit: l.item.unit,
+      qty: l.qty.toFixed(3),
+      rate: l.rate?.toString() ?? null,
+      poNo: l.poLine?.po.docNo ?? null,
+      poRate: l.poLine ? poRateText(l.poLine) : null,
+    })),
+  };
+}
+
 export const trimsService = {
+  // ═════════ For accessories purchase bills (Q-089) ═════════
+  /** Posted accessory purchase receipts of a supplier not yet billed in full. Returns and replacements are not billed. */
+  async billable(vendorId: string, orderId: string | null) {
+    return (await repo.billable(vendorId, orderId)).map(forBill);
+  },
+  async forBill(ids: string[], db: Tx | typeof prisma = prisma) {
+    return (await repo.byIdsForBill(ids, db)).map(forBill);
+  },
+  lockForBill: (tx: Tx, ids: string[]) => repo.lockForBill(tx, ids),
+  async markBilled(tx: Tx, ids: string[], billId: string, full = true) {
+    const r = await repo.setBill(tx, ids, billId, full);
+    if (r.count !== ids.length) throw new AppError('ALREADY_BILLED', 'An accessories receipt on this bill is already billed or no longer posted', 409);
+  },
+  clearBilled: (tx: Tx, billId: string) => repo.clearBill(tx, billId),
+  restoreBilled: (tx: Tx, id: string, billId: string | null, full: boolean) => repo.setBillState(tx, id, billId, full),
+  /**
+   * Accessories bill check list (Q-089): for each PO line behind these receipts, the PO qty and what has
+   * been received against it in all (receipts − returns + replacements), and the balance.
+   */
+  async poPositionsForReceipts(receiptIds: string[]) {
+    const docs = await repo.byIdsForBill(receiptIds);
+    const lines = new Map<string, TrimsDocDetail['lines'][number]>();
+    for (const d of docs) for (const l of d.lines) if (l.poLine && !lines.has(l.poLine.id)) lines.set(l.poLine.id, l);
+    const pos = await positions([...lines.keys()], prisma);
+    return [...lines.entries()].map(([id, l]) => {
+      const p = l.poLine!;
+      const st = poLinePosition(p.qty.toString(), (pos.received.get(id) ?? D(0)).toString(), (pos.returned.get(id) ?? D(0)).toString(), (pos.replaced.get(id) ?? D(0)).toString());
+      return { poLineId: id, poNo: p.po.docNo, item: l.item.name, colour: p.colour ?? l.colour, size: p.size ?? l.size, unit: p.unit, poQty: p.qty.toFixed(3), receivedQty: st.netReceived, balance: st.pending };
+    });
+  },
+
   async list(q: z.output<typeof zProductionListQuery>) {
     const p = paging(q);
     const types = ['RECEIPT', 'ISSUE', 'RETURN', 'REPLACEMENT', 'TRANSFER'] as const;

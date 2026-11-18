@@ -183,7 +183,7 @@ export function PaymentVoucherPrint({ id }: { id: string }) {
   );
 }
 
-const SOURCE: Record<string, string> = { INWARD_DC: 'Inward D.C.', PANEL_IN: 'Panel inward' };
+const SOURCE: Record<string, string> = { INWARD_DC: 'Inward D.C.', PANEL_IN: 'Panel inward', YARN_RECEIPT: 'Yarn receipt', STOCK_INWARD: 'Inward from others', TRIMS_RECEIPT: 'Accessories receipt' };
 
 /** Vendor bill (A4): vendor with certificate no. and expiry (Q-074), invoice, D.C.s billed, GST, debit notes, net payable. */
 export function VendorBillPrint({ id }: { id: string }) {
@@ -193,12 +193,14 @@ export function VendorBillPrint({ id }: { id: string }) {
   const b = q.data;
   const v = b.vendor;
   const f = b.figures;
+  const purchase = b.kind !== 'JOBWORK';
+  const showBillQty = b.lines.some((l) => l.billQty !== null || l.billPcs !== null);
   return (
-    <PrintLayout title={`Vendor bill ${b.docNo ?? ''}`}>
+    <PrintLayout title={`${b.kind === 'ACCESSORY' ? 'Accessories purchase bill' : purchase ? 'Purchase bill' : 'Vendor bill'} ${b.docNo ?? ''}`}>
       <div className="flex items-start justify-between border-b border-black pb-2">
         <CompanyBlock c={company.data} />
         <div className="text-right">
-          <div className="text-lg font-bold">VENDOR BILL</div>
+          <div className="text-lg font-bold">{purchase ? 'PURCHASE BILL' : 'VENDOR BILL'}</div>
           <div className="font-mono">{b.docNo ?? 'DRAFT'}</div>
           <div>Date: {formatDate(b.docDate)}</div>
           {b.status === 'CANCELLED' ? <div className="font-bold text-red-700">CANCELLED</div> : null}
@@ -206,7 +208,7 @@ export function VendorBillPrint({ id }: { id: string }) {
       </div>
       <div className="mt-2 grid grid-cols-2 gap-4">
         <div>
-          <div className="text-[10px] font-semibold uppercase">Vendor</div>
+          <div className="text-[10px] font-semibold uppercase">{purchase ? 'Supplier' : 'Vendor'}</div>
           <div className="font-semibold">{v.name}</div>
           <div>{[v.addressLine1, v.addressLine2, v.city, v.state].filter(Boolean).join(', ')}</div>
           {v.gstin ? <div>GSTIN: {v.gstin}</div> : null}
@@ -222,6 +224,7 @@ export function VendorBillPrint({ id }: { id: string }) {
               Order: {b.order.orderNo} · {b.order.styleNo}
             </div>
           ) : null}
+          {b.process ? <div>Process: {b.process.name}</div> : null}
           {b.remarks ? <div className="mt-1">{b.remarks}</div> : null}
         </div>
       </div>
@@ -231,7 +234,9 @@ export function VendorBillPrint({ id }: { id: string }) {
             <th className="py-1">#</th>
             <th>Document</th>
             <th>Date</th>
-            <th className="text-right">Qty</th>
+            <th className="text-right">{showBillQty ? 'Recd qty' : 'Qty'}</th>
+            {showBillQty ? <th className="text-right">Bill qty</th> : null}
+            {showBillQty ? <th className="text-right">Bill pcs</th> : null}
             <th className="text-right">Rate ₹</th>
             <th className="text-right">Expected ₹</th>
             <th className="text-right">Invoiced ₹</th>
@@ -243,11 +248,29 @@ export function VendorBillPrint({ id }: { id: string }) {
               <td className="py-1">{i + 1}</td>
               <td>
                 {SOURCE[l.sourceType] ?? l.sourceType} {l.sourceDocNo}
+                {l.details ? (
+                  <div className="text-[10px] leading-tight">
+                    {[
+                      l.details.vendorDcNo ? `Party D.C. ${l.details.vendorDcNo}` : l.details.against || null,
+                      l.details.orderNo,
+                      l.details.fabricDescription || l.details.items,
+                      l.details.colours,
+                      l.details.gsm ? `GSM ${l.details.gsm}` : null,
+                      l.details.gauge ? `GG ${l.details.gauge}` : null,
+                      l.details.loopLength ? `LL ${l.details.loopLength}` : null,
+                      l.details.lots ? `Lot ${l.details.lots}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
+                ) : null}
               </td>
               <td>{formatDate(l.sourceDate)}</td>
               <td className="text-right">
                 {l.billableQty} {l.unit.toLowerCase()}
               </td>
+              {showBillQty ? <td className="text-right">{l.billQty ? `${l.billQty} ${l.unit.toLowerCase()}` : 'same'}</td> : null}
+              {showBillQty ? <td className="text-right">{l.billPcs ?? '—'}</td> : null}
               <td className="text-right">{l.rate ?? '—'}</td>
               <td className="text-right">{l.expectedAmount ? formatInr(l.expectedAmount) : '—'}</td>
               <td className="text-right">{l.invoicedAmount ? formatInr(l.invoicedAmount) : '—'}</td>
@@ -277,6 +300,18 @@ export function VendorBillPrint({ id }: { id: string }) {
             <tr>
               <td className="py-0.5">IGST</td>
               <td className="text-right">{formatInr(b.igstAmount)}</td>
+            </tr>
+          ) : null}
+          {Number(b.addAmount) ? (
+            <tr>
+              <td className="py-0.5">Add</td>
+              <td className="text-right">{formatInr(b.addAmount)}</td>
+            </tr>
+          ) : null}
+          {Number(b.lessAmount) ? (
+            <tr>
+              <td className="py-0.5">Less</td>
+              <td className="text-right">({formatInr(b.lessAmount)})</td>
             </tr>
           ) : null}
           <tr className="border-t border-black font-semibold">

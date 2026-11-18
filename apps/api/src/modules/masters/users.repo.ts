@@ -15,6 +15,7 @@ const userSelect = {
   version: true,
   createdAt: true,
   roles: { select: { role: { select: { id: true, code: true, name: true } } } },
+  units: { select: { unitId: true } },
 } satisfies Prisma.UserSelect;
 
 export const usersRepo = {
@@ -27,16 +28,24 @@ export const usersRepo = {
   get(id: string, tx: Tx | typeof prisma = prisma) {
     return tx.user.findUnique({ where: { id }, select: userSelect });
   },
-  create(tx: Tx, data: { username: string; fullName: string; email: string | null; phone: string | null; passwordHash: string; roleIds: string[] }) {
-    const { roleIds, ...rest } = data;
-    return tx.user.create({ data: { ...rest, mustChangePassword: true, roles: { create: roleIds.map((roleId) => ({ roleId })) } }, select: userSelect });
+  create(tx: Tx, data: { username: string; fullName: string; email: string | null; phone: string | null; passwordHash: string; roleIds: string[]; unitIds: string[] }) {
+    const { roleIds, unitIds, ...rest } = data;
+    return tx.user.create({
+      data: { ...rest, mustChangePassword: true, roles: { create: roleIds.map((roleId) => ({ roleId })) }, units: { create: unitIds.map((unitId) => ({ unitId })) } },
+      select: userSelect,
+    });
   },
-  async update(tx: Tx, id: string, version: number, data: { fullName: string; email: string | null; phone: string | null; roleIds: string[] }) {
-    const { roleIds, ...rest } = data;
+  countUnits(ids: string[]) {
+    return prisma.businessUnit.count({ where: { id: { in: ids } } });
+  },
+  async update(tx: Tx, id: string, version: number, data: { fullName: string; email: string | null; phone: string | null; roleIds: string[]; unitIds: string[] }) {
+    const { roleIds, unitIds, ...rest } = data;
     const r = await tx.user.updateMany({ where: { id, version }, data: { ...rest, version: { increment: 1 } } });
     if (r.count === 0) return null;
     await tx.userRole.deleteMany({ where: { userId: id, roleId: { notIn: roleIds } } });
     await tx.userRole.createMany({ data: roleIds.map((roleId) => ({ userId: id, roleId })), skipDuplicates: true });
+    await tx.userUnit.deleteMany({ where: { userId: id, unitId: { notIn: unitIds } } });
+    await tx.userUnit.createMany({ data: unitIds.map((unitId) => ({ userId: id, unitId })), skipDuplicates: true });
     return tx.user.findUnique({ where: { id }, select: userSelect });
   },
   setActive(tx: Tx, id: string, isActive: boolean) {

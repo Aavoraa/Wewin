@@ -25,13 +25,13 @@ export interface InvoiceLineData {
 const lineRows = (lines: InvoiceLineData[]) => lines.map((l, i) => ({ ...l, lineNo: i + 1, unitPrice: new Prisma.Decimal(l.unitPrice), amount: new Prisma.Decimal(l.amount) }));
 
 const shipmentInclude = {
-  buyer: { select: { id: true, code: true, name: true, country: true } },
+  buyer: { select: { id: true, code: true, name: true, country: true, addressLine1: true, addressLine2: true, city: true, contactPerson: true, phone: true, email: true } },
   invoices: { select: { id: true, docNo: true, docDate: true, totalPcs: true, fobValue: true, currency: true, portOfLoading: true, portOfDischarge: true } },
 } satisfies Prisma.ShipmentInclude;
 export type ShipmentDetail = Prisma.ShipmentGetPayload<{ include: typeof shipmentInclude }>;
 
 const receiptInclude = {
-  buyer: { select: { id: true, code: true, name: true, country: true } },
+  buyer: { select: { id: true, code: true, name: true, country: true, addressLine1: true, addressLine2: true, city: true, contactPerson: true, phone: true, email: true } },
   allocations: { include: { invoice: { select: { id: true, docNo: true, docDate: true, fobValue: true, exchangeRate: true, currency: true } } } },
 } satisfies Prisma.BuyerReceiptInclude;
 export type ReceiptDetail = Prisma.BuyerReceiptGetPayload<{ include: typeof receiptInclude }>;

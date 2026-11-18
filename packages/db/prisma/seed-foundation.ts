@@ -74,7 +74,8 @@ export async function seedFoundation(prisma: PrismaClient, opts: { ownerPassword
     });
     for (const fyCode of opts.fyCodes) {
       await prisma.numberSeries.upsert({
-        where: { seriesCode_fyCode: { seriesCode: code, fyCode } },
+        // The first exporter's main unit (Q-085); other units start their series on first use.
+        where: { seriesCode_fyCode_unitId: { seriesCode: code, fyCode, unitId: '00000000-0000-4000-8000-000000000001' } },
         create: { seriesCode: code, fyCode, lastNo: 0 },
         update: {},
       });
@@ -106,5 +107,13 @@ export async function seedFoundation(prisma: PrismaClient, opts: { ownerPassword
         isPlaceholder: true,
       },
     });
+  }
+  // The first exporter (Q-085) starts as the company settings; a fresh database creates it before they exist.
+  const main = '00000000-0000-4000-8000-000000000001';
+  const exporter = await prisma.exporter.findUnique({ where: { id: main } });
+  const c = await prisma.companySettings.findUniqueOrThrow({ where: { id: 1 } });
+  if (exporter?.isPlaceholder) {
+    const { id: _id, logoFileKey: _logo, version: _v, updatedAt: _u, ...details } = c;
+    await prisma.exporter.update({ where: { id: main }, data: details });
   }
 }

@@ -6,13 +6,32 @@ import { api, refreshAccessToken, setAccessToken, setOnAuthLost } from './api';
 interface AuthState {
   user: MeResponse | null;
   status: 'loading' | 'authenticated' | 'anonymous';
-  login(username: string, password: string): Promise<void>;
+  login(username: string, password: string, unitId?: string): Promise<void>;
+  /** Work in another unit: new tokens, and every cached page is dropped (Q-085). */
+  switchUnit(unitId: string): Promise<void>;
   logout(): Promise<void>;
   can(...perms: PermissionKey[]): boolean;
   reload(): Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
+
+const UNIT_KEY = 'wewin.unitId';
+/** Unit picked last time on this computer, preselected at login. */
+export function rememberedUnit(): string | null {
+  try {
+    return localStorage.getItem(UNIT_KEY);
+  } catch {
+    return null;
+  }
+}
+function rememberUnit(id: string) {
+  try {
+    localStorage.setItem(UNIT_KEY, id);
+  } catch {
+    // storage unavailable — the login screen just won't preselect it
+  }
+}
 
 /** Auth lives in React context; the access token only in memory (A§9/A§10). */
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -46,12 +65,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [qc, reload]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const r = await api.post<LoginResponse>('/auth/login', { username, password });
+  const login = useCallback(async (username: string, password: string, unitId?: string) => {
+    const r = await api.post<LoginResponse>('/auth/login', { username, password, unitId });
     setAccessToken(r.accessToken);
     setUser(r.user);
+    rememberUnit(r.user.unit.id);
     setStatus('authenticated');
   }, []);
+
+  const switchUnit = useCallback(
+    async (unitId: string) => {
+      const r = await api.post<LoginResponse>('/auth/switch-unit', { unitId });
+      setAccessToken(r.accessToken);
+      qc.clear();
+      setUser(r.user);
+      rememberUnit(r.user.unit.id);
+    },
+    [qc],
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -69,11 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       status,
       login,
+      switchUnit,
       logout,
       reload,
       can: (...perms) => !!user && perms.every((p) => user.permissions.includes(p)),
     }),
-    [user, status, login, logout, reload],
+    [user, status, login, switchUnit, logout, reload],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

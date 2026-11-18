@@ -1,5 +1,5 @@
 import { type Prisma } from '@wewin/db';
-import { type Tx, prisma } from '../../core/db';
+import { type Tx, prisma, unitFilter } from '../../core/db';
 import { type Paging } from '../../core/list';
 
 type Db = Tx | typeof prisma;
@@ -41,6 +41,10 @@ export const qualityRepo = {
   },
   get(id: string, db: Db = prisma) {
     return db.qcInspection.findUnique({ where: { id }, include });
+  },
+  /** The approver (the user who posted the check) for the print. */
+  userName(id: string, db: Db = prisma) {
+    return db.user.findUnique({ where: { id }, select: { id: true, fullName: true } });
   },
   async lock(tx: Tx, id: string) {
     await tx.$queryRaw`SELECT 1 FROM qc_inspections WHERE id = ${id}::uuid FOR UPDATE`;
@@ -92,7 +96,7 @@ export const qualityRepo = {
       SELECT q.kind::text AS kind, d->>'code' AS code, SUM((d->>'count')::int) AS count
       FROM qc_inspections q JOIN qc_inspection_lines l ON l.inspection_id = q.id
       CROSS JOIN LATERAL jsonb_array_elements(l.defects) d
-      WHERE q.status = 'POSTED' AND q.doc_date >= ${from}
+      WHERE q.status = 'POSTED' AND q.doc_date >= ${from} ${unitFilter('q')}
       GROUP BY q.kind, d->>'code' ORDER BY count DESC`;
   },
   pendingCount(db: Db = prisma) {

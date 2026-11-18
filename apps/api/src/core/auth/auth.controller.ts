@@ -4,7 +4,7 @@ import { env } from '../../config/env';
 import { HANDLED, type HandlerInput } from '../http';
 import { authService, type IssuedTokens } from './auth.service';
 import { REFRESH_COOKIE, REFRESH_COOKIE_PATH } from './tokens';
-import { type zChangePasswordBody, type zLoginBody } from './auth.routes';
+import { type zChangePasswordBody, type zLoginBody, type zSwitchUnitBody } from './auth.routes';
 
 function client(req: Request) {
   return { ip: req.ip, userAgent: req.get('user-agent')?.slice(0, 300) };
@@ -26,12 +26,12 @@ function clearRefreshCookie(res: Response) {
 
 async function tokenResponse(res: Response, t: IssuedTokens): Promise<LoginResponse> {
   setRefreshCookie(res, t);
-  return { accessToken: t.accessToken, expiresIn: env.ACCESS_TOKEN_TTL_SEC, user: await authService.me(t.userId) };
+  return { accessToken: t.accessToken, expiresIn: env.ACCESS_TOKEN_TTL_SEC, user: await authService.me(t.userId, t.unitId) };
 }
 
 export const authController = {
   async login({ body, req, res }: HandlerInput<{ body: typeof zLoginBody }>) {
-    const t = await authService.login(body.username, body.password, client(req));
+    const t = await authService.login(body.username, body.password, client(req), body.unitId);
     return tokenResponse(res, t);
   },
 
@@ -53,7 +53,18 @@ export const authController = {
   },
 
   me({ user }: HandlerInput<object>) {
-    return authService.me(user.id);
+    return authService.me(user.id, user.unitId);
+  },
+
+  /** New tokens for the same login, working in another unit (Q-085). */
+  async switchUnit({ user, body, req, res }: HandlerInput<{ body: typeof zSwitchUnitBody }>) {
+    const t = await authService.refresh(req.cookies?.[REFRESH_COOKIE] as string | undefined, client(req), { unitId: body.unitId, asUser: user.id });
+    return tokenResponse(res, t);
+  },
+
+  /** Exporters and units for the login screen: names only (Q-085). */
+  units() {
+    return authService.loginUnits();
   },
 
   async changePassword({ user, body, res }: HandlerInput<{ body: typeof zChangePasswordBody }>) {

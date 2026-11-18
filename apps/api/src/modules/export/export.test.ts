@@ -168,6 +168,11 @@ describe('shipment', () => {
     ok(p);
     expect(p.body.data.docNo).toMatch(/^SHP\//);
     expect(p.body.data.invoices.map((i: { id: string }) => i.id)).toEqual([invoice.id]);
+    // The print shows the buyer's address and contact under the name.
+    await prisma.buyer.update({ where: { id: m.buyer.id }, data: { addressLine1: '12 Harbour Rd', city: 'Hamburg', country: 'Germany', contactPerson: 'Anna K', phone: '+49 40 1234', email: 'anna@example.com' } });
+    const g = await exec.get(`/api/v1/shipments/${shipment.id}`);
+    ok(g);
+    expect(g.body.data.buyer).toMatchObject({ id: m.buyer.id, addressLine1: '12 Harbour Rd', addressLine2: null, city: 'Hamburg', country: 'Germany', contactPerson: 'Anna K', phone: '+49 40 1234', email: 'anna@example.com' });
     const dup = await exec.post('/api/v1/shipments', { docDate: '2026-10-19', buyerId: m.buyer.id, invoiceIds: [invoice.id], mode: 'SEA' });
     expect(dup.status).toBe(409);
     expect(dup.body.error.code).toBe('ALREADY_SHIPPED');
@@ -193,6 +198,9 @@ describe('buyer receipts and realisation', () => {
     const p = await exec.post(`/api/v1/buyer-receipts/${c.body.data.id}/post`);
     ok(p);
     r1 = p.body.data.id;
+    const g = await exec.get(`/api/v1/buyer-receipts/${r1}`);
+    ok(g);
+    expect(g.body.data.buyer).toMatchObject({ addressLine1: '12 Harbour Rd', city: 'Hamburg', contactPerson: 'Anna K', email: 'anna@example.com' }); // set in the shipment test
     let inv = (await owner.get(`/api/v1/export-invoices/${invoice.id}`)).body.data;
     expect(inv.figures).toMatchObject({ realisedFc: '200.00', outstandingFc: '125.00', realisation: 'PARTIAL', exchangeDifferenceInr: '130.00' }); // 200 × (84.10 − 83.45)
     const c2 = await exec.post('/api/v1/buyer-receipts', { docDate: '2026-11-28', buyerId: m.buyer.id, currency: 'USD', amountFc: '125', exchangeRate: '83.90', allocations: [{ invoiceId: invoice.id, amountFc: '125' }] });

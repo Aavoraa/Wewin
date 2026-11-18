@@ -1,5 +1,5 @@
 import { Prisma } from '@wewin/db';
-import { type Tx, prisma } from '../../core/db';
+import { type Tx, prisma, unitScoped } from '../../core/db';
 
 export interface BalanceFilter {
   itemId?: string;
@@ -66,7 +66,7 @@ export const stockRepo = {
             SELECT item_id, from_location_id, lot, colour, size, order_id, unit, -qty FROM stock_movements
           ) x GROUP BY item_id, location_id, lot, colour, size, order_id, unit HAVING SUM(q) <> 0)`
       : Prisma.sql`stock_balances`;
-    return prisma.$queryRaw<BalanceRow[]>`
+    return prisma.$queryRaw<BalanceRow[]>(unitScoped(Prisma.sql`
       SELECT b.item_id, i.code AS item_code, i.name AS item_name, i.type::text AS item_type,
              b.location_id, l.code AS location_code, l.name AS location_name, l.kind::text AS location_kind,
              b.lot, b.colour, b.size, b.order_id, NULL::text AS order_no, b.unit::text AS unit, b.qty,
@@ -76,7 +76,7 @@ export const stockRepo = {
       JOIN locations l ON l.id = b.location_id
       WHERE ${Prisma.join(conds, ' AND ')}
       ORDER BY l.kind, l.name, i.code, b.lot, b.colour, b.size
-      OFFSET ${f.skip} LIMIT ${f.take}`;
+      OFFSET ${f.skip} LIMIT ${f.take}`));
   },
 
   movements(f: {
@@ -136,7 +136,7 @@ export const stockRepo = {
       SELECT item_id, to_location_id AS location_id, lot, colour, size, order_id, roll_id, bundle_id, carton_id, unit, qty AS q FROM stock_movements
       UNION ALL
       SELECT item_id, from_location_id, lot, colour, size, order_id, roll_id, bundle_id, carton_id, unit, -qty FROM stock_movements)`;
-    const units = prisma.$queryRaw<LocateRow[]>`
+    const units = prisma.$queryRaw<LocateRow[]>(unitScoped(Prisma.sql`
       WITH hit AS (
         (SELECT 'ROLL' AS kind, r.id AS key, r.roll_no AS label, i.name || COALESCE(' · ' || NULLIF(r.lot, ''), '') || COALESCE(' · ' || NULLIF(r.colour, ''), '') AS sub
            FROM fabric_rolls r JOIN items i ON i.id = r.item_id WHERE r.roll_no ILIKE ${like} ORDER BY r.roll_no LIMIT ${limit})
@@ -153,8 +153,8 @@ export const stockRepo = {
       JOIN ${legs} m ON (h.kind = 'ROLL' AND m.roll_id = h.key) OR (h.kind = 'BUNDLE' AND m.bundle_id = h.key) OR (h.kind = 'CARTON' AND m.carton_id = h.key)
       JOIN locations l ON l.id = m.location_id
       GROUP BY h.kind, h.key, h.label, h.sub, m.unit, l.code, l.name, l.kind, m.colour, m.size
-      HAVING SUM(m.q) > 0`;
-    const stock = prisma.$queryRaw<LocateRow[]>`
+      HAVING SUM(m.q) > 0`));
+    const stock = prisma.$queryRaw<LocateRow[]>(unitScoped(Prisma.sql`
       WITH lots AS (
         SELECT DISTINCT m.item_id, m.lot FROM stock_movements m WHERE m.lot <> '' AND m.lot ILIKE ${like} LIMIT ${limit}
       ), its AS (
@@ -179,7 +179,7 @@ export const stockRepo = {
       SELECT 'ORDER', o.id::text, o.order_no, o.style_no || ' · PO ' || o.buyer_po_no, b.unit::text, l.code, l.name, l.kind::text,
              i.name, SUM(b.qty)
         FROM bal b JOIN ords t ON t.id = b.order_id JOIN orders o ON o.id = b.order_id JOIN items i ON i.id = b.item_id JOIN locations l ON l.id = b.location_id
-        WHERE l.kind <> 'VIRTUAL' GROUP BY o.id, o.order_no, o.style_no, o.buyer_po_no, b.unit, l.code, l.name, l.kind, i.name`;
+        WHERE l.kind <> 'VIRTUAL' GROUP BY o.id, o.order_no, o.style_no, o.buyer_po_no, b.unit, l.code, l.name, l.kind, i.name`));
     const [u, s] = await Promise.all([units, stock]);
     return [...u, ...s];
   },
@@ -196,6 +196,6 @@ export const stockRepo = {
   },
 
   lastRefresh() {
-    return prisma.$queryRaw<{ last: Date | null }[]>`SELECT MAX(last_movement_at) AS last FROM stock_balances`;
+    return prisma.$queryRaw<{ last: Date | null }[]>(unitScoped(Prisma.sql`SELECT MAX(last_movement_at) AS last FROM stock_balances`));
   },
 };

@@ -1,5 +1,5 @@
-import { type Prisma } from '@wewin/db';
-import { prisma } from '../../core/db';
+import { Prisma } from '@wewin/db';
+import { prisma, unitScoped } from '../../core/db';
 
 /**
  * Read-only queries for reports and the dashboard (A§3 module map: `reports/` — read-only queries
@@ -79,7 +79,7 @@ export const reportsRepo = {
 
   /** Order progress: ordered, sewn, packed, shipped pieces per order. */
   orderProgress(f: { status?: string }) {
-    return prisma.$queryRaw<{ id: string; order_no: string; buyer: string; buyer_po_no: string; style_no: string; ship_date: Date | null; status: string; ordered: bigint; sewn: bigint; packed: bigint; shipped: Dec }[]>`
+    return prisma.$queryRaw<{ id: string; order_no: string; buyer: string; buyer_po_no: string; style_no: string; ship_date: Date | null; status: string; ordered: bigint; sewn: bigint; packed: bigint; shipped: Dec }[]>(unitScoped(Prisma.sql`
       SELECT o.id, o.order_no, b.name AS buyer, o.buyer_po_no, o.style_no, o.ship_date, o.status::text AS status,
         COALESCE((SELECT SUM(qty) FROM order_lines WHERE order_id = o.id), 0)::bigint AS ordered,
         COALESCE((SELECT SUM(l.pcs) FROM sewing_entry_lines l JOIN sewing_entries e ON e.id = l.entry_id WHERE e.order_id = o.id AND e.status = 'POSTED'), 0)::bigint AS sewn,
@@ -89,12 +89,12 @@ export const reportsRepo = {
            WHERE m.order_id = o.id AND (tl.code = 'SHIPPED' OR fl.code = 'SHIPPED')), 0) AS shipped
       FROM orders o JOIN buyers b ON b.id = o.buyer_id
       WHERE (${f.status ?? null}::text IS NULL AND o.status IN ('CONFIRMED', 'CLOSED')) OR o.status::text = ${f.status ?? ''}
-      ORDER BY o.ship_date NULLS LAST, o.order_no`;
+      ORDER BY o.ship_date NULLS LAST, o.order_no`));
   },
 
   // ───────── Dashboard ─────────
   async ordersSummary() {
-    const r = await prisma.$queryRaw<{ open: bigint; ordered: bigint; packed: bigint; shipped: Dec; due_soon: bigint }[]>`
+    const r = await prisma.$queryRaw<{ open: bigint; ordered: bigint; packed: bigint; shipped: Dec; due_soon: bigint }[]>(unitScoped(Prisma.sql`
       SELECT COUNT(*)::bigint AS open,
         COALESCE(SUM((SELECT SUM(qty) FROM order_lines WHERE order_id = o.id)), 0)::bigint AS ordered,
         COALESCE(SUM((SELECT SUM(l.pcs) FROM carton_lines l JOIN cartons c ON c.id = l.carton_id WHERE c.order_id = o.id AND c.status = 'POSTED')), 0)::bigint AS packed,
@@ -102,17 +102,17 @@ export const reportsRepo = {
            JOIN locations tl ON tl.id = m.to_location_id JOIN locations fl ON fl.id = m.from_location_id
            WHERE m.order_id = o.id AND (tl.code = 'SHIPPED' OR fl.code = 'SHIPPED'))), 0) AS shipped,
         COUNT(*) FILTER (WHERE o.ship_date IS NOT NULL AND o.ship_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date + 14)::bigint AS due_soon
-      FROM orders o WHERE o.status = 'CONFIRMED'`;
+      FROM orders o WHERE o.status = 'CONFIRMED'`));
     return r[0]!;
   },
   /** Live kg and pieces at job workers (ledger, not the cache). */
   async atVendors() {
-    const r = await prisma.$queryRaw<{ unit: string; qty: Dec }[]>`
+    const r = await prisma.$queryRaw<{ unit: string; qty: Dec }[]>(unitScoped(Prisma.sql`
       SELECT x.unit::text AS unit, COALESCE(SUM(x.q), 0) AS qty FROM (
         SELECT m.unit, m.qty AS q FROM stock_movements m JOIN locations l ON l.id = m.to_location_id WHERE l.kind = 'VENDOR'
         UNION ALL
         SELECT m.unit, -m.qty FROM stock_movements m JOIN locations l ON l.id = m.from_location_id WHERE l.kind = 'VENDOR'
-      ) x GROUP BY x.unit`;
+      ) x GROUP BY x.unit`));
     return r;
   },
   openOutwardCount() {
@@ -128,7 +128,7 @@ export const reportsRepo = {
   async monthFigures(from: string, to: string) {
     const [yarn, packed, exports] = await Promise.all([
       prisma.yarnReceiptLine.aggregate({ where: { receipt: { status: 'POSTED', docDate: { gte: new Date(d(from)), lte: new Date(d(to)) } } }, _sum: { qtyKg: true } }),
-      prisma.$queryRaw<{ pcs: bigint }[]>`SELECT COALESCE(SUM(l.pcs), 0)::bigint AS pcs FROM carton_lines l JOIN cartons c ON c.id = l.carton_id WHERE c.status = 'POSTED' AND c.doc_date BETWEEN ${from}::date AND ${to}::date`,
+      prisma.$queryRaw<{ pcs: bigint }[]>(unitScoped(Prisma.sql`SELECT COALESCE(SUM(l.pcs), 0)::bigint AS pcs FROM carton_lines l JOIN cartons c ON c.id = l.carton_id WHERE c.status = 'POSTED' AND c.doc_date BETWEEN ${from}::date AND ${to}::date`)),
       prisma.exportInvoice.groupBy({ by: ['currency'], where: { status: 'POSTED', docDate: { gte: new Date(d(from)), lte: new Date(d(to)) } }, _sum: { fobValue: true, totalPcs: true } }),
     ]);
     return { yarnKg: yarn._sum.qtyKg, packedPcs: packed[0]?.pcs ?? 0n, exports };

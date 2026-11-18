@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Controller } from 'react-hook-form';
 import { KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
-import { zUserCreate, zUserUpdate } from '@wewin/shared';
+import { type UnitInfo, zUserCreate, zUserUpdate } from '@wewin/shared';
 import { api, errorMessage } from '@/lib/api';
 import { formatDateTimeIst } from '@/lib/format';
 import { TextField } from '@/components/form-fields';
@@ -22,6 +22,7 @@ interface UserRow extends MasterRow {
   mustChangePassword: boolean;
   roles: { id: string; code: string; name: string }[];
   roleIds: string[];
+  unitIds: string[];
 }
 interface RoleRow {
   id: string;
@@ -65,6 +66,7 @@ function ResetPassword({ user }: { user: UserRow }) {
 
 export function UsersPage() {
   const roles = useQuery({ queryKey: ['roles'], queryFn: () => api.get<RoleRow[]>('/roles') });
+  const units = useQuery({ queryKey: ['auth', 'units'], queryFn: () => api.get<UnitInfo[]>('/auth/units') });
   return (
     <MasterCrudPage<UserRow>
       id="users"
@@ -86,8 +88,8 @@ export function UsersPage() {
       ]}
       schema={zUserCreate}
       updateSchema={zUserUpdate}
-      emptyForm={{ username: '', fullName: '', email: '', phone: '', password: '', roleIds: [] }}
-      toForm={(r) => ({ fullName: r.fullName, email: r.email ?? '', phone: r.phone ?? '', roleIds: r.roleIds })}
+      emptyForm={{ username: '', fullName: '', email: '', phone: '', password: '', roleIds: [], unitIds: [] }}
+      toForm={(r) => ({ fullName: r.fullName, email: r.email ?? '', phone: r.phone ?? '', roleIds: r.roleIds, unitIds: r.unitIds })}
       rowActions={(r) => <ResetPassword user={r} />}
       renderForm={(form, editing) => (
         <>
@@ -126,6 +128,31 @@ export function UsersPage() {
               )}
             />
           </div>
+          {(units.data ?? []).length > 1 ? (
+            <div className="sm:col-span-2">
+              <Label>Units this user may log into</Label>
+              <Controller
+                control={form.control}
+                name="unitIds"
+                render={({ field }) => {
+                  const v = (field.value as string[] | undefined) ?? [];
+                  return (
+                    <>
+                      <div className="mt-1 flex flex-wrap gap-3">
+                        {(units.data ?? []).map((u) => (
+                          <label key={u.id} className="flex items-center gap-1.5 text-sm">
+                            <Checkbox checked={v.includes(u.id)} onChange={(e) => field.onChange(e.target.checked ? [...v, u.id] : v.filter((x) => x !== u.id))} />
+                            {u.exporter.name} · {u.name}
+                          </label>
+                        ))}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">None ticked = every unit.</span>
+                    </>
+                  );
+                }}
+              />
+            </div>
+          ) : null}
         </>
       )}
     />

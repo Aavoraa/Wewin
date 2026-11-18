@@ -8,6 +8,11 @@ import { type QcDoc, type QcLine, qcSummary } from '@/features/quality/QcPages';
 import { type YarnProgram } from '@/features/jobwork/YarnProgramPages';
 import { BillDoc, type BillDocColumn } from './BillDoc';
 
+/** Who approved (QC: the user who posted it; programme: approvedById), returned with the document. */
+type Approver = { approvedBy?: { id: string; fullName: string } | null };
+/** Name over date / time above the Approved by line; null until approved. */
+const approvedSign = (by: Approver['approvedBy'], at: string | null | undefined) => (at ? [by?.fullName, formatDateTimeIst(at)].filter(Boolean).join('\n') : null);
+
 const RESULT: Record<string, string> = { PASS: 'Pass', HOLD: 'Hold', REJECT: 'Reject' };
 const defectsText = (l: QcLine) => l.defects.map((x) => `${x.code} × ${x.count}`).join(', ');
 /** Whole-piece / point counts (not kg or money). */
@@ -15,7 +20,7 @@ const sumInt = (vals: (number | null)[]) => vals.reduce<number>((a, v) => a + (v
 
 /** Quality check — fabric roll inspection, inline check or final inspection — in bill format (A4). */
 export function QcPrint({ id }: { id: string }) {
-  const q = useQuery({ queryKey: ['print', 'qc', id], queryFn: () => api.get<QcDoc>(`/qc/${id}`) });
+  const q = useQuery({ queryKey: ['print', 'qc', id], queryFn: () => api.get<QcDoc & Approver>(`/qc/${id}`) });
   if (!q.data) return <LoadingState />;
   const d = q.data;
   const fabric = d.kind === 'FABRIC_ROLL';
@@ -113,7 +118,7 @@ export function QcPrint({ id }: { id: string }) {
         [inline ? 'Checker' : 'Inspector', d.inspector],
         ['Result', qcSummary(d)],
         ['Status', d.status === 'POSTED' ? 'Approved' : d.status === 'DRAFT' ? 'Awaiting approval' : d.status],
-        ['Approved', d.status === 'POSTED' && d.postedAt ? formatDateTimeIst(d.postedAt) : null],
+        ['Approved', d.status === 'POSTED' && d.postedAt ? [formatDateTimeIst(d.postedAt), d.approvedBy?.fullName].filter(Boolean).join(' · ') : null],
       ]}
       columns={columns}
       rows={rows}
@@ -126,13 +131,14 @@ export function QcPrint({ id }: { id: string }) {
       }
       remarks={d.remarks}
       signatures={[inline ? 'Checker' : 'Inspector', 'QC in-charge', 'Approved by']}
+      signed={[null, null, d.status === 'POSTED' ? approvedSign(d.approvedBy, d.postedAt) : null]}
     />
   );
 }
 
 /** Program Defined — a process programme (mix in, item out, allowed loss) in bill format (A4). */
 export function YarnProgramPrint({ id }: { id: string }) {
-  const q = useQuery({ queryKey: ['print', 'yarn-program', id], queryFn: () => api.get<YarnProgram & { createdAt?: string }>(`/yarn-programs/${id}`) });
+  const q = useQuery({ queryKey: ['print', 'yarn-program', id], queryFn: () => api.get<YarnProgram & Approver & { createdAt?: string }>(`/yarn-programs/${id}`) });
   if (!q.data) return <LoadingState />;
   const p = q.data;
   const mixTotal = p.inputs.reduce((a, l) => a.plus(D(l.mixPct)), D(0));
@@ -153,13 +159,14 @@ export function YarnProgramPrint({ id }: { id: string }) {
         ['Allowed loss', `${D(p.allowedLossPct).toString()}%`],
         ['Kg to send', p.sendKg ? formatKg(p.sendKg) : null],
         ['Input cost ₹/kg', p.materialCostPerKg ? D(p.materialCostPerKg).toFixed(2) : null],
-        ['Status', p.status === 'APPROVED' && p.approvedAt ? `Approved ${formatDateTimeIst(p.approvedAt)}` : p.status],
+        ['Status', p.status === 'APPROVED' && p.approvedAt ? `Approved ${formatDateTimeIst(p.approvedAt)}${p.approvedBy ? ` by ${p.approvedBy.fullName}` : ''}` : p.status],
       ]}
       columns={[{ header: 'Input item' }, { header: 'Code' }, { header: 'Colour' }, { header: 'Mixing %', align: 'right' }, { header: 'Kg to send', align: 'right' }]}
       rows={p.inputs.map((l) => [l.item.name, l.item.code, l.colour ?? '', `${D(l.mixPct).toString()}%`, l.planKg ? formatKg(l.planKg) : ''])}
       totals={[null, null, null, `${mixTotal.toString()}%`, anyPlan ? formatKg(planTotal.toFixed(3)) : '']}
       remarks={p.remarks}
       signatures={['Prepared by', 'Production in-charge', 'Approved by']}
+      signed={[null, null, approvedSign(p.approvedBy, p.approvedAt)]}
     />
   );
 }

@@ -43,6 +43,20 @@ export interface PlCandidate {
   netKg: string;
 }
 
+/** Buyer as returned on a shipment / buyer receipt: name, address and contact for the print. */
+export interface ExportPartyBuyer {
+  id: string;
+  code: string;
+  name: string;
+  country: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
 export interface Shipment {
   id: string;
   docNo: string | null;
@@ -66,7 +80,7 @@ export interface Shipment {
   status: string;
   version: number;
   postedAt: string | null;
-  buyer: { id: string; code: string; name: string; country: string | null };
+  buyer: ExportPartyBuyer;
   invoices: { id: string; docNo: string | null; docDate: string | null; totalPcs: number; fobValue: string; currency: string; portOfLoading: string; portOfDischarge: string }[];
   draftInvoices: ExportInvoice[];
 }
@@ -87,7 +101,7 @@ export interface BuyerReceipt {
   status: string;
   version: number;
   postedAt: string | null;
-  buyer: { id: string; code: string; name: string; country: string | null };
+  buyer: ExportPartyBuyer;
   allocations: { id: string; invoiceId: string; amountFc: string; invoice: { id: string; docNo: string | null; docDate: string | null; fobValue: string; exchangeRate: string; currency: string } }[];
   allocatedFc: string;
   unallocatedFc: string;

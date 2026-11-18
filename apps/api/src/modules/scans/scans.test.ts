@@ -332,6 +332,70 @@ describe('job-work invoice → vendor bill matched against inward D.C.s', () => 
   });
 });
 
+describe('purchase invoice → purchase bill matched against yarn receipts (Q-083)', () => {
+  it('suggests the receipt with the same supplier invoice no., creates a draft PURCHASE bill, flags a second bill and refuses job-work D.C.s', async () => {
+    // Bills need a valid vendor certificate (Q-074).
+    await prisma.vendor.update({ where: { id: mill.id }, data: { certificateNo: uid('CERT'), certificateExpiry: new Date('2099-12-31T00:00:00.000Z') } });
+    const fx = inv();
+    const pdf = await invoicePdf(fx);
+    // The receipt was entered by hand with the supplier invoice no. typed differently (case / spaces).
+    const typed = fx.invoiceNo.toLowerCase().replace('/', ' / ');
+    const yr = await owner.post('/api/v1/yarn-receipts', {
+      docDate: '2026-10-10',
+      vendorId: mill.id,
+      supplierInvoiceNo: typed,
+      supplierInvoiceDate: '2026-10-09',
+      lines: [
+        { itemId: yarn30.id, lot: uid('PB'), qtyKg: '1250', ratePerKg: '282.5' },
+        { itemId: yarn40.id, lot: uid('PB'), qtyKg: '500', ratePerKg: '305', bags: 50 },
+      ],
+    });
+    ok(yr, 201);
+    ok(await owner.post(`/api/v1/yarn-receipts/${yr.body.data.id}/post`));
+
+    // The classifier still takes a yarn invoice for a yarn receipt; the reviewer switches it.
+    let d = await scan(owner, pdf, 'kaveri-bill.pdf', 'application/pdf');
+    expect(d.review.target).toBe('YARN_RECEIPT');
+    let p = await owner.patch(`/api/v1/invoice-scans/${d.id}/review`, { version: d.version, target: 'PURCHASE_BILL' });
+    ok(p);
+    d = p.body.data;
+    expect(d.review.target).toBe('PURCHASE_BILL');
+    expect(d.review.vendor).toMatchObject({ id: mill.id, state: 'AUTO' });
+    expect(d.review.sources).toEqual([expect.objectContaining({ sourceType: 'YARN_RECEIPT', sourceId: yr.body.data.id, reason: expect.stringMatching(/Supplier invoice/) })]);
+    expect(d.validation.issues.map((x: { code: string }) => x.code)).toContain('SOURCES_UNCONFIRMED');
+    const cands = (await owner.get(`/api/v1/invoice-scans/${d.id}/sources`)).body.data as { sourceType: string; sourceId: string; vendorDcNo: string | null }[];
+    expect(cands).toContainEqual(expect.objectContaining({ sourceType: 'YARN_RECEIPT', sourceId: yr.body.data.id, vendorDcNo: typed }));
+    expect(cands.every((c) => ['YARN_RECEIPT', 'STOCK_INWARD'].includes(c.sourceType))).toBe(true);
+
+    // A job-work D.C. is never a source of a purchase bill.
+    const refused = await owner.patch(`/api/v1/invoice-scans/${d.id}/review`, { version: d.version, sources: [{ sourceType: 'INWARD_DC', sourceId: crypto.randomUUID() }] });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('ALREADY_BILLED');
+
+    p = await owner.patch(`/api/v1/invoice-scans/${d.id}/review`, { version: d.version, sources: [{ sourceType: 'YARN_RECEIPT', sourceId: yr.body.data.id }], confirm: ['sources'] });
+    ok(p);
+    d = p.body.data;
+    expect(d.status, JSON.stringify(d.validation.issues)).toBe('READY');
+    const a = await owner.post(`/api/v1/invoice-scans/${d.id}/apply`, { version: d.version });
+    ok(a);
+    const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { sourceScanId: d.id }, include: { lines: true } });
+    expect(bill).toMatchObject({ kind: 'PURCHASE', status: 'DRAFT', processId: null, vendorId: mill.id, vendorInvoiceNo: fx.invoiceNo, withinTolerance: true });
+    expect(bill.taxableAmount.toFixed(2)).toBe('505625.00');
+    expect(bill.lines.map((l) => [l.sourceType, l.sourceId])).toEqual([['YARN_RECEIPT', yr.body.data.id]]);
+    expect(a.body.data).toMatchObject({ status: 'APPLIED', applied: { docType: 'PURCHASE_BILL', id: bill.id, status: 'DRAFT', route: `/purchase-bills/${bill.id}` } });
+
+    // The same invoice scanned again for a bill: already on a bill (never acknowledgeable).
+    let again = await scan(owner, pdf, 'kaveri-bill-again.pdf', 'application/pdf', 'PURCHASE_BILL');
+    expect(again.review.target).toBe('PURCHASE_BILL');
+    expect(again.validation.issues.map((x: { code: string }) => x.code)).toContain('DUPLICATE_INVOICE');
+    again = (await owner.patch(`/api/v1/invoice-scans/${again.id}/review`, { version: again.version, confirm: ['sources'] })).body.data;
+    expect((await owner.post(`/api/v1/invoice-scans/${again.id}/apply`, { version: again.version })).body.error.code).toBe('SCAN_NOT_READY');
+    // Posting goes through the existing bill rules and marks the receipt billed.
+    ok(await owner.post(`/api/v1/vendor-bills/${bill.id}/post`));
+    expect((await prisma.yarnReceipt.findUniqueOrThrow({ where: { id: yr.body.data.id } })).billId).toBe(bill.id);
+  });
+});
+
 describe('scanned delivery challans → draft outward / inward D.C.s', () => {
   let pp1: string;
   let knitterGstin: string;

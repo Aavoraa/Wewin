@@ -69,6 +69,8 @@ const vendorShape = z.object({
   creditDays: z.coerce.number().int().min(0).max(365).default(0),
   tdsApplicable: z.boolean().default(false),
   tdsRatePct: zOptional(zDecimal({ scale: 3, max: '100' })),
+  /** Ledger name in Tally when it differs from the vendor name (Q-084). */
+  tallyLedgerName: optText(120),
   debitNoteGstApplicable: z.boolean().default(false),
   debitNoteGstRatePct: zOptional(zDecimal({ scale: 3, max: '100' })),
   bankName: optText(100),
@@ -195,12 +197,15 @@ export const zUserCreate = z.object({
   phone: optText(30),
   password: zPasswordPolicy,
   roleIds: z.array(zRef()).min(1, 'Assign at least one role'),
+  /** Units the user may log into (Q-085); none = every active unit. */
+  unitIds: z.array(zRef()).default([]),
 });
 export const zUserUpdate = z.object({
   fullName: z.string().trim().min(2).max(100),
   email: zEmail,
   phone: optText(30),
   roleIds: z.array(zRef()).min(1, 'Assign at least one role'),
+  unitIds: z.array(zRef()).default([]),
   version: z.number().int().min(1),
 });
 export const zResetPassword = z.object({ password: zPasswordPolicy });

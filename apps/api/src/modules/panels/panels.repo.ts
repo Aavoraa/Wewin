@@ -96,8 +96,11 @@ export const panelsRepo = {
       include: { process: { select: { name: true } }, lines: { select: { id: true, goodPcs: true, rejectedPcs: true, panelItemId: true, outLineId: true } } },
     });
   },
-  setBill(tx: Tx, ids: string[], billId: string) {
-    return tx.panelDc.updateMany({ where: { id: { in: ids }, type: 'IN', billId: null, status: 'POSTED' }, data: { billId } });
+  setBill(tx: Tx, ids: string[], billId: string, full = true) {
+    return tx.panelDc.updateMany({ where: { id: { in: ids }, type: 'IN', status: 'POSTED', OR: [{ billId: null }, { billedInFull: false }] }, data: { billId, billedInFull: full } });
+  },
+  setBillState(tx: Tx, id: string, billId: string | null, full: boolean) {
+    return tx.panelDc.update({ where: { id }, data: { billId, billedInFull: full } });
   },
   clearBill(tx: Tx, billId: string) {
     return tx.panelDc.updateMany({ where: { billId }, data: { billId: null } });
@@ -146,6 +149,10 @@ export const panelsRepo = {
       where: { id },
       include: { order: { select: { orderNo: true, styleNo: true } }, lines: { orderBy: { lineNo: 'asc' }, include: { panelItem: { select: { name: true } } } } },
     });
+  },
+  /** The panel D.C. a recut slip is raised against (no relation on panelDcId). */
+  recutPanelDc(id: string, db: Db = prisma) {
+    return db.panelDc.findUnique({ where: { id }, select: { id: true, docNo: true, docDate: true } });
   },
   createRecut(tx: Tx, data: Omit<Prisma.RecutSlipUncheckedCreateInput, 'lines'>, lines: { componentCode: string; panelItemId: string; colour: string; size: string; pcs: number }[]) {
     return tx.recutSlip.create({ data: { ...data, lines: { create: lines.map((l, i) => ({ lineNo: i + 1, ...l })) } } });

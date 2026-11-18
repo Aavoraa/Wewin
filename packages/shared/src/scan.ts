@@ -7,8 +7,17 @@ import { zListQuery, zRef } from './api';
 
 // ───────── What the ERP can receive from a scanned document ─────────
 /** Existing Wewin documents a scan can fill. No new transaction types are introduced. */
-export const SCAN_TARGETS = ['YARN_RECEIPT', 'TRIMS_RECEIPT', 'VENDOR_BILL', 'OUTWARD_DC', 'INWARD_DC', 'ORDER', 'PROGRAM'] as const;
+export const SCAN_TARGETS = ['YARN_RECEIPT', 'TRIMS_RECEIPT', 'VENDOR_BILL', 'PURCHASE_BILL', 'OUTWARD_DC', 'INWARD_DC', 'ORDER', 'PROGRAM'] as const;
 export type ScanTarget = (typeof SCAN_TARGETS)[number];
+/**
+ * Vendor bills: VENDOR_BILL is a job-work bill (inward D.C.s / panel inwards); PURCHASE_BILL is a
+ * purchase bill (posted yarn receipts / inward from others). Never chosen by the classifier — a
+ * purchase invoice still defaults to YARN_RECEIPT; the reviewer or the purchase-bills register picks it (Q-083).
+ */
+export const BILL_TARGETS: readonly ScanTarget[] = ['VENDOR_BILL', 'PURCHASE_BILL'];
+export const isBillTarget = (t: ScanTarget | null | undefined) => !!t && BILL_TARGETS.includes(t);
+/** Documents a scan's `sources` may point at. */
+export const SCAN_SOURCE_TYPES = ['INWARD_DC', 'PANEL_IN', 'OUTWARD_DC', 'YARN_RECEIPT', 'STOCK_INWARD'] as const;
 /** Delivery challans: no tax or totals; they move material, so they are matched to stock / outward D.C.s instead. */
 export const DC_TARGETS: readonly ScanTarget[] = ['OUTWARD_DC', 'INWARD_DC'];
 export const isDcTarget = (t: ScanTarget | null | undefined) => !!t && DC_TARGETS.includes(t);
@@ -176,13 +185,14 @@ export const zReview = z.object({
   header: zScanHeader,
   lines: z.array(zReviewLine),
   /**
-   * Job-work bills: the inward D.C.s / panel inwards this invoice covers. Inward D.C.s: our posted
+   * Job-work bills: the inward D.C.s / panel inwards this invoice covers. Purchase bills: the posted
+   * yarn receipts / inward from others it covers. Inward D.C.s: our posted
    * outward D.C.s the rolls come back against, with the kg counted against each (`kg` null = split
    * automatically by what is pending).
    */
   sources: z.array(
     z.object({
-      sourceType: z.enum(['INWARD_DC', 'PANEL_IN', 'OUTWARD_DC']),
+      sourceType: z.enum(SCAN_SOURCE_TYPES),
       sourceId: z.string(),
       docNo: z.string(),
       reason: z.string(),
@@ -228,7 +238,7 @@ export const zReviewPatch = z.object({
     .optional(),
   addLine: z.boolean().optional(),
   sources: z
-    .array(z.object({ sourceType: z.enum(['INWARD_DC', 'PANEL_IN', 'OUTWARD_DC']), sourceId: zRef(), kg: z.string().trim().regex(/^\d+(\.\d{1,3})?$/, 'Kg must be a number').nullable().optional() }))
+    .array(z.object({ sourceType: z.enum(SCAN_SOURCE_TYPES), sourceId: zRef(), kg: z.string().trim().regex(/^\d+(\.\d{1,3})?$/, 'Kg must be a number').nullable().optional() }))
     .max(500)
     .optional(),
   programProcessId: zRef().nullable().optional(),

@@ -133,3 +133,56 @@ describe('yarn receipts', () => {
     expect(res.body.data.map((x: { id: string }) => x.id)).toEqual([r.id]);
   });
 });
+
+describe('GRN against PO (Q-080)', () => {
+  it('receives against an approved yarn PO: pending, PO rate, no more than ordered, freed when a receipt is cancelled', async () => {
+    const order = await createOrder(owner, m);
+    const po = (
+      await owner.post('/api/v1/purchase-orders', {
+        kind: 'YARN', docDate: '2026-10-05', vendorId: m.vendors.mill.id, orderId: order.id, deliveryDate: '2026-10-20',
+        lines: [{ itemId: m.items.yarn.id, millName: 'Adisankara', bags: 10, qty: '500', rate: '328' }],
+      })
+    ).body.data;
+    const poLineId = po.lines[0].id as string;
+    const lot = uid('PO');
+    const line = (qtyKg: string, over: Record<string, unknown> = {}) => ({ itemId: m.items.yarn.id, lot, qtyKg, ratePerKg: '328', poLineId, ...over });
+
+    // A draft PO cannot be received against.
+    expect((await owner.post('/api/v1/yarn-receipts', body({ lines: [line('100')] }))).status).toBe(409);
+    const approved = await owner.post(`/api/v1/purchase-orders/${po.id}/approve`, { note: 'Rate as agreed' });
+    expect(approved.status).toBe(200);
+    const poNo = approved.body.data.docNo as string;
+
+    const open = await owner.get(`/api/v1/yarn-receipts/po-lines?vendorId=${m.vendors.mill.id}`);
+    expect(open.status).toBe(200);
+    expect(open.body.data.find((l: { poLineId: string }) => l.poLineId === poLineId)).toMatchObject({ ordered: '500.000', received: '0.000', pending: '500.000', ratePerKg: '328' });
+
+    // Wrong item or supplier is refused; more than ordered is refused.
+    expect((await owner.post('/api/v1/yarn-receipts', body({ lines: [line('100', { itemId: m.items.lycra.id })] }))).status).toBe(400);
+    expect((await owner.post('/api/v1/yarn-receipts', body({ vendorId: m.vendors.knitter.id, lines: [line('100')] }))).status).toBe(400);
+    const over = await owner.post('/api/v1/yarn-receipts', body({ lines: [line('500.001')] }));
+    expect(over.status).toBe(409);
+    expect(over.body.error.message).toContain('500.000 kg left');
+
+    const r1 = (await owner.post('/api/v1/yarn-receipts', body({ lines: [line('300')] }))).body.data;
+    expect(r1.lines[0]).toMatchObject({ poNo, poRatePerKg: '328' });
+    expect((await owner.post(`/api/v1/yarn-receipts/${r1.id}/post`)).status).toBe(200);
+    const after = (await owner.get(`/api/v1/yarn-receipts/po-lines?vendorId=${m.vendors.mill.id}`)).body.data.find((l: { poLineId: string }) => l.poLineId === poLineId);
+    expect(after).toMatchObject({ received: '300.000', pending: '200.000' });
+    // The purchase bill shows the PO and its rate next to the receipt.
+    const cands = (await owner.get(`/api/v1/vendor-bills/match?vendorId=${m.vendors.mill.id}&kind=PURCHASE`)).body.data;
+    expect(cands.find((c: { sourceId: string }) => c.sourceId === r1.id)).toMatchObject({ poNos: poNo, poRate: '328' });
+
+    // A second draft for 250 saves only if it fits; posting re-checks against what is posted by then.
+    expect((await owner.post('/api/v1/yarn-receipts', body({ lines: [line('250')] }))).status).toBe(409);
+    const r2 = (await owner.post('/api/v1/yarn-receipts', body({ lines: [line('200')] }))).body.data;
+    const r3 = (await owner.post('/api/v1/yarn-receipts', body({ lines: [line('150')] }))).body.data;
+    expect((await owner.post(`/api/v1/yarn-receipts/${r2.id}/post`)).status).toBe(200);
+    expect((await owner.post(`/api/v1/yarn-receipts/${r3.id}/post`)).status).toBe(409); // nothing left
+    expect((await owner.get(`/api/v1/yarn-receipts/po-lines?vendorId=${m.vendors.mill.id}`)).body.data.map((l: { poLineId: string }) => l.poLineId)).not.toContain(poLineId);
+
+    // Cancelling a receipt puts its kg back on the PO.
+    expect((await owner.post(`/api/v1/yarn-receipts/${r2.id}/cancel`, { reason: 'Wrong lot' })).status).toBe(200);
+    expect((await owner.post(`/api/v1/yarn-receipts/${r3.id}/post`)).status).toBe(200);
+  });
+});

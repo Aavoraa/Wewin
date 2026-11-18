@@ -47,6 +47,10 @@ export const yarnProgramsRepo = {
   get(id: string, db: Db = prisma) {
     return db.yarnProgram.findUnique({ where: { id }, include });
   },
+  /** The approver's name for the print (no relation on approvedById). */
+  userName(id: string, db: Db = prisma) {
+    return db.user.findUnique({ where: { id }, select: { id: true, fullName: true } });
+  },
   async getForUpdate(tx: Tx, id: string) {
     await tx.$queryRaw`SELECT id FROM yarn_programs WHERE id = ${id}::uuid FOR UPDATE`;
     return tx.yarnProgram.findUnique({ where: { id }, include });

@@ -83,7 +83,8 @@ export const yarnProgramsService = {
   async get(id: string) {
     const p = await repo.get(id);
     if (!p) throw notFound('Programme');
-    return shape(p);
+    const approvedBy = p.approvedById ? await repo.userName(p.approvedById) : null;
+    return { ...shape(p), approvedBy };
   },
 
   async create(input: Input) {
@@ -120,7 +121,7 @@ export const yarnProgramsService = {
       await ordersService.requireOpen(p.orderId, tx);
       await repo.setStatus(tx, id, { status: 'APPROVED', approvedAt: new Date(), approvedById: user.id });
       await audit.log(tx, { docType: DOC, recordId: id, action: 'APPROVE', docNo: p.programNo });
-      return shape((await repo.get(id, tx))!);
+      return { ...shape((await repo.get(id, tx))!), approvedBy: await repo.userName(user.id, tx) };
     });
   },
 

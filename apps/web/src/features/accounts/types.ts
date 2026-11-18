@@ -19,13 +19,23 @@ export interface RateContract {
   order: { orderNo: string } | null;
 }
 
-/** A posted, unbilled D.C. offered on the match screen, priced at the effective contract rate. */
+export type BillKind = 'JOBWORK' | 'PURCHASE' | 'ACCESSORY';
+export type BillSourceType = 'INWARD_DC' | 'PANEL_IN' | 'YARN_RECEIPT' | 'STOCK_INWARD' | 'TRIMS_RECEIPT';
+
+/**
+ * A posted, unbilled document offered on the match screen. Job-work candidates (inward D.C.s, panel
+ * receipts) are priced at the effective contract rate; purchase candidates (yarn receipts, inward from
+ * others) at their own weighted-average rate (Q-079). Descriptive fields are present only where they apply.
+ */
 export interface BillCandidate {
-  sourceType: 'INWARD_DC' | 'PANEL_IN';
+  /** Bill the rest later (Q-081): what the document holds and what posted bills have billed of it already. */
+  receivedQty?: string;
+  billedBefore?: string | null;
+  sourceType: BillSourceType;
   sourceId: string;
   docNo: string;
   docDate: string;
-  processId: string;
+  processId: string | null;
   processName: string;
   itemId: string | null;
   orderId: string | null;
@@ -35,6 +45,22 @@ export interface BillCandidate {
   rateContractId: string | null;
   expected: string | null;
   against: string;
+  vendorDcNo?: string | null;
+  orderNo?: string | null;
+  items?: string | null;
+  fabricDescription?: string | null;
+  colours?: string | null;
+  gsm?: string | null;
+  dia?: string | null;
+  gauge?: string | null;
+  loopLength?: string | null;
+  rolls?: number | null;
+  lots?: string | null;
+  bags?: number | null;
+  /** Yarn PO(s) behind a yarn receipt and their rate per kg (GRN against PO, Q-080). */
+  poNos?: string | null;
+  poRate?: string | null;
+  sizes?: string | null;
 }
 
 export interface MatchResult {
@@ -55,12 +81,38 @@ export interface BillFigures {
   payStatus: 'UNPAID' | 'PARTIAL' | 'PAID' | null;
 }
 
+export type BillAuditStatus = 'PENDING' | 'PASSED' | 'HELD';
+
+/** Description of a saved bill line's document (Q-079). */
+export interface BillLineDetails {
+  vendorDcNo: string | null;
+  against: string;
+  orderNo: string | null;
+  processName: string;
+  items: string | null;
+  fabricDescription: string | null;
+  colours: string | null;
+  gsm: string | null;
+  dia: string | null;
+  gauge: string | null;
+  loopLength: string | null;
+  rolls: number | null;
+  lots: string | null;
+  bags: number | null;
+  poNos?: string | null;
+  poRate?: string | null;
+  sizes?: string | null;
+}
+
 export interface VendorBill {
   id: string;
+  kind: BillKind;
   docNo: string | null;
   docDate: string;
   vendorId: string;
   orderId: string | null;
+  processId: string | null;
+  process: { id: string; code: string; name: string } | null;
   vendorInvoiceNo: string;
   vendorInvoiceDate: string;
   dueDate: string;
@@ -68,12 +120,29 @@ export interface VendorBill {
   cgstAmount: string;
   sgstAmount: string;
   igstAmount: string;
+  gstRatePct: string | null;
+  taxType: 'GST' | 'IGST' | 'NONE' | null;
+  taxablePct: string;
+  addAmount: string;
+  lessAmount: string;
+  discountPct: string | null;
+  discountAmount: string;
+  packingAmount: string;
+  tcsPct: string | null;
+  tcsAmount: string;
   expectedTaxable: string;
   variance: string;
   withinTolerance: boolean;
   approvalStatus: 'NOT_REQUIRED' | 'PENDING' | 'APPROVED';
   approvedAt: string | null;
   approvalNote: string | null;
+  isOpening?: boolean;
+  audit1Status: BillAuditStatus;
+  audit1At: string | null;
+  audit1Note: string | null;
+  audit2Status: BillAuditStatus;
+  audit2At: string | null;
+  audit2Note: string | null;
   remarks: string | null;
   status: string;
   version: number;
@@ -96,11 +165,17 @@ export interface VendorBill {
   order: { id: string; orderNo: string; styleNo: string } | null;
   lines: {
     id: string;
-    sourceType: 'INWARD_DC' | 'PANEL_IN';
+    sourceType: BillSourceType;
     sourceId: string;
     sourceDocNo: string;
     sourceDate: string;
+    /** Received qty of the source document. */
     billableQty: string;
+    /** Qty billed when it differs from the received qty, else null. */
+    billQty: string | null;
+    billPcs: number | null;
+    /** What the document holds (saved bills only): party D.C., order, fabric, colour, GSM, GG, LL, rolls… (Q-079). */
+    details?: BillLineDetails | null;
     unit: string;
     rate: string | null;
     expectedAmount: string | null;

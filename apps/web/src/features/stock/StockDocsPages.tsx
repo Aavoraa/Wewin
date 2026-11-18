@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { Plus, Trash2 } from 'lucide-react';
+import { ClipboardList, Plus, Trash2 } from 'lucide-react';
+import { LoadFromPo } from '../purchase/LoadFromPo';
 import {
   OTHER_PURPOSES,
   STOCK_DOC_ITEM_TYPES,
@@ -39,6 +40,9 @@ interface StockDocLine {
   unit: string;
   rate: string | null;
   reason: string | null;
+  poLineId?: string | null;
+  poNo?: string | null;
+  poRate?: string | null;
   item: { id: string; code: string; name: string; type: string; unit: string };
 }
 interface StockDoc {
@@ -205,6 +209,9 @@ interface LineForm {
   qty: string;
   rate: string;
   reason: string;
+  /** Inward from others received against a PO (Q-082). */
+  poLineId?: string | null;
+  poNo?: string | null;
 }
 interface FormValues {
   docDate: string;
@@ -245,6 +252,7 @@ export function StockDocPage() {
   const d = useDocument<StockDoc>('/stock-docs', `stock-docs/${kind}`, id);
   const doc = d.doc;
   const [labels, setLabels] = useState<Record<string, string>>({});
+  const [loadingPo, setLoadingPo] = useState(false);
   const form = useForm<FormValues>({
     defaultValues: {
       docDate: todayIst(),
@@ -293,6 +301,8 @@ export function StockDocPage() {
         qty: String(Number(l.qty)),
         rate: l.rate ? String(Number(l.rate)) : '',
         reason: l.reason ?? '',
+        poLineId: l.poLineId ?? null,
+        poNo: l.poNo ?? null,
       })),
     });
     const lb: Record<string, string> = {};
@@ -347,6 +357,7 @@ export function StockDocPage() {
           qty: l.qty.trim(),
           rate: or(l.rate),
           reason: or(l.reason),
+          poLineId: kind === 'OTHER_INWARD' ? (l.poLineId ?? null) : null,
         })),
       };
       const parsed = zStockDocInput.safeParse(payload);
@@ -391,7 +402,7 @@ export function StockDocPage() {
     { k: 'bags', label: other ? 'Del.Bag' : 'Bags', w: 'w-16', num: true, show: !rejection },
     { k: 'qty', label: other ? 'Del Kgs' : 'Qty', w: 'w-24', num: true, show: true },
     { k: 'reason', label: 'Reason', w: 'w-48', show: rejection },
-    { k: 'rate', label: 'Rate ₹', w: 'w-20', num: true, show: rejection && v.raiseDebitNote },
+    { k: 'rate', label: 'Rate ₹', w: 'w-20', num: true, show: (rejection && v.raiseDebitNote) || kind === 'OTHER_INWARD' },
   ];
 
   return (
@@ -491,9 +502,42 @@ export function StockDocPage() {
                   : 'Rejected items'}
             </CardTitle>
             {editable ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => lines.append(blank())}>
-                <Plus /> Add line
-              </Button>
+              <div className="flex gap-2">
+                {kind === 'OTHER_INWARD' ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!v.vendorId}
+                    title={v.vendorId ? 'Fill lines from an approved yarn / fabric PO' : 'Pick the supplier (vendor) first'}
+                    onClick={() => setLoadingPo(true)}
+                  >
+                    <ClipboardList /> Load from PO
+                  </Button>
+                ) : null}
+                <Button type="button" size="sm" variant="outline" onClick={() => lines.append(blank())}>
+                  <Plus /> Add line
+                </Button>
+              </div>
+            ) : null}
+            {loadingPo ? (
+              <LoadFromPo
+                endpoint="/stock-docs/po-lines"
+                vendorId={v.vendorId}
+                orderId={v.orderId || undefined}
+                already={v.lines.map((l) => l.poLineId).filter((x): x is string => !!x)}
+                onClose={() => setLoadingPo(false)}
+                onAdd={(picked) => {
+                  // Drop the empty starting line, then add one line per ticked PO line (lot typed in).
+                  const empty = v.lines.map((l, idx) => (!l.itemId && !l.qty ? idx : -1)).filter((idx) => idx >= 0);
+                  if (empty.length) lines.remove(empty);
+                  setLabels((x) => ({ ...x, ...Object.fromEntries(picked.map((p) => [p.itemId, p.item.name])) }));
+                  lines.append(
+                    picked.map((p) => ({ ...blank(), itemId: p.itemId, colour: p.colour ?? '', millName: p.millName ?? '', counts: p.counts ?? '', bags: p.bags ? String(p.bags) : '', qty: p.pending, rate: p.ratePerKg, poLineId: p.poLineId, poNo: p.poNo })),
+                  );
+                  setLoadingPo(false);
+                }}
+              />
             ) : null}
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -511,6 +555,7 @@ export function StockDocPage() {
                         {c.label}
                       </th>
                     ))}
+                  {kind === 'OTHER_INWARD' ? <th>PO</th> : null}
                   <th className="w-8" />
                 </tr>
               </thead>
@@ -551,6 +596,7 @@ export function StockDocPage() {
                           />
                         </td>
                       ))}
+                    {kind === 'OTHER_INWARD' ? <td className="whitespace-nowrap pr-1 font-mono text-xs">{v.lines[i]?.poNo ?? '—'}</td> : null}
                     <td>
                       {editable && lines.fields.length > 1 ? (
                         <Button

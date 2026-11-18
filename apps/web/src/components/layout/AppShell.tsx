@@ -1,11 +1,14 @@
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { BookOpen, ChevronDown, CircleHelp, Keyboard, KeyRound, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, CircleHelp, Keyboard, KeyRound, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { errorMessage } from '@/lib/api';
 import { ROLE_NAMES, type RoleCode } from '@wewin/shared';
 import { useAuth } from '@/lib/auth';
 import { useFy } from '@/lib/fy';
 import { cn } from '@/lib/utils';
-import { NAV } from '@/nav';
+import { MODULES, NAV, isModuleCode, navFor } from '@/nav';
+import { setModule, useModule } from '@/lib/module';
 import { LoadingState } from '../states';
 import { PrintButton } from '../PrintButton';
 import { WewinBrand, WewinMark } from '../Brand';
@@ -52,6 +55,7 @@ const inGroup = (pathname: string, to: string) => (to === '/' ? pathname === '/'
 function Sidebar({ onNavigate, collapsed = false, onToggle, transparent }: { onNavigate?: () => void; collapsed?: boolean; onToggle?: () => void; transparent?: boolean }) {
   const { can } = useAuth();
   const { pathname } = useLocation();
+  const module = useModule();
   // Each section is a dropdown: the user's choice is remembered; untouched sections open only
   // when they hold the current page.
   const [navOpen, setNavOpen] = useState(readNavOpen);
@@ -87,7 +91,7 @@ function Sidebar({ onNavigate, collapsed = false, onToggle, transparent }: { onN
           </button>
         ) : null}
       </div>
-      {NAV.map((g) => {
+      {navFor(module).map((g) => {
         const items = g.items.filter((i) => can(i.perm));
         if (!items.length) return null;
         const hasActive = items.some((i) => inGroup(pathname, i.to));
@@ -201,10 +205,60 @@ function PrintHeader() {
   );
 }
 
+/** Exporter / unit this login works in, with a menu to switch to another unit the user may use (Q-085). */
+function UnitSwitcher() {
+  const { user, switchUnit } = useAuth();
+  const navigate = useNavigate();
+  if (!user) return null;
+  const label = (
+    <span className="leading-tight">
+      <span className="block max-w-40 truncate text-xs font-medium text-slate-900">{user.unit.exporter.name}</span>
+      <span className="block max-w-40 truncate text-[11px] text-muted-foreground">{user.unit.name}</span>
+    </span>
+  );
+  if (user.units.length < 2) return <span className="hidden items-center gap-1.5 rounded-lg px-2 md:flex"><Building2 className="size-4 text-muted-foreground" />{label}</span>;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="hidden items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-accent md:flex" aria-label="Switch unit">
+          <Building2 className="size-4 text-muted-foreground" />
+          {label}
+          <ChevronDown className="size-4 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel>Switch unit</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {user.units.map((u) => (
+          <DropdownMenuItem
+            key={u.id}
+            onSelect={() => {
+              if (u.id === user.unit.id) return;
+              void switchUnit(u.id)
+                .then(() => {
+                  navigate('/');
+                  toast.success(`Now working in ${u.exporter.name} · ${u.name}`);
+                })
+                .catch((e: unknown) => toast.error(errorMessage(e)));
+            }}
+          >
+            {u.id === user.unit.id ? <Check /> : <span className="size-4" />}
+            <span className="leading-tight">
+              <span className="block">{u.name}</span>
+              <span className="block text-xs text-muted-foreground">{u.exporter.name}</span>
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** App shell (A§9): module sidebar, top bar with brand, search, notifications, help and user menu. */
 export function AppShell() {
   const { user, logout } = useAuth();
   const fy = useFy();
+  const module = useModule();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   // The full sidebar is the default on every page; the toggle squeezes it to icons and the choice is remembered.
@@ -267,6 +321,24 @@ export function AppShell() {
             <NotificationBell />
             <HelpMenu />
             <VoiceAssistant />
+            <UnitSwitcher />
+            <label className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
+              Module
+              <Select
+                className="h-8 w-40"
+                value={module}
+                onChange={(e) => {
+                  if (isModuleCode(e.target.value)) setModule(e.target.value);
+                }}
+                aria-label="Module"
+              >
+                {MODULES.map((m) => (
+                  <option key={m.code} value={m.code}>
+                    {m.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
             <label className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
               FY
               <Select className="h-8 w-24" value={fy.fyCode} onChange={(e) => fy.setFy(e.target.value)} aria-label="Financial year">

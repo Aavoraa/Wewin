@@ -33,7 +33,7 @@ export async function ownerToken(app: Express, req: typeof request): Promise<str
     const { signAccessToken } = await import('../src/core/auth/tokens');
     const owner = await prisma.user.findUnique({ where: { username: 'owner' } });
     if (!owner?.isActive) throw new Error('No active "owner" user in the target database');
-    return signAccessToken(owner.id, randomUUID());
+    return signAccessToken(owner.id, randomUUID(), '00000000-0000-4000-8000-000000000001');
   }
   const password = process.env.SEED_OWNER_PASSWORD;
   if (!password) throw new Error('SEED_OWNER_PASSWORD is not set in .env');

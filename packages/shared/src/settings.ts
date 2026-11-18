@@ -56,6 +56,16 @@ export const SETTINGS_SCHEMA = {
     default: ['Hole', 'Stain / oil mark', 'Shade variation', 'Slub / yarn fault', 'Broken stitch', 'Skip stitch', 'Open seam', 'Puckering', 'Measurement out', 'Uncut thread', 'Print / embroidery fault', 'Label / trim missing'],
     description: 'Defect names offered on quality checks (Q-063).',
   },
+  'purchase.yarnOverReceiptPct': {
+    schema: zPct(),
+    default: '0',
+    description: 'How much more than a yarn PO line may be received against it, as % of the ordered qty (GRN against PO, Q-080). 0 = never more than ordered.',
+  },
+  'purchase.fabricOverReceiptPct': {
+    schema: zPct(),
+    default: '0',
+    description: 'How much more than a fabric PO line may be received against it, as % of the ordered qty (GRN against PO, Q-082). 0 = never more than ordered.',
+  },
   'purchase.roundNetToRupee': {
     schema: z.boolean(),
     default: true,
@@ -65,6 +75,46 @@ export const SETTINGS_SCHEMA = {
     schema: z.boolean(),
     default: true,
     description: "A vendor bill cannot be saved or posted when the vendor's certificate is missing or expired on the bill date or today (Q-074).",
+  },
+  'accounts.billAuditRequiredForPayment': {
+    schema: z.boolean(),
+    default: false,
+    description: 'A vendor bill can be paid only after it passes the 2nd audit (bills passing, Q-078). Off: audits are recorded but do not hold payments.',
+  },
+  'tally.companyName': {
+    schema: z.string().trim().max(120),
+    default: '',
+    description: 'Tally company the debit-note import file is for (blank = the company open in Tally) (Q-084).',
+  },
+  'tally.debitNoteVoucherType': {
+    schema: z.string().trim().min(1).max(60),
+    default: 'Debit Note',
+    description: 'Tally voucher type for Wewin debit notes (Q-084).',
+  },
+  'tally.jobWorkLedger': {
+    schema: z.string().trim().min(1).max(120),
+    default: 'Job Work Charges',
+    description: 'Tally ledger credited with the taxable value of debit notes on job-work bills and manual debit notes (Q-084).',
+  },
+  'tally.purchaseLedger': {
+    schema: z.string().trim().min(1).max(120),
+    default: 'Purchase Accounts',
+    description: 'Tally ledger credited with the taxable value of debit notes on purchase bills (Q-084).',
+  },
+  'tally.cgstLedger': {
+    schema: z.string().trim().min(1).max(120),
+    default: 'Input CGST',
+    description: 'Tally ledger for the CGST on debit notes (Q-084).',
+  },
+  'tally.sgstLedger': {
+    schema: z.string().trim().min(1).max(120),
+    default: 'Input SGST',
+    description: 'Tally ledger for the SGST on debit notes (Q-084).',
+  },
+  'tally.igstLedger': {
+    schema: z.string().trim().min(1).max(120),
+    default: 'Input IGST',
+    description: 'Tally ledger for the IGST on debit notes (Q-084).',
   },
   'accounts.feedEnabled': {
     schema: z.boolean(),

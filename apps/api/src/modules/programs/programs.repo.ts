@@ -1,5 +1,5 @@
 import { Prisma } from '@wewin/db';
-import { type Tx, prisma } from '../../core/db';
+import { type Tx, prisma, unitFilter } from '../../core/db';
 import { type Paging } from '../../core/list';
 
 type Db = Tx | typeof prisma;
@@ -159,7 +159,7 @@ export const programsRepo = {
     const rows = await prisma.$queryRaw<{ counts: string; item_id: string }[]>`
       SELECT DISTINCT ON (lower(m->>'counts')) lower(m->>'counts') AS counts, m->>'yarnItemId' AS item_id
       FROM fabric_programs p CROSS JOIN LATERAL jsonb_array_elements(p.yarn_mix) m
-      WHERE p.status <> 'CANCELLED' AND m->>'yarnItemId' IS NOT NULL AND lower(m->>'counts') = ANY(${counts.map((c) => c.toLowerCase())}::text[])
+      WHERE p.status <> 'CANCELLED' AND m->>'yarnItemId' IS NOT NULL AND lower(m->>'counts') = ANY(${counts.map((c) => c.toLowerCase())}::text[]) ${unitFilter('p')}
       ORDER BY lower(m->>'counts'), p.created_at DESC`;
     return new Map(rows.map((r) => [r.counts, r.item_id]));
   },

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
@@ -67,6 +67,7 @@ const VOICE_DN: VoiceFormSpec = { title: 'Debit note', fields: [{ name: 'docDate
 export function DebitNotePage() {
   const { id } = useParams();
   const { can } = useAuth();
+  const [search] = useSearchParams();
   const d = useDocument<DebitNote>('/debit-notes', 'debit-notes', id);
   const doc = d.doc;
   const [labels, setLabels] = useState<Record<string, string>>({});
@@ -75,6 +76,16 @@ export function DebitNotePage() {
     defaultValues: { docDate: todayIst(), vendorId: '', billId: null, remarks: '', lines: [{ _key: newKey(), description: '', qty: '', unit: 'PCS', rate: '' }] },
   });
   const voice = useVoiceFill({ form, spec: VOICE_DN, enabled: (doc?.status ?? 'DRAFT') === 'DRAFT' && can('accounts.debitnote.create'), setLabels, linesName: 'lines', newLine: () => ({ _key: newKey(), description: '', qty: '', unit: 'PCS', rate: '' }) as DnRow, isBlankLine: (l: DnRow) => !l.description && !l.qty });
+  // Opened with "Debit" from a bill: vendor and bill come filled in.
+  useEffect(() => {
+    if (!d.isNew) return;
+    const v = search.get('vendorId');
+    if (!v) return;
+    form.setValue('vendorId', v, { shouldDirty: true });
+    form.setValue('billId', search.get('billId'), { shouldDirty: true });
+    const name = search.get('vendorName');
+    if (name) setLabels((x) => ({ ...x, [v]: name }));
+  }, [d.isNew, search, form]);
   useEffect(() => {
     if (!doc) return;
     form.reset({

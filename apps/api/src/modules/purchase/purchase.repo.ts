@@ -1,4 +1,4 @@
-import { type Prisma } from '@wewin/db';
+import { Prisma } from '@wewin/db';
 import { type Tx, prisma } from '../../core/db';
 import { type Paging } from '../../core/list';
 
@@ -86,6 +86,45 @@ export const purchaseRepo = {
         order: { select: { id: true, orderNo: true, styleNo: true } },
       },
     });
+  },
+  /** Yarn PO lines with their PO header (GRN against PO, Q-080). */
+  yarnLines(where: Prisma.PurchaseOrderLineWhereInput, db: Db = prisma) {
+    return this.receiptLines(where, ['YARN'], db);
+  },
+  /** Yarn / fabric PO lines with their PO header, for receipts against them (Q-080, Q-082). */
+  receiptLines(where: Prisma.PurchaseOrderLineWhereInput, kinds: ('YARN' | 'FABRIC')[], db: Db = prisma) {
+    return db.purchaseOrderLine.findMany({
+      where: { ...where, po: { kind: { in: kinds }, ...(where.po as object | undefined) } },
+      orderBy: [{ po: { docNo: 'asc' } }, { lineNo: 'asc' }],
+      include: {
+        po: { select: { id: true, docNo: true, docDate: true, status: true, kind: true, vendorId: true, orderId: true, vendor: { select: { name: true } }, order: { select: { orderNo: true, styleNo: true } } } },
+        item: { select: { id: true, code: true, name: true, unit: true } },
+        order: { select: { id: true, orderNo: true, styleNo: true } },
+      },
+    });
+  },
+  /**
+   * Qty received against PO lines on posted yarn receipts and posted inward from others (Q-080, Q-082),
+   * optionally leaving out the document being checked.
+   */
+  async receivedByPoLine(poLineIds: string[], db: Db = prisma, except: { yarnReceiptId?: string; stockDocId?: string } = {}) {
+    const out = new Map<string, Prisma.Decimal>();
+    if (!poLineIds.length) return out;
+    const [yr, sd] = await Promise.all([
+      db.yarnReceiptLine.groupBy({
+        by: ['poLineId'],
+        where: { poLineId: { in: poLineIds }, receipt: { status: 'POSTED', ...(except.yarnReceiptId ? { id: { not: except.yarnReceiptId } } : {}) } },
+        _sum: { qtyKg: true },
+      }),
+      db.stockDocLine.groupBy({
+        by: ['poLineId'],
+        where: { poLineId: { in: poLineIds }, doc: { status: 'POSTED', kind: 'OTHER_INWARD', ...(except.stockDocId ? { id: { not: except.stockDocId } } : {}) } },
+        _sum: { qty: true },
+      }),
+    ]);
+    for (const r of yr) out.set(r.poLineId!, (out.get(r.poLineId!) ?? new Prisma.Decimal(0)).plus(r._sum.qtyKg ?? 0));
+    for (const r of sd) out.set(r.poLineId!, (out.get(r.poLineId!) ?? new Prisma.Decimal(0)).plus(r._sum.qty ?? 0));
+    return out;
   },
   /** Yarn PO lines of an order (line order, else the PO's) on POs that are not cancelled (Q-073). */
   yarnLinesForOrder(orderId: string, db: Db = prisma) {

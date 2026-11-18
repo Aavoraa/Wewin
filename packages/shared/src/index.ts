@@ -27,3 +27,5 @@ export * from './quality';
 export * from './purchase';
 export * from './stockdocs';
 export * from './yarnPrograms';
+export * from './tally';
+export * from './units';

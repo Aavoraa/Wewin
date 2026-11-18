@@ -19,6 +19,9 @@ import {
   zRateContractInput,
   zRateContractUpdate,
   zRateListQuery,
+  zBillAudit,
+  zTallyExport,
+  zTallyQueueQuery,
 } from '@wewin/shared';
 import { requirePermission } from '../../core/auth/auth.middleware';
 import { HANDLED, ListResult, handle } from '../../core/http';
@@ -26,6 +29,7 @@ import { mountDocRoutes } from '../../core/doc-routes';
 import { sendWorkbook } from '../../core/excel';
 import { ratesService } from './rates.service';
 import { billsService } from './bills.service';
+import { tallyService } from './tally.service';
 import { debitNotesService } from './debitnotes.service';
 import { paymentsService } from './payments.service';
 import { statementsService } from './statements.service';
@@ -52,8 +56,12 @@ accountsRouter.post('/rate-contracts/:id/deactivate', rates, handle(id, ({ param
 
 // ───────── Vendor bills ─────────
 const billCreate = requirePermission('accounts.bill.create');
-accountsRouter.get('/vendor-bills/match', billCreate, handle({ query: zBillMatchQuery }, async ({ query }) => all(await billsService.candidates(query.vendorId, query.orderId ?? null))));
+accountsRouter.get('/vendor-bills/match', billCreate, handle({ query: zBillMatchQuery }, async ({ query }) => (query.kind === 'ACCESSORY' ? all(await billsService.accessoryCandidates(query.vendorId, query.orderId ?? null)) : query.kind === 'PURCHASE' ? all(await billsService.purchaseCandidates(query.vendorId, query.orderId ?? null)) : all(await billsService.candidates(query.vendorId, query.orderId ?? null, query.processId)))));
 accountsRouter.post('/vendor-bills/preview', billCreate, handle({ body: zBillInput }, ({ body }) => billsService.preview(body)));
+accountsRouter.get('/tally/debit-notes', requirePermission('accounts.tally.export'), handle({ query: zTallyQueueQuery }, ({ query }) => tallyService.queue(query.queue)));
+accountsRouter.post('/tally/debit-notes/export', requirePermission('accounts.tally.export'), handle({ body: zTallyExport }, ({ body, user }) => tallyService.export(body, user)));
+accountsRouter.get('/vendor-bills/:id/check-list', requirePermission('accounts.view'), handle({ params: zIdParam }, ({ params }) => billsService.checkList(params.id)));
+accountsRouter.post('/vendor-bills/:id/audit', requirePermission('accounts.view'), handle({ params: zIdParam, body: zBillAudit }, ({ params, body, user }) => billsService.audit(params.id, body, user)));
 accountsRouter.post('/vendor-bills/:id/approve', requirePermission('accounts.bill.approve'), handle({ params: zIdParam, body: zApprove }, ({ params, body, user }) => billsService.approve(params.id, body.note, user)));
 mountDocRoutes(accountsRouter, '/vendor-bills', {
   perms: { view: 'accounts.view', create: 'accounts.bill.create', post: 'accounts.bill.post', cancel: 'accounts.bill.cancel' },

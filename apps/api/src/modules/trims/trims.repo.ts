@@ -13,7 +13,20 @@ const include = {
     orderBy: { lineNo: 'asc' },
     include: {
       item: { select: { id: true, code: true, name: true, unit: true, trimGroup: true } },
-      poLine: { select: { id: true, orderId: true, po: { select: { id: true, docNo: true, orderId: true } }, order: { select: { orderNo: true } } } },
+      poLine: {
+        select: {
+          id: true,
+          orderId: true,
+          qty: true,
+          unit: true,
+          rate: true,
+          per: true,
+          colour: true,
+          size: true,
+          po: { select: { id: true, docNo: true, orderId: true } },
+          order: { select: { orderNo: true } },
+        },
+      },
     },
   },
 } satisfies Prisma.TrimsDocInclude;
@@ -44,6 +57,32 @@ const rows = (lines: LineData[]) =>
   }));
 
 export const trimsRepo = {
+  // ───────── For accessories purchase bills (Q-089): posted receipts of a supplier ─────────
+  billable(vendorId: string, orderId: string | null, db: Db = prisma) {
+    return db.trimsDoc.findMany({
+      where: { type: 'RECEIPT', vendorId, status: 'POSTED', OR: [{ billId: null }, { billedInFull: false }], ...(orderId ? { orderId } : {}) },
+      orderBy: { docDate: 'asc' },
+      include,
+    });
+  },
+  byIdsForBill(ids: string[], db: Db = prisma) {
+    if (!ids.length) return Promise.resolve([]);
+    return db.trimsDoc.findMany({ where: { id: { in: ids } }, include });
+  },
+  async lockForBill(tx: Tx, ids: string[]) {
+    if (!ids.length) return;
+    await tx.$queryRaw`SELECT 1 FROM trims_docs WHERE id = ANY(${[...new Set(ids)].sort()}::uuid[]) ORDER BY id FOR UPDATE`;
+  },
+  setBill(tx: Tx, ids: string[], billId: string, full = true) {
+    return tx.trimsDoc.updateMany({ where: { id: { in: ids }, status: 'POSTED', type: 'RECEIPT', OR: [{ billId: null }, { billedInFull: false }] }, data: { billId, billedInFull: full } });
+  },
+  setBillState(tx: Tx, id: string, billId: string | null, full: boolean) {
+    return tx.trimsDoc.update({ where: { id }, data: { billId, billedInFull: full } });
+  },
+  clearBill(tx: Tx, billId: string) {
+    return tx.trimsDoc.updateMany({ where: { billId }, data: { billId: null } });
+  },
+
   list(where: Prisma.TrimsDocWhereInput, order: Prisma.TrimsDocOrderByWithRelationInput, p: Paging) {
     return prisma.$transaction([
       prisma.trimsDoc.findMany({ where, orderBy: order, skip: p.skip, take: p.take, include }),

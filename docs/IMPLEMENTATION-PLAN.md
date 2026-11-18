@@ -107,6 +107,86 @@ Acceptance: login/refresh/logout/me with lockout; permission guard on all routes
 ## Progress log
 (Newest first. Each entry: what was verified, how.)
 
+### 2026-11-17 — Accessories Purchase Bill Entry; discount, packing, TCS on bills (Q-089)
+- Migration `20261118100000_accessory_bills`: `trims_docs.bill_id / billed_in_full`; bill kind ACCESSORY (CHECK); `vendor_bills.discount_pct / discount_amount / packing_amount / tcs_pct / tcs_amount` (CHECK ≥ 0, % 0–100).
+- Shared: bill source `TRIMS_RECEIPT`, kind `ACCESSORY`; `billCharges()`, `billTcs()`; `billInvoiceTotal()` takes discount / packing / TCS. API: trims `billable / forBill / lock / markBilled / restoreBilled`, `poPositionsForReceipts`; bills offer, price, post, cancel accessory receipts; check list `accessoryItems`, `poLines`; overview open-bills SQL counts add / less / charges; Tally posts accessory debit notes to the purchase ledger.
+- Web: Accessories › Accessories Purchase Bill Entry (`/accessory-bills`), party D.C. / order / colour-size columns, PO rate "rate/per"; charges fields on purchase-type bills with automatic discount, GST base and TCS; check list print laid out as the desktop Accessories Purchase Bill Chk.List with the PO-wise table and amount in words. Export menu also shows in the Production module.
+- Verified: Vitest (charges, TCS, totals incl. the desktop 958.00 example; nav modules), Supertest `accessory-bills.test.ts` (offered at PO rate on the accessories bill only, purchase bill refuses it, charges in the net 194.44, post marks billed, second bill refused, check list item and PO position, cancel frees the receipt).
+
+### 2026-11-17 — Module choice at login (Q-088)
+- `nav.ts`: `MODULES` (All, Order & Planning, Yarn to Fabric, Production), `modules` on each menu group, `navFor()`; `lib/module.ts` remembers the choice on the computer.
+- Login page: module picker; top bar: Module list. The sidebar shows the chosen module's menus plus Overview / Masters / Settings. UI only — permissions unchanged.
+- Verified: Vitest `nav.test.ts` (All shows everything, each module's menus, shared menus everywhere, every menu reachable from a module); web typecheck and lint.
+
+### 2026-11-17 — Bill tax type / taxable %, checklist Lot · Process · UoM (Q-087)
+- Migration `20261117260000_bill_tax_type`: `vendor_bills.tax_type` (GST / IGST / NONE / null = by state, CHECK) and `taxable_pct` (default 100, 0 < % ≤ 100, CHECK).
+- Shared `BILL_TAX_TYPES`, `billTax()` (type + taxable %), `billGst()` taxable % argument; bill schema rules: the chosen type must match the GST amounts.
+- Bill entry screen: Tax type and "Tax on % of taxable"; automatic GST and "Work out GST" follow them. Check list: separate Lot, Process and UoM columns; abstract shows tax type / rate / % when not the defaults. API check list lines carry `lots` and `processName`.
+- Verified: Vitest (`billTax` all types and 60 %, schema rules), Supertest (tax type and % stored and returned, mismatched type refused, check list line process / unit).
+
+### 2026-11-17 — Dyeing bill passing: GRN search, Debit button, checklist Debit (Q-086)
+- Bill entry (purchase and every job-work invoice): search by Party D.C. / supplier invoice or by GRN no., F2 to focus, Enter ticks the found documents; ticked documents stay visible.
+- Posted bill: **Debit** button opens a new debit note with the vendor and bill filled in.
+- Check list: `reconciliation[].debitKg / debitAmount / colours` (excess-loss lines on posted debit notes per outward D.C.); print laid out as the desktop Dyeing Bill Checklist with a Debit column and totals. Return column left open (Q-086).
+- Verified: Supertest (check list Debit 1.000 kg / ₹280 after the excess-loss note, 0 without one; a cancelled note is not counted); web typecheck.
+
+### 2026-11-17 — Exporter / unit at login, fully separate units (Q-085)
+- Migration `20261117240000_exporters_units`: `exporters` (first one copied from company settings), `units` (main unit `MAIN`, blank number prefix, unique prefixes), `user_units`; `unit_id` (default main unit) on the 32 document / stock / alert / report tables; `sessions.unit_id`; `number_series` unique per unit; `stock_balances` view per unit.
+- Unit scoping in `core/db.ts`: Prisma extension adds the request's unit to every read / write of the 32 models; `unitScoped()` (CTEs named after the tables) and `unitFilter()` for hand-written SQL (ledger balances, reports, stock, WIP, quality, programs). Numbering prefixes the unit's `doc_prefix`. Jobs run per unit (queued jobs keep the unit that queued them, cron jobs loop over active units).
+- Auth: login takes an optional `unitId` (default main unit, else first allowed), checked against `user_units` (none = every active unit); token claim `unit`; `authenticate` sets the request's unit and re-checks access; refresh keeps the unit; `POST /auth/switch-unit`; public `GET /auth/units`; `/auth/me` returns the unit, its exporter and the allowed units.
+- Settings › Company now edits the current unit's exporter (first exporter mirrors to `company_settings`); letterhead / GSTIN / state follow the login unit. `GET/POST/PUT /exporters`, `/units`, `…/active` (`settings.view` / `settings.edit`). Users master gets "Units this user may log into".
+- Web: Exporter and Unit pickers on the login page (remembered on the computer), unit switcher in the top bar, Settings › Exporters & units.
+- Verified: Vitest (`pickUnit`), Supertest `units.test.ts` (public unit list, default / chosen unit, letterhead per exporter, orders and stock invisible across units, posting refused without the unit's own stock, unit prefix on numbers, movements stamped with the unit, disallowed unit refused, switch unit + refresh keeps it, permission, main unit cannot be deactivated, duplicate prefix refused).
+
+### 2026-11-17 — Debit Note Posting to Accounts → Tally (Q-084)
+- Shared `tally.ts`: `tallyDebitNotesXml` / `tallyDebitNoteVoucher` (Tally import envelope, Debit Note voucher Dr vendor / Cr job-work or purchase / Cr CGST + SGST or IGST, bill-wise Agst Ref or On Account, cancellation by voucher number), `tallyGstSplit`, `tallyEscape`.
+- Migration `20261117220000_tally_debit_notes`: `debit_notes.tally_exported_at / _by_id / tally_cancel_exported_at`; `vendors.tally_ledger_name`. Permission `accounts.tally.export`; settings `tally.*` (company, voucher type, ledgers).
+- API `GET /tally/debit-notes?queue=PENDING|POSTED`, `POST /tally/debit-notes/export` (ids, mark) → `{ fileName, xml, count, total }`, audit EXPORT. Web: Bills Entry › Debit Note Posting to Accounts; vendor "Tally ledger name".
+- Verified: Vitest (balanced voucher, GST split, Agst Ref / On Account, purchase ledger, cancellation, escaping, envelope), Supertest (draft not queued, posted queued, permission, export + mark, posted once only, download again unmarked, audit, cancellation queued and sent once).
+
+### 2026-11-17 — Fabric GRN against PO (Q-082)
+- Migration `20261117180000_fabric_grn_against_po`: `stock_doc_lines.po_line_id` → purchase_order_lines. Setting `purchase.fabricOverReceiptPct` (default 0).
+- Purchase module owns the PO receipt position: `receiptLines` (yarn / fabric PO lines), `receivedByPoLine` (posted yarn receipts + posted inward from others), `openReceiptLines`, `checkReceiptAgainstPo` (approved PO, supplier, item, over-receipt by PO kind) — used by yarn receipts (Q-080) and inward from others. `GET /stock-docs/po-lines`.
+- Inward from others keeps the line rate; lines return `poNo`, `poRate`; purchase bills show PO no. / rate for inward from others too.
+- Web: shared `LoadFromPo` dialog (yarn receipt and Yarn/Fabric Inward from Others), PO and Rate columns on the inward.
+- Verified: Supertest (draft PO refused, pending / received, over-receipt refused with qty left, supplier required, only inward from others may name a PO line, purchase-bill candidate at the PO rate), existing yarn GRN tests unchanged.
+
+### 2026-11-17 — Scan a supplier invoice into a purchase bill (Q-083)
+- Scan target `PURCHASE_BILL` (label "Purchase bill"): bill header mapping as the job-work bill (vendor, invoice no. / date, taxable, CGST / SGST / IGST) with `kind: 'PURCHASE'` and no process; sources are posted yarn receipts / inward from others from `purchaseCandidates`, suggested by supplier invoice no. (case / space-insensitive) or the receipt no. printed on the invoice (`matchPurchaseSources`); picking validates against `purchaseCandidates`; duplicate check by vendor + invoice no. on bills; apply creates a draft bill through `billsService.create`; the created document links to `/purchase-bills/:id`.
+- Classification unchanged (a yarn invoice still defaults to a yarn receipt); the reviewer switches "Create as", or uploads from **Scan invoice** on the Purchase bills register. Review page lists receipts with supplier invoice no., items, qty, rate and expected amount.
+- Migration `20261117200000_purchase_bill_scan_target` widens the `invoice_scans_target` CHECK constraint to `PURCHASE_BILL`.
+- Verified: shared Vitest (target, matcher, validation, payload), typecheck; Supertest case added (receipt suggested → draft PURCHASE bill → duplicate flagged → job-work D.C. refused).
+
+### 2026-11-17 — Bill the rest later (Q-081)
+- Migration `20261117160000_partial_billing`: `billed_in_full` (default true) on inward D.C.s, panel D.C.s, yarn receipts and stock documents.
+- Bills: what is left to bill = received − billed on posted bills; candidates offer it (with `receivedQty`, `billedBefore`); lines are priced on it; a line with a bill qty marks the document part-billed (`billedInFull = false`, still on the bill), a line without completes it; posting refuses a draft whose document was part-billed by another bill since it was saved; cancelling restores each document to the other posted bills covering it or to unbilled; excess-loss / reject debits only from the completing bill.
+- Web: bill lines show "Qty to bill" with "left of … · … billed" for part-billed documents.
+- Verified: Supertest (part bill, what is left offered and priced, more than left refused, two drafts for the rest — second refused, completion, cancel of the first part hands its qty back, full cancel back to unbilled, inward cancel refused while on a bill).
+
+### 2026-11-17 — Yarn GRN against PO (Q-080), automatic GST, print gaps
+- Migration `20261117140000_yarn_grn_against_po`: `yarn_receipt_lines.po_line_id` → purchase_order_lines. Setting `purchase.yarnOverReceiptPct` (default 0). API `GET /yarn-receipts/po-lines` (approved yarn PO lines of a mill with ordered / received / pending / PO rate per kg); receipts check PO, supplier, yarn and the remaining kg on save and on post; receipt lines return `poNo`, `poRatePerKg`. Web: **Load from PO** on the yarn receipt and a PO column. Purchase bills show PO no. and P.O. rate.
+- Bills: GST works itself out when the taxable amount or GST % is typed (amounts stay editable).
+- Prints: buyer address and contact on shipment advice and buyer receipt; "Against panel D.C." on recut slips; approver's name on QC and Program Defined prints.
+- Verified: Supertest (draft PO refused, wrong yarn / supplier refused, over-receipt refused with kg left, pending after posting, second draft re-checked on post, cancel frees kg, bill candidates carry PO no. and rate; buyer address, recut D.C. no., approver names returned), typecheck, lint.
+
+### 2026-11-17 — Bills Entry menu per process; descriptions on saved bills (Q-079)
+- Sidebar **Bills Entry** group in the desktop's order: Yarn/Fabric Purchase Bill Entry, nine JobWork Invoice entries (Yarn Dyeing, Yarn Twisting, Yarn Other Process, Knitting, Grey Process, Dyeing, Fabric to Yarn, Printing = FABRIC_PRINTING, Fabric Other Process), Bills Passing 1st / 2nd Audit. Each invoice entry (`/jobwork-invoices/:processCode`) is the bills register filtered to that process; New opens a bill with the process set.
+- Saved bills return `lines[].details` (party D.C., order, fabric / items, colour, GSM, dia, GG, LL, rolls; lots / bags for purchases); the saved bill screen, the bill print and the check list show them.
+- Verified: typecheck, lint, Supertest (saved job-work and purchase bill lines carry their details).
+
+### 2026-11-17 — Purchase bills and bill-entry details (Q-079)
+- Migration `20261117120000_purchase_bills_bill_details`: `vendor_bills.kind` (JOBWORK / PURCHASE), `process_id`, `add_amount`, `less_amount`, `gst_rate_pct`; `vendor_bill_lines.process_id` nullable, `bill_qty` (≤ received, CHECK), `bill_pcs`; `yarn_receipts.bill_id`, `stock_docs.bill_id`.
+- Shared: bill sources `YARN_RECEIPT`, `STOCK_INWARD`; `BILL_KIND_SOURCES` rule; `billGst()` (CGST / SGST halves or IGST, to the paisa); `billInvoiceTotal()` (taxable + GST + add − less).
+- API: purchase candidates (`/vendor-bills/match?kind=PURCHASE`) from yarn receipts and inward from others at their own rates; job-work candidates filter by process and carry order ref, fabric, colour, GSM, GG, LL, rolls; bill qty prices the line; posting marks receipts / inwards billed and cancelling frees them; cancelling a billed receipt / inward is refused; list filter `kind`, `processId`; check list uses the bill qty.
+- Web: Accounts › Purchase bills; process, GST %, add / less on the bill; bill qty / pcs and the desktop columns on the lines; prints show add / less and bill qty.
+- Verified: Vitest (GST split, invoice total, kind / source rules, bill qty), Supertest (process filter and refusal, bill qty above received refused, bill qty pricing, add / less in the total, purchase candidates at the receipt rate, purchase bill post / double-bill / receipt cancel guard / freed on cancel, kind filter).
+
+### 2026-11-17 — Bills passing 1st / 2nd audit and the bill check list (Q-078)
+- Migration `20261117100000_bill_audits`: `vendor_bills.audit1_*` / `audit2_*` (status PENDING / PASSED / HELD, by, at, note), CHECK that the 2nd audit follows a passed 1st. Permissions `accounts.bill.audit1` (Accountant) and `accounts.bill.audit2` (Owner); setting `accounts.billAuditRequiredForPayment` (default off).
+- API: `POST /vendor-bills/:id/audit` (level 1 / 2, PASS / HOLD + reason, audit log), list filter `audit=PENDING1|PENDING2|HELD|PASSED`, `GET /vendor-bills/:id/check-list`; payments refuse unaudited bills when the setting is on.
+- Web: Accounts › Bills Passing 1st Audit and Bill Passing 2nd Audit (queues with Pass / Hold and the check list); audit column on the bills register; audit badges and a Check list button on the bill. New `bill-check-list` print.
+- Verified: Vitest (audit input), Supertest (draft refused, permission per level, 2nd before 1st refused, hold needs a reason, queues, payment held when the setting is on, audit log, check list reconciliation and auditors). Not yet seen in a logged-in browser.
+
 ### 2026-11-12 — Every document prints in bill format
 - Wewin asked that every print be in bill format, not a screen layout. `DocumentForm` now opens the document's print layout for drafts too (marked DRAFT); on a document not yet saved, Print saves the draft first and then opens its bill layout. The top-bar Print and Ctrl+P on a document page open the bill layout too; only list and report pages print as shown.
 - `BillDoc` (shared bill layout: letterhead, title, number / date, party with vendor certificate, details, lines table, totals, signatures). New prints: sewing issue, sewing output, carton, trims documents, panel inward, recut slip, cutting lay, quality checks, Program Defined, shipment advice, buyer receipt; Yarn/Fabric inward and order transfers print one copy; the SPL request print is now linked. Every document form has a print layout.

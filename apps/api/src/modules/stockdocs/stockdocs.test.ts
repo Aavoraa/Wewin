@@ -103,3 +103,44 @@ describe('Rejection Entry (Q-071)', () => {
     expect(got.lines[0].item).toHaveProperty('hsnCode');
   });
 });
+
+describe('Fabric GRN against PO on inward from others (Q-082)', () => {
+  it('receives fabric against an approved fabric PO with its rate; pending, over-receipt and kind rules', async () => {
+    const po = (
+      await owner.post('/api/v1/purchase-orders', {
+        kind: 'FABRIC', docDate: '2026-11-02', vendorId: m.vendors.mill.id, orderId: orderA.id, deliveryDate: '2026-11-12',
+        lines: [{ itemId: m.items.greige.id, gsm: 160, qty: '200', rate: '150' }],
+      })
+    ).body.data;
+    const poLineId = po.lines[0].id as string;
+    const lot = `FB-${randomUUID().slice(0, 6)}`;
+    const inward = (qty: string, over: Record<string, unknown> = {}) => ({
+      kind: 'OTHER_INWARD', docDate: '2026-11-10', purpose: 'Purchase', vendorId: m.vendors.mill.id, partyName: null, orderId: orderA.id,
+      lines: [{ itemId: m.items.greige.id, lot, qty, rate: '150', poLineId }], ...over,
+    });
+
+    ok(await owner.post('/api/v1/stock-docs', inward('50')), 409); // PO not approved yet
+    ok(await owner.post(`/api/v1/purchase-orders/${po.id}/approve`, { note: 'Agreed' }));
+    const open = await owner.get(`/api/v1/stock-docs/po-lines?vendorId=${m.vendors.mill.id}`);
+    ok(open);
+    expect(open.body.data.find((l: { poLineId: string }) => l.poLineId === poLineId)).toMatchObject({ poKind: 'FABRIC', ordered: '200.000', pending: '200.000', ratePerKg: '150' });
+
+    ok(await owner.post('/api/v1/stock-docs', inward('200.5')), 409); // more than ordered
+    ok(await owner.post('/api/v1/stock-docs', inward('50', { vendorId: null, partyName: 'Walk-in' })), 400); // no supplier
+    const d = await owner.post('/api/v1/stock-docs', inward('120'));
+    ok(d, 201);
+    expect(d.body.data.lines[0]).toMatchObject({ rate: '150', poNo: expect.any(String), poRate: '150' });
+    ok(await owner.post(`/api/v1/stock-docs/${d.body.data.id}/post`));
+    expect((await owner.get(`/api/v1/stock-docs/po-lines?vendorId=${m.vendors.mill.id}`)).body.data.find((l: { poLineId: string }) => l.poLineId === poLineId)).toMatchObject({ received: '120.000', pending: '80.000' });
+    const tooMuch = await owner.post('/api/v1/stock-docs', inward('81'));
+    expect(tooMuch.status).toBe(409);
+    expect(tooMuch.body.error.message).toContain('80.000 kg left');
+
+    // Only an inward from others is received against a PO.
+    ok(await owner.post('/api/v1/stock-docs', { kind: 'OTHER_DELIVERY', docDate: '2026-11-10', purpose: 'Sample', partyName: 'Sampling', lines: [{ itemId: m.items.greige.id, lot, qty: '1', poLineId }] }), 400);
+
+    // A purchase bill shows the PO next to the inward.
+    const cands = (await owner.get(`/api/v1/vendor-bills/match?vendorId=${m.vendors.mill.id}&kind=PURCHASE`)).body.data;
+    expect(cands.find((c: { sourceId: string }) => c.sourceId === d.body.data.id)).toMatchObject({ sourceType: 'STOCK_INWARD', qty: '120.000', expected: '18000.00', poRate: '150' });
+  });
+});

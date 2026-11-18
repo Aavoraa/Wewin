@@ -2,6 +2,7 @@ import { type Prisma } from '@wewin/db';
 import { type z } from 'zod';
 import { D, allocateOldestFirst, type zAccountsListQuery, type zPaymentInput } from '@wewin/shared';
 import { type Tx, type prisma, withTx } from '../../core/db';
+import { settingsService } from '../../core/settings/settings.service';
 import { AppError, notFound, versionConflict } from '../../core/errors/app-error';
 import { paging } from '../../core/list';
 import { audit } from '../../core/audit/audit.service';
@@ -54,6 +55,9 @@ async function validate(tx: Tx | typeof prisma, i: Input, paymentId?: string) {
   for (const a of i.allocations) {
     const b = open.get(a.billId);
     if (!b) throw new AppError('VALIDATION_ERROR', 'A bill is not open for this vendor (paid, cancelled or not posted)', 409);
+    if (!b.auditPassed && (await settingsService.get('accounts.billAuditRequiredForPayment', tx as Tx))) {
+      throw new AppError('INVALID_STATE', `${b.docNo} has not passed the 2nd audit yet; it cannot be paid (bills passing)`, 409);
+    }
     if (D(a.amount).greaterThan(D(b.outstanding))) throw new AppError('OVER_ALLOCATION', `${b.docNo}: allocation ₹${a.amount} exceeds outstanding ₹${b.outstanding}`, 409);
   }
   const allocated = i.allocations.reduce((s, a) => s.plus(D(a.amount)), D(0));
